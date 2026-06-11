@@ -1,0 +1,64 @@
+/* Design tokens — a light-mode, collaborative FigJam-inspired canvas theme. */
+
+:root {
+  /* Surfaces */
+  --color-bg: #f9f9fb;          /* Clean off-white FigJam canvas */
+  --color-surface: #ffffff;     /* Solid white panels and sidebars */
+  --color-surface-2: #f4f4f5;   /* Light gray for headers, rows, inputs */
+  --color-surface-hover: #e4e4e7;
+  --color-border: #e4e4e7;      /* Clean zinc border */
+  --color-border-hover: #71717a;
+  --color-text: #09090b;        /* High-contrast dark text */
+  --color-text-dim: #71717a;    /* Muted label gray */
+
+  /* Brand accent */
+  --color-accent: #0d99ff;      /* FigJam Signature Blue */
+  --color-accent-soft: rgba(13, 153, 255, 0.08);
+
+  /* Node-kind colors (Bright, saturated sticky-note palette) */
+  --kind-component: #2dd4bf;    /* Teal */
+  --kind-route: #c084fc;        /* Purple */
+  --kind-endpoint: #34d399;     /* Mint */
+  --kind-middleware: #fbbf24;   /* Amber */
+  --kind-auth: #f87171;         /* Coral */
+  --kind-database: #60a5fa;     /* Sky */
+  --kind-external-service: #fb7185; /* Pink */
+  --kind-config: #a1a1aa;       /* Muted gray */
+  --kind-mcp: #ec4899;          /* Pink / Magenta for MCP */
+  --kind-unknown: #d4d4d8;
+
+  /* Severity */
+  --sev-critical: #f87171;
+  --sev-high: #fb923c;
+  --sev-bottleneck: #f59e0b; /* amber — scale bottlenecks, distinct from red */
+  --sev-medium: #facc15;
+  --sev-low: #60a5fa;
+  --sev-info: #a1a1aa;
+
+  /* State colors for animation ramp */
+  --state-green: #34d399;
+  --state-yellow: #fbbf24;
+  --state-red: #f87171;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --text-xs: 0.72rem;
+  --text-sm: 0.82rem;
+  --text-base: 0.92rem;
+  --text-lg: 1.1rem;
+  --text-xl: 1.4rem;
+
+  /* Spacing + motion */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --radius: 12px;                /* Softer FigJam rounded corners */
+  --radius-sm: 8px;
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.vite/
+.env
+.env.local
+
+# The global brain is local intellectual property and holds absolute machine
+# paths. Never commit its runtime data; keep only the folder's README.
+brain/*
+!brain/README.md

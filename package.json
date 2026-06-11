@@ -1,0 +1,25 @@
+{
+  "name": "archlab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ArchLab — local engineering command center: maps any project to a live canvas, runs structured checks, and grows a global brain. Everything runs on localhost.",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/frontend",
+    "packages/mcp-server"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @archlab/shared",
+    "dev": "npm run build:shared && concurrently -n backend,frontend,mcp -c green,cyan,magenta \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:mcp\"",
+    "dev:backend": "npm run dev --workspace @archlab/backend",
+    "dev:frontend": "npm run dev --workspace @archlab/frontend",
+    "dev:mcp": "npm run dev --workspace @archlab/mcp-server",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.2"
+  }
+}

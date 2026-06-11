@@ -1,0 +1,142 @@
+/**
+ * File-system scanner.
+ *
+ * Walks any project folder regardless of framework or language and returns a
+ * flat list of source files with light metadata. Heavy/irrelevant directories
+ * are skipped so large repos stay fast.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+/** Directories we never descend into. */
+const IGNORED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  '.turbo',
+  'coverage',
+  '.cache',
+  'vendor',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'Pods',
+  '.symlinks',
+  '.dart_tool',
+  '.gradle',
+  'gradle',
+  '.idea',
+  '.vscode',
+]);
+
+/** Hard cap so a pathological repo can never hang the scan. */
+const MAX_FILES = 5000;
+/** Only read content for files smaller than this (bytes) for heuristics. */
+const MAX_READ_BYTES = 200_000;
+
+export interface ScannedFile {
+  /** Absolute path on disk. */
+  absPath: string;
+  /** Path relative to the project root, using forward slashes. */
+  relPath: string;
+  ext: string;
+  /** File content, or '' if too large / unreadable. */
+  content: string;
+}
+
+export interface ScanResult {
+  root: string;
+  name: string;
+  files: ScannedFile[];
+}
+
+/** Recursively scan a project folder into a flat file list. */
+export function scanProject(root: string): ScanResult {
+  const absRoot = path.resolve(root);
+  if (!fs.existsSync(absRoot) || !fs.statSync(absRoot).isDirectory()) {
+    throw new Error(`Not a directory: ${absRoot}`);
+  }
+
+  const files: ScannedFile[] = [];
+  const stack: string[] = [absRoot];
+
+  while (stack.length > 0 && files.length < MAX_FILES) {
+    const dir = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue; // Unreadable directory: skip rather than crash.
+    }
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
+          stack.push(path.join(dir, entry.name));
+        }
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      const absPath = path.join(dir, entry.name);
+      const relPath = path.relative(absRoot, absPath).split(path.sep).join('/');
+      const ext = path.extname(entry.name).toLowerCase();
+
+      let content = '';
+      try {
+        const stat = fs.statSync(absPath);
+        if (stat.size <= MAX_READ_BYTES && isTextExt(ext)) {
+          content = fs.readFileSync(absPath, 'utf8');
+        }
+      } catch {
+        // Ignore unreadable file content; keep the node, drop the text.
+      }
+
+      files.push({ absPath, relPath, ext, content });
+    }
+  }
+
+  return { root: absRoot, name: path.basename(absRoot), files };
+}
+
+/** Whether we should attempt to read this extension as text for heuristics. */
+function isTextExt(ext: string): boolean {
+  return [
+    '.ts',
+    '.tsx',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs',
+    '.py',
+    '.go',
+    '.rb',
+    '.php',
+    '.java',
+    '.rs',
+    '.json',
+    '.env',
+    '.yml',
+    '.yaml',
+    '.sql',
+    '.prisma',
+    '.vue',
+    '.svelte',
+    '.html',
+    '.css',
+    '.dart',
+    '.swift',
+    '.kt',
+    '.cs',
+    '.cpp',
+    '.cc',
+    '.c',
+    '.h',
+    '.hpp',
+    '.m',
+    '.scala',
+  ].includes(ext);
+}
