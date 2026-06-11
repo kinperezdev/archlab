@@ -192,6 +192,7 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
 
   // Background swim-lane containers, sized to wrap each lane's nodes. Rendered
   // behind the real nodes (zIndex -1) so the Frontend/Backend split is obvious.
+  // Memoized on structureKey so it does not recalculate on animation updates.
   const laneGroups = useMemo(() => {
     const groups: ReturnType<typeof buildLaneGroup>[] = [];
     const frontend = filteredNodes.filter((n) => n.lane === 'frontend');
@@ -199,7 +200,8 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
     if (frontend.length > 0) groups.push(buildLaneGroup('__lane_frontend', 'Frontend', 'frontend', frontend));
     if (backend.length > 0) groups.push(buildLaneGroup('__lane_backend', 'Backend', 'backend', backend));
     return groups;
-  }, [filteredNodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [structureKey]);
 
   // 1. Build the node set ONLY when the structure changes (new project, new
   //    nodes, filter switch). Never on a pipeline animation tick, so nodes are
@@ -224,10 +226,10 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
     }));
     // Lane backgrounds first so they paint behind the real nodes.
     setNodes([...laneGroups, ...realNodes]);
-    // filteredNodes is captured via structureKey to avoid rebuilds on every
-    // animation frame; positions/ids are what actually matter here.
+    // filteredNodes is captured via structureKey and stable laneGroups to avoid
+    // rebuilds on every animation frame; positions/ids are what actually matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structureKey, laneGroups, setNodes]);
+  }, [structureKey, setNodes]);
 
   // 1b. Patch live animation state onto the EXISTING nodes in place. This is
   //     what the pipeline drives: color/glow updates only, nodes stay mounted.

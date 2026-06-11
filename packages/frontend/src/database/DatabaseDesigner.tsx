@@ -1,11 +1,3 @@
-/**
- * Database Schema Designer: a SQL editor on the left and a live table-node canvas
- * on the right. Typing SQL regenerates the canvas; editing tables on the canvas
- * regenerates the SQL. Foreign keys draw connection lines between tables. The
- * schema persists locally, and tables can be pushed into the Ideas canvas to
- * build a full database -> backend -> frontend diagram.
- */
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   Background,
@@ -17,8 +9,8 @@ import ReactFlow, {
   type Edge,
   type Node,
 } from 'reactflow';
-import { loadJSON, saveJSON } from '../lib/storage.js';
 import { appendToIdeas } from '../lib/ideasStore.js';
+import { loadSchema, saveSchema } from '../lib/schemaStore.js';
 import {
   parseSqlSchema,
   serializeSqlSchema,
@@ -29,18 +21,17 @@ import { promptForSchema } from '../lib/prompts.js';
 import { neighborSet, highlightClass } from '../lib/highlight.js';
 import { SchemaTableNode, type SchemaNodeData } from './SchemaTableNode.js';
 
-const SQL_KEY = 'archlab.database.sql.v1';
 const nodeTypes = { schemaTable: SchemaTableNode };
 
 const SAMPLE_SQL = `CREATE TABLE users (
   id SERIAL PRIMARY KEY,
-  email TEXT,
+  email TEXT NOT NULL UNIQUE,
   created_at TIMESTAMP
 );
 
 CREATE TABLE posts (
   id SERIAL PRIMARY KEY,
-  title TEXT,
+  title TEXT NOT NULL,
   author_id INT REFERENCES users(id)
 );`;
 
@@ -48,16 +39,175 @@ CREATE TABLE posts (
 function tablePosition(index: number): { x: number; y: number } {
   const col = index % 3;
   const row = Math.floor(index / 3);
-  return { x: 80 + col * 340, y: 80 + row * 320 };
+  return { x: 80 + col * 340, y: 80 + row * 400 }; // Taller rows to accommodate expanded node editors
+}
+
+/** 1. Circular dependency checking */
+function checkCircularDependencies(tables: DbTable[]): string | null {
+  const adj: Record<string, string[]> = {};
+  for (const t of tables) {
+    adj[t.name] = [];
+    for (const col of t.columns) {
+      if (col.isFk && col.fkRelation) {
+        adj[t.name].push(col.fkRelation.parentTable);
+      }
+    }
+  }
+
+  const visited: Record<string, 'visiting' | 'visited'> = {};
+  const path: string[] = [];
+
+  function dfs(node: string): string[] | null {
+    if (visited[node] === 'visiting') {
+      const cycleStart = path.indexOf(node);
+      return [...path.slice(cycleStart), node];
+    }
+    if (visited[node] === 'visited') return null;
+
+    visited[node] = 'visiting';
+    path.push(node);
+
+    const neighbors = adj[node] || [];
+    for (const next of neighbors) {
+      const cycle = dfs(next);
+      if (cycle) return cycle;
+    }
+
+    path.pop();
+    visited[node] = 'visited';
+    return null;
+  }
+
+  for (const t of tables) {
+    const cycle = dfs(t.name);
+    if (cycle) {
+      return `Circular dependency detected: ${cycle.join(' → ')}`;
+    }
+  }
+  return null;
+}
+
+/** 2. Check if referenced column is a primary key */
+interface FkValidationError {
+  table: string;
+  column: string;
+  message: string;
+}
+
+function checkFkValidity(tables: DbTable[]): FkValidationError[] {
+  const errors: FkValidationError[] = [];
+  for (const t of tables) {
+    for (const col of t.columns) {
+      if (col.isFk && col.fkRelation) {
+        const parent = tables.find((p) => p.name === col.fkRelation!.parentTable);
+        if (!parent) {
+          errors.push({
+            table: t.name,
+            column: col.name,
+            message: `Table "${t.name}" references non-existent table "${col.fkRelation.parentTable}".`,
+          });
+        } else {
+          const parentCol = parent.columns.find((c) => c.name === col.fkRelation!.parentColumn);
+          if (!parentCol) {
+            errors.push({
+              table: t.name,
+              column: col.name,
+              message: `Table "${t.name}" references non-existent column "${col.fkRelation.parentColumn}" in table "${parent.name}".`,
+            });
+          } else if (!parentCol.isPk) {
+            errors.push({
+              table: t.name,
+              column: col.name,
+              message: `Warning: Column "${col.name}" references "${parent.name}.${parentCol.name}" which is not a PRIMARY KEY.`,
+            });
+          }
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+/** 3. Check for type mismatch between FK and PK */
+interface TypeMismatchError {
+  table: string;
+  column: string;
+  parentTable: string;
+  parentColumn: string;
+  type: string;
+  parentType: string;
+  message: string;
+}
+
+function checkFkTypeMismatches(tables: DbTable[]): TypeMismatchError[] {
+  const mismatches: TypeMismatchError[] = [];
+  for (const t of tables) {
+    for (const col of t.columns) {
+      if (col.isFk && col.fkRelation) {
+        const parent = tables.find((p) => p.name === col.fkRelation!.parentTable);
+        if (parent) {
+          const parentCol = parent.columns.find((c) => c.name === col.fkRelation!.parentColumn);
+          if (parentCol) {
+            const t1 = col.type.toUpperCase().trim();
+            const t2 = parentCol.type.toUpperCase().trim();
+            
+            const isInt1 = ['INT', 'INTEGER', 'SERIAL', 'BIGINT', 'BIGSERIAL'].includes(t1);
+            const isInt2 = ['INT', 'INTEGER', 'SERIAL', 'BIGINT', 'BIGSERIAL'].includes(t2);
+            const isString1 = ['TEXT', 'VARCHAR', 'CHAR', 'CHARACTER VARYING'].includes(t1);
+            const isString2 = ['TEXT', 'VARCHAR', 'CHAR', 'CHARACTER VARYING'].includes(t2);
+
+            const isCompatible = (isInt1 && isInt2) || (isString1 && isString2) || (t1 === t2);
+            if (!isCompatible) {
+              mismatches.push({
+                table: t.name,
+                column: col.name,
+                parentTable: parent.name,
+                parentColumn: parentCol.name,
+                type: col.type,
+                parentType: parentCol.type,
+                message: `Type mismatch on "${t.name}.${col.name}" (${col.type}) referencing "${parent.name}.${parentCol.name}" (${parentCol.type}). Recommend matching the types (e.g. both INT/SERIAL or both TEXT).`,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+  return mismatches;
 }
 
 /** Build the FK relationship edges between table nodes. */
-function buildEdges(tables: DbTable[]): Edge[] {
+function buildEdges(
+  tables: DbTable[],
+  mismatches: TypeMismatchError[],
+  validationErrors: FkValidationError[]
+): Edge[] {
   const names = new Set(tables.map((t) => t.name));
   const edges: Edge[] = [];
   for (const table of tables) {
     for (const col of table.columns) {
       if (col.isFk && col.fkRelation && names.has(col.fkRelation.parentTable)) {
+        const hasMismatch = mismatches.some(
+          (m) => m.table === table.name && m.column === col.name
+        );
+        const hasInvalid = validationErrors.some(
+          (e) => e.table === table.name && e.column === col.name && e.message.includes('not a PRIMARY KEY')
+        );
+
+        const isCriticalError = validationErrors.some(
+          (e) => e.table === table.name && e.column === col.name && !e.message.includes('not a PRIMARY KEY')
+        );
+
+        let strokeColor = '#60a5fa'; // Default light blue
+        let strokeDash = undefined;
+
+        if (hasMismatch || isCriticalError) {
+          strokeColor = '#ef4444'; // Red for critical or type mismatches
+        } else if (hasInvalid) {
+          strokeColor = '#f59e0b'; // Amber for non-PK references
+          strokeDash = '5 5';
+        }
+
         edges.push({
           id: `fk_${table.name}_${col.name}`,
           source: table.name,
@@ -65,7 +215,7 @@ function buildEdges(tables: DbTable[]): Edge[] {
           type: 'smoothstep',
           label: `${col.name} → ${col.fkRelation.parentColumn}`,
           markerEnd: { type: MarkerType.ArrowClosed },
-          style: { stroke: '#60a5fa', strokeWidth: 2 },
+          style: { stroke: strokeColor, strokeWidth: 2, strokeDasharray: strokeDash },
         });
       }
     }
@@ -74,12 +224,20 @@ function buildEdges(tables: DbTable[]): Edge[] {
 }
 
 function DatabaseDesignerInner() {
-  const [sql, setSql] = useState<string>(() => loadJSON<string>(SQL_KEY, SAMPLE_SQL));
-  const [tables, setTables] = useState<DbTable[]>(() => parseSqlSchema(loadJSON<string>(SQL_KEY, SAMPLE_SQL)));
+  const [sql, setSql] = useState<string>('');
+  const [tables, setTables] = useState<DbTable[]>([]);
   const [sentToIdeas, setSentToIdeas] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
+
+  // Load saved SQL schema once when the tab opens
+  useEffect(() => {
+    loadSchema(SAMPLE_SQL).then((savedSql) => {
+      setSql(savedSql);
+      setTables(parseSqlSchema(savedSql));
+    });
+  }, []);
 
   // Escape releases the locked highlight.
   useEffect(() => {
@@ -94,7 +252,7 @@ function DatabaseDesignerInner() {
   const onSqlChange = (value: string) => {
     setSql(value);
     setTables(parseSqlSchema(value));
-    saveJSON(SQL_KEY, value);
+    saveSchema(value);
   };
 
   // Canvas -> SQL.
@@ -102,17 +260,69 @@ function DatabaseDesignerInner() {
     setTables(next);
     const nextSql = serializeSqlSchema(next);
     setSql(nextSql);
-    saveJSON(SQL_KEY, nextSql);
+    saveSchema(nextSql);
   }, []);
 
   const updateTable = useCallback(
-    (name: string, updated: DbTable) => {
-      applyTables(tables.map((t) => (t.name === name ? updated : t)));
+    (tableName: string, updated: DbTable) => {
+      const oldTable = tables.find((t) => t.name === tableName);
+      if (!oldTable) return;
+
+      let nextTables = tables.map((t) => (t.name === tableName ? updated : t));
+
+      // 1. Cascade rename: If table name changed, update all FKs referencing it
+      if (oldTable.name !== updated.name) {
+        nextTables = nextTables.map((t) => {
+          const columns = t.columns.map((col) => {
+            if (col.isFk && col.fkRelation && col.fkRelation.parentTable === oldTable.name) {
+              return {
+                ...col,
+                fkRelation: { ...col.fkRelation, parentTable: updated.name },
+              };
+            }
+            return col;
+          });
+          return { ...t, columns };
+        });
+      }
+
+      // 2. Cascade rename: If column name changed, update all FKs referencing that column
+      oldTable.columns.forEach((oldCol, idx) => {
+        const newCol = updated.columns[idx];
+        if (newCol && oldCol.name !== newCol.name) {
+          nextTables = nextTables.map((t) => {
+            const columns = t.columns.map((col) => {
+              if (
+                col.isFk &&
+                col.fkRelation &&
+                col.fkRelation.parentTable === updated.name &&
+                col.fkRelation.parentColumn === oldCol.name
+              ) {
+                return {
+                  ...col,
+                  fkRelation: { ...col.fkRelation, parentColumn: newCol.name },
+                };
+              }
+              return col;
+            });
+            return { ...t, columns };
+          });
+        }
+      });
+
+      applyTables(nextTables);
     },
-    [tables, applyTables],
+    [tables, applyTables]
   );
 
-  const edges = useMemo(() => buildEdges(tables), [tables]);
+  // Compute errors & validation warnings
+  const circularWarning = useMemo(() => checkCircularDependencies(tables), [tables]);
+  const validationErrors = useMemo(() => checkFkValidity(tables), [tables]);
+  const typeMismatches = useMemo(() => checkFkTypeMismatches(tables), [tables]);
+
+  const edges = useMemo(() => {
+    return buildEdges(tables, typeMismatches, validationErrors);
+  }, [tables, typeMismatches, validationErrors]);
 
   const nodes: Node<SchemaNodeData>[] = useMemo(() => {
     const neighbors = activeNodeId ? neighborSet(activeNodeId, edges) : null;
@@ -123,6 +333,7 @@ function DatabaseDesignerInner() {
       className: highlightClass(table.name, activeNodeId, neighbors),
       data: {
         table,
+        allTables: tables,
         onUpdateTable: (next: DbTable) => updateTable(table.name, next),
       },
     }));
@@ -143,13 +354,17 @@ function DatabaseDesignerInner() {
 
   return (
     <div className="db-designer">
+      {/* 1/3 Width SQL Editor Panel */}
       <div className="db-editor-panel">
         <div className="db-editor-head">
           <h3>SQL Schema</h3>
           <div className="db-editor-actions">
             <CopyPromptButton
               prompt={() =>
-                promptForSchema(sql, 'review this schema and suggest improvements (indexes, missing relations, normalization, data types)')
+                promptForSchema(
+                  sql,
+                  'review this schema and suggest improvements (indexes, missing relations, normalization, data types)'
+                )
               }
               label="Copy Prompt"
             />
@@ -158,6 +373,28 @@ function DatabaseDesignerInner() {
             </button>
           </div>
         </div>
+
+        {/* Smart warnings overlay */}
+        {(circularWarning || validationErrors.length > 0 || typeMismatches.length > 0) && (
+          <div className="db-editor-warnings">
+            {circularWarning && (
+              <div className="warning-item critical">
+                <strong>⚠️ Cycle:</strong> {circularWarning}
+              </div>
+            )}
+            {validationErrors.map((err, i) => (
+              <div key={`val-${i}`} className={`warning-item ${err.message.startsWith('Warning') ? 'amber' : 'critical'}`}>
+                <strong>⚠️ Validation:</strong> {err.message}
+              </div>
+            ))}
+            {typeMismatches.map((err, i) => (
+              <div key={`mismatch-${i}`} className="warning-item critical">
+                <strong>⚠️ Type Mismatch:</strong> {err.message}
+              </div>
+            ))}
+          </div>
+        )}
+
         <textarea
           className="db-sql-editor"
           spellCheck={false}
@@ -166,10 +403,11 @@ function DatabaseDesignerInner() {
           placeholder="Paste or write CREATE TABLE statements here…"
         />
         <p className="db-editor-hint">
-          {tables.length} table(s) parsed. Edit cells on the right to update this SQL.
+          {tables.length} table(s) parsed. Select any table node on the right to edit columns visually.
         </p>
       </div>
 
+      {/* 2/3 Width Canvas Panel */}
       <div className="db-canvas-panel">
         <ReactFlow
           nodes={nodes}
@@ -183,7 +421,7 @@ function DatabaseDesignerInner() {
           onPaneClick={() => setLockedNodeId(null)}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Lines} gap={36} color="#e4e4e7" />
+          <Background variant={BackgroundVariant.Dots} gap={24} color="#cbd5e1" />
           <MiniMap pannable zoomable className="arch-minimap" />
           <Controls showInteractive={false} />
         </ReactFlow>

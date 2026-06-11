@@ -31,7 +31,7 @@ import { neighborSet, highlightClass, stripHighlight } from '../lib/highlight.js
 import { IdeaNode, IDEA_KINDS, type IdeaKind, type IdeaNodeData } from './IdeaNode.js';
 
 const nodeTypes = { idea: IdeaNode };
-const DRAG_MIME = 'application/archlab-idea';
+const DRAG_MIME = 'text/plain';
 
 interface ContextMenuState {
   x: number;
@@ -134,7 +134,7 @@ function IdeasCanvasInner() {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const kind = e.dataTransfer.getData(DRAG_MIME) as IdeaKind;
-    if (!kind) return;
+    if (!kind || !IDEA_KINDS.some(ik => ik.kind === kind)) return;
     // Exact drop position in flow coordinates.
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     addNode(kind, pos.x, pos.y);

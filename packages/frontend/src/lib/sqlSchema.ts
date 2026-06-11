@@ -12,6 +12,8 @@ export interface DbColumn {
   isPk: boolean;
   isFk: boolean;
   fkRelation?: { parentTable: string; parentColumn: string };
+  isNotNull?: boolean;
+  isUnique?: boolean;
 }
 
 export interface DbTable {
@@ -68,6 +70,8 @@ export function parseSqlSchema(content: string): DbTable[] {
       const colName = parts[0].replace(/[`"']/g, '');
       const colType = parts[1].replace(/,$/, '');
       const isPk = upper.includes('PRIMARY KEY');
+      const isNotNull = upper.includes('NOT NULL');
+      const isUnique = upper.includes('UNIQUE') && !isPk;
 
       let isFk = false;
       let fkRelation: DbColumn['fkRelation'];
@@ -80,7 +84,7 @@ export function parseSqlSchema(content: string): DbTable[] {
         };
       }
 
-      columns.push({ name: colName, type: colType, isPk, isFk, fkRelation });
+      columns.push({ name: colName, type: colType, isPk, isFk, fkRelation, isNotNull, isUnique });
     }
 
     for (const fk of fkConstraints) {
@@ -104,6 +108,8 @@ export function serializeSqlSchema(tables: DbTable[]): string {
       const lines = table.columns.map((col) => {
         let line = `  ${col.name} ${col.type}`;
         if (col.isPk) line += ' PRIMARY KEY';
+        if (col.isNotNull && !col.isPk) line += ' NOT NULL';
+        if (col.isUnique && !col.isPk) line += ' UNIQUE';
         if (col.isFk && col.fkRelation) {
           line += ` REFERENCES ${col.fkRelation.parentTable}(${col.fkRelation.parentColumn})`;
         }

@@ -78,6 +78,7 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'archlab-backend
 
 // ---- Ideas canvas persistence (brain/ideas.json) ----------------------
 const IDEAS_FILE = path.join(BRAIN_DIR, 'ideas.json');
+const SCHEMA_FILE = path.join(BRAIN_DIR, 'schema.json');
 
 app.get('/ideas', (_req, res) => {
   try {
@@ -95,6 +96,27 @@ app.post('/ideas', (req, res) => {
   try {
     fs.mkdirSync(path.dirname(IDEAS_FILE), { recursive: true });
     fs.writeFileSync(IDEAS_FILE, JSON.stringify({ nodes, edges }, null, 2), 'utf8');
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get('/schema', (_req, res) => {
+  try {
+    if (!fs.existsSync(SCHEMA_FILE)) return res.json({ ok: true, sql: '' });
+    const data = JSON.parse(fs.readFileSync(SCHEMA_FILE, 'utf8'));
+    return res.json({ ok: true, sql: data.sql ?? '' });
+  } catch {
+    return res.json({ ok: true, sql: '' });
+  }
+});
+
+app.post('/schema', (req, res) => {
+  const sql = typeof req.body?.sql === 'string' ? req.body.sql : '';
+  try {
+    fs.mkdirSync(path.dirname(SCHEMA_FILE), { recursive: true });
+    fs.writeFileSync(SCHEMA_FILE, JSON.stringify({ sql }, null, 2), 'utf8');
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
