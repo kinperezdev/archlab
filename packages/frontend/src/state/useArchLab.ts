@@ -59,6 +59,7 @@ export interface ArchLabState {
   brain: BrainSummary;
   logs: LogLine[];
   terminal: TerminalState;
+  inferredSql: string | null;
 }
 
 const EMPTY_CANVAS: CanvasGraph = { nodes: [], edges: [] };
@@ -80,6 +81,7 @@ export function useArchLab() {
     brain: { projectCount: 0, patterns: [], insights: [] },
     logs: [],
     terminal: { cwd: '~', lines: [] },
+    inferredSql: null,
   });
 
   // Reduce one server message into the next immutable state.
@@ -100,6 +102,7 @@ export function useArchLab() {
           diagnostics: [],
           report: null,
           intelligence: null,
+          inferredSql: msg.inferredSql ?? null,
         };
 
       case 'canvas-update':

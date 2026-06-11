@@ -97,7 +97,7 @@ export function App() {
           {tab === 'ideas' ? (
             <IdeasCanvas />
           ) : tab === 'database' ? (
-            <DatabaseDesigner />
+            <DatabaseDesigner inferredSql={state.inferredSql} />
           ) : (
             <ReactFlowProvider>
               <Canvas

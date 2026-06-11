@@ -14,11 +14,13 @@ export interface DbColumn {
   fkRelation?: { parentTable: string; parentColumn: string };
   isNotNull?: boolean;
   isUnique?: boolean;
+  isInferred?: boolean;
 }
 
 export interface DbTable {
   name: string;
   columns: DbColumn[];
+  isInferred?: boolean;
 }
 
 /** Parse standard SQL `CREATE TABLE` statements into tables. */
@@ -30,12 +32,19 @@ export function parseSqlSchema(content: string): DbTable[] {
   while ((match = createTableRegex.exec(content)) !== null) {
     const tableName = match[1];
     const body = match[2];
+    
+    // Check if the table header itself was inferred
+    const headerPart = match[0].split('(')[0];
+    const isTableInferred = headerPart.includes('@inferred');
+    
     const columns: DbColumn[] = [];
     const fkConstraints: { local: string; parentTable: string; parentColumn: string }[] = [];
 
     for (const rawLine of body.split(',')) {
-      const trimmed = rawLine.trim().replace(/\s+/g, ' ');
-      if (!trimmed || trimmed.startsWith('--') || trimmed.startsWith('/*')) continue;
+      const isColInferred = rawLine.includes('@inferred');
+      const cleanLine = rawLine.replace(/--.*$/, '').trim();
+      const trimmed = cleanLine.replace(/\s+/g, ' ');
+      if (!trimmed || trimmed.startsWith('/*')) continue;
       const upper = trimmed.toUpperCase();
 
       if (upper.startsWith('FOREIGN KEY')) {
@@ -84,7 +93,16 @@ export function parseSqlSchema(content: string): DbTable[] {
         };
       }
 
-      columns.push({ name: colName, type: colType, isPk, isFk, fkRelation, isNotNull, isUnique });
+      columns.push({
+        name: colName,
+        type: colType,
+        isPk,
+        isFk,
+        fkRelation,
+        isNotNull,
+        isUnique,
+        isInferred: isColInferred
+      });
     }
 
     for (const fk of fkConstraints) {
@@ -95,7 +113,7 @@ export function parseSqlSchema(content: string): DbTable[] {
       }
     }
 
-    tables.push({ name: tableName, columns });
+    tables.push({ name: tableName, columns, isInferred: isTableInferred });
   }
 
   return tables;
@@ -113,9 +131,13 @@ export function serializeSqlSchema(tables: DbTable[]): string {
         if (col.isFk && col.fkRelation) {
           line += ` REFERENCES ${col.fkRelation.parentTable}(${col.fkRelation.parentColumn})`;
         }
+        if (col.isInferred) {
+          line += ' -- @inferred';
+        }
         return line;
       });
-      return `CREATE TABLE ${table.name} (\n${lines.join(',\n')}\n);`;
+      const tableHeader = `CREATE TABLE ${table.name} (${table.isInferred ? ' -- @inferred' : ''}`;
+      return `${tableHeader}\n${lines.join(',\n')}\n);`;
     })
     .join('\n\n');
 }

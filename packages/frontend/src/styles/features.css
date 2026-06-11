@@ -834,3 +834,22 @@
   padding: var(--space-2);
 }
 
+.inferred-badge {
+  font-size: 0.55rem;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #b45309;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.inferred-col-bullet {
+  margin-left: var(--space-1);
+  cursor: help;
+  display: inline-block;
+}
+

@@ -33,6 +33,7 @@ export function detectEdges(
   };
 
   // 1. Structural edges from imports.
+  const importedDbNodes = new Map<string, Set<string>>();
   for (const file of files) {
     const sourceId = fileToNode.get(file.relPath);
     if (!sourceId || !file.content) continue;
@@ -109,7 +110,17 @@ export function detectEdges(
       const targetRel = resolveImport(file.relPath, spec, byPath);
       if (!targetRel) continue;
       const targetId = fileToNode.get(targetRel);
-      if (targetId) push(sourceId, targetId, 'imports');
+      if (targetId) {
+        const targetNode = nodes.find((n) => n.id === targetId);
+        if (targetNode?.kind === 'database') {
+          if (!importedDbNodes.has(sourceId)) {
+            importedDbNodes.set(sourceId, new Set());
+          }
+          importedDbNodes.get(sourceId)!.add(targetId);
+        } else {
+          push(sourceId, targetId, 'imports');
+        }
+      }
     }
   }
 
@@ -145,6 +156,72 @@ export function detectEdges(
         return cleanLabel && (segment.toLowerCase().includes(cleanLabel) || cleanLabel.includes(segment.toLowerCase()));
       });
       if (target) push(sourceId, target.id, `nav: ${url}`);
+    }
+  }
+
+  // 4. Database CRUD / Operation mapping (Fix 1)
+  const dbNodes = nodes.filter((n) => n.kind === 'database');
+  for (const file of files) {
+    const sourceId = fileToNode.get(file.relPath);
+    if (!sourceId || !file.content) continue;
+    const sourceNode = nodes.find((n) => n.id === sourceId);
+    if (!sourceNode || sourceNode.kind === 'database') continue;
+
+    for (const dbNode of dbNodes) {
+      const dbModelName = dbNode.label
+        .replace(/\.[jt]sx?$/, '')
+        .replace(/\.dart$/, '')
+        .replace(/Screen|Page|Form|Controller|Route/i, '')
+        .replace(/\.(model|schema|entity|repository)$/i, '')
+        .replace(/(model|schema|entity|repository)$/i, '');
+
+      let isTouched = false;
+
+      // Check if it imports the db node
+      if (importedDbNodes.get(sourceId)?.has(dbNode.id)) {
+        isTouched = true;
+      }
+
+      // Or if the content mentions the db model name
+      if (!isTouched && dbModelName.length >= 3) {
+        const baseName = dbModelName.toLowerCase();
+        const namesToTry = [baseName];
+        if (baseName.endsWith('s') && baseName.length > 3) {
+          namesToTry.push(baseName.slice(0, -1));
+        } else {
+          namesToTry.push(baseName + 's');
+        }
+
+        for (const name of namesToTry) {
+          const modelRegex = new RegExp(`\\b${name}\\b`, 'i');
+          if (modelRegex.test(file.content)) {
+            isTouched = true;
+            break;
+          }
+        }
+      }
+
+      if (isTouched) {
+        // Find operation type
+        let op = 'QUERY';
+        const lower = file.content.toLowerCase();
+        
+        const createPattern = new RegExp(`\\b${dbModelName.toLowerCase()}\\b.*\\b(create|insert|save|add|new)\\b`, 'i');
+        const updatePattern = new RegExp(`\\b${dbModelName.toLowerCase()}\\b.*\\b(update|save|edit|set|patch)\\b`, 'i');
+        const deletePattern = new RegExp(`\\b${dbModelName.toLowerCase()}\\b.*\\b(delete|destroy|remove|drop)\\b`, 'i');
+        const readPattern = new RegExp(`\\b${dbModelName.toLowerCase()}\\b.*\\b(find|get|select|query|fetch|retrieve|where)\\b`, 'i');
+
+        if (createPattern.test(file.content)) op = 'CREATE';
+        else if (updatePattern.test(file.content)) op = 'UPDATE';
+        else if (deletePattern.test(file.content)) op = 'DELETE';
+        else if (readPattern.test(file.content)) op = 'READ';
+        else if (/\b(create|insert|add)\b/i.test(lower)) op = 'CREATE';
+        else if (/\b(update|set|patch|edit)\b/i.test(lower)) op = 'UPDATE';
+        else if (/\b(delete|destroy|remove)\b/i.test(lower)) op = 'DELETE';
+        else if (/\b(find|select|query|get)\b/i.test(lower)) op = 'READ';
+
+        push(sourceId, dbNode.id, op);
+      }
     }
   }
 

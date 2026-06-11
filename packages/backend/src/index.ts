@@ -21,6 +21,7 @@ import { detectBottlenecks } from './pipeline/bottleneck.js';
 import { learnFromProject, loadBrain } from './brain/brainStore.js';
 import { BRAIN_DIR } from './brain/paths.js';
 import { createSession, runCommand, type ShellSession } from './terminal/shell.js';
+import { inferSchemaFromAppFlow } from './analyzer/inference.js';
 
 const HOST = '127.0.0.1';
 
@@ -356,12 +357,15 @@ async function handleAnalyze(
   // Persist id -> root path immediately so checks can always recover this
   // project later, even after a restart or page refresh.
   rememberProject(analysis.projectId, analysis.rootPath, analysis.name);
+  
+  const inferredSql = inferSchemaFromAppFlow(analysis.scan);
   emit({
     type: 'project-ready',
     projectId: analysis.projectId,
     name: analysis.name,
     rootPath: analysis.rootPath,
     canvas: analysis.canvas,
+    inferredSql,
   });
   log(
     emit,

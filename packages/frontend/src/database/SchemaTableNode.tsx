@@ -130,6 +130,9 @@ Please review this and suggest optimizations for performance, indexing strategy,
             }}
           >
             {table.name}
+            {table.isInferred && (
+              <span className="inferred-badge" title="Inferred from app flow">💡 Suggested</span>
+            )}
           </span>
         )}
 
@@ -151,7 +154,12 @@ Please review this and suggest optimizations for performance, indexing strategy,
                   {col.isUnique && !col.isPk && <span className="key-badge uq" title="Unique">UQ</span>}
                 </span>
                 
-                <span className="schema-col-name">{col.name}</span>
+                <span className="schema-col-name">
+                  {col.name}
+                  {col.isInferred && (
+                    <span className="inferred-col-bullet" title="Inferred from app flow">💡</span>
+                  )}
+                </span>
                 <span className="schema-col-type">{col.type}</span>
               </div>
 

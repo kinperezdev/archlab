@@ -51,7 +51,7 @@ function IdeasCanvasInner() {
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, setCenter } = useReactFlow();
 
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
 
@@ -136,9 +136,24 @@ function IdeasCanvasInner() {
     const kind = e.dataTransfer.getData(DRAG_MIME) as IdeaKind;
     console.log('IdeasCanvas onDrop fired:', kind);
     if (!kind || !IDEA_KINDS.some(ik => ik.kind === kind)) return;
-    // Exact drop position in flow coordinates.
+
+    // Exact drop position in flow coordinates using screen position directly
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    console.log('IdeasCanvas: Calculated flow position:', pos, 'from screen client:', { x: e.clientX, y: e.clientY });
+
     addNode(kind, pos.x, pos.y);
+    setCenter(pos.x, pos.y, { zoom: 1, duration: 400 });
+  };
+
+  const onPaletteClick = (kind: IdeaKind) => {
+    if (!wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+    const pos = screenToFlowPosition({ x: clientX, y: clientY });
+    console.log('IdeasCanvas: Click to place at center:', pos);
+    addNode(kind, pos.x, pos.y);
+    setCenter(pos.x, pos.y, { zoom: 1, duration: 400 });
   };
 
   // Double-click an edge to (re)label it.
@@ -181,23 +196,15 @@ function IdeasCanvasInner() {
     <div className="ideas-layout">
       <aside className="ideas-palette">
         <h4 className="ideas-palette-title">Node Palette</h4>
-        <p className="ideas-palette-hint">Drag onto the canvas</p>
+        <p className="ideas-palette-hint">Click or drag onto canvas</p>
         {IDEA_KINDS.map((k) => (
           <div
             key={k.kind}
             className={`ideas-palette-item idea-${k.kind}`}
             draggable
             onDragStart={(e) => onPaletteDragStart(e, k.kind)}
-            onDoubleClick={() => {
-              // Quick-add at canvas center on double-click.
-              const rect = wrapRef.current?.getBoundingClientRect();
-              const pos = screenToFlowPosition({
-                x: (rect?.left ?? 0) + (rect?.width ?? 800) / 2,
-                y: (rect?.top ?? 0) + (rect?.height ?? 600) / 2,
-              });
-              addNode(k.kind, pos.x, pos.y);
-            }}
-            title={`Drag to add ${k.label} (double-click to drop at center)`}
+            onClick={() => onPaletteClick(k.kind)}
+            title={`Click to place at center, or drag onto canvas`}
           >
             <span className="ideas-palette-glyph">{k.glyph}</span>
             {k.label}
@@ -219,27 +226,27 @@ function IdeasCanvasInner() {
           onNodeMouseEnter={(_e, n) => setHoveredNodeId(n.id)}
           onNodeMouseLeave={() => setHoveredNodeId(null)}
           onNodeClick={(_e, n) => setLockedNodeId(n.id)}
-          onPaneClick={() => {
-            setLockedNodeId(null);
-            setMenu(null);
+          onPaneClick={(e: React.MouseEvent) => {
+            if (e.detail === 2) {
+              e.preventDefault();
+              const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+              setMenu({ x: e.clientX, y: e.clientY, flowX: pos.x, flowY: pos.y });
+            } else {
+              setLockedNodeId(null);
+              setMenu(null);
+            }
           }}
           onDragOver={onDragOver}
           onDrop={onDrop}
           defaultEdgeOptions={{ type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } }}
           deleteKeyCode={['Backspace', 'Delete']}
-          fitView
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#cbd5e1" />
           <MiniMap pannable zoomable className="arch-minimap" />
           <Controls showInteractive={false} />
         </ReactFlow>
-
-        {nodes.length === 0 && loaded && (
-          <div className="ideas-hint">
-            Drag a node type from the palette on the left, or right-click the canvas to add one.
-          </div>
-        )}
 
         {menu && (
           <div className="ideas-context-menu" style={{ left: menu.x, top: menu.y }}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -6,6 +6,8 @@ import ReactFlow, {
   MarkerType,
   MiniMap,
   ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
   type Edge,
   type Node,
 } from 'reactflow';
@@ -39,7 +41,7 @@ CREATE TABLE posts (
 function tablePosition(index: number): { x: number; y: number } {
   const col = index % 3;
   const row = Math.floor(index / 3);
-  return { x: 80 + col * 340, y: 80 + row * 400 }; // Taller rows to accommodate expanded node editors
+  return { x: 80 + col * 340, y: 80 + row * 400 };
 }
 
 /** 1. Circular dependency checking */
@@ -198,13 +200,13 @@ function buildEdges(
           (e) => e.table === table.name && e.column === col.name && !e.message.includes('not a PRIMARY KEY')
         );
 
-        let strokeColor = '#60a5fa'; // Default light blue
+        let strokeColor = '#60a5fa'; 
         let strokeDash = undefined;
 
         if (hasMismatch || isCriticalError) {
-          strokeColor = '#ef4444'; // Red for critical or type mismatches
+          strokeColor = '#ef4444'; 
         } else if (hasInvalid) {
-          strokeColor = '#f59e0b'; // Amber for non-PK references
+          strokeColor = '#f59e0b'; 
           strokeDash = '5 5';
         }
 
@@ -223,23 +225,93 @@ function buildEdges(
   return edges;
 }
 
-function DatabaseDesignerInner() {
+/** Merge explicit schema tables with inferred tables. */
+function mergeSchemas(explicit: DbTable[], inferred: DbTable[]): DbTable[] {
+  const merged: DbTable[] = explicit.map((t) => ({
+    ...t,
+    columns: t.columns.map((c) => ({ ...c })),
+  }));
+
+  for (const infTable of inferred) {
+    const expTable = merged.find((t) => t.name.toLowerCase() === infTable.name.toLowerCase());
+    if (!expTable) {
+      merged.push({
+        ...infTable,
+        isInferred: true,
+        columns: infTable.columns.map((c) => ({ ...c, isInferred: true })),
+      });
+    } else {
+      for (const infCol of infTable.columns) {
+        const expCol = expTable.columns.find((c) => c.name.toLowerCase() === infCol.name.toLowerCase());
+        if (!expCol) {
+          expTable.columns.push({
+            ...infCol,
+            isInferred: true,
+          });
+        }
+      }
+    }
+  }
+  return merged;
+}
+
+function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) {
   const [sql, setSql] = useState<string>('');
   const [tables, setTables] = useState<DbTable[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNodeData>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [sentToIdeas, setSentToIdeas] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
 
-  // Load saved SQL schema once when the tab opens
+  // Use a ref to keep track of current nodes to preserve positions without causing loops
+  const nodesRef = useRef<Node<SchemaNodeData>[]>([]);
+  nodesRef.current = nodes;
+
+  // Load saved SQL schema and merge with inferredSql
   useEffect(() => {
     loadSchema(SAMPLE_SQL).then((savedSql) => {
-      setSql(savedSql);
-      const parsed = parseSqlSchema(savedSql);
-      console.log('DatabaseDesigner: initial load parsed tables:', parsed);
-      setTables(parsed);
+      const explicit = parseSqlSchema(savedSql);
+      const inferred = parseSqlSchema(inferredSql || '');
+      const merged = mergeSchemas(explicit, inferred);
+      const mergedSql = serializeSqlSchema(merged);
+      
+      setSql(mergedSql);
+      setTables(merged);
+      console.log('DatabaseDesigner: initial load & merge parsed tables:', merged);
     });
-  }, []);
+  }, [inferredSql]);
+
+  // Compute errors & validation warnings
+  const circularWarning = useMemo(() => checkCircularDependencies(tables), [tables]);
+  const validationErrors = useMemo(() => checkFkValidity(tables), [tables]);
+  const typeMismatches = useMemo(() => checkFkTypeMismatches(tables), [tables]);
+
+  // Sync React Flow nodes/edges with tables whenever they or selection changes.
+  useEffect(() => {
+    const computedEdges = buildEdges(tables, typeMismatches, validationErrors);
+    const neighbors = activeNodeId ? neighborSet(activeNodeId, computedEdges) : null;
+    
+    const nextNodes = tables.map((table, i) => {
+      const existing = nodesRef.current.find((n) => n.id === table.name);
+      return {
+        id: table.name,
+        type: 'schemaTable',
+        position: existing?.position || tablePosition(i),
+        className: highlightClass(table.name, activeNodeId, neighbors),
+        data: {
+          table,
+          allTables: tables,
+          onUpdateTable: (next: DbTable) => updateTable(table.name, next),
+        },
+      };
+    });
+
+    setNodes(nextNodes);
+    setEdges(computedEdges);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tables, activeNodeId, setNodes, setEdges]);
 
   // Escape releases the locked highlight.
   useEffect(() => {
@@ -320,30 +392,6 @@ function DatabaseDesignerInner() {
     [tables, applyTables]
   );
 
-  // Compute errors & validation warnings
-  const circularWarning = useMemo(() => checkCircularDependencies(tables), [tables]);
-  const validationErrors = useMemo(() => checkFkValidity(tables), [tables]);
-  const typeMismatches = useMemo(() => checkFkTypeMismatches(tables), [tables]);
-
-  const edges = useMemo(() => {
-    return buildEdges(tables, typeMismatches, validationErrors);
-  }, [tables, typeMismatches, validationErrors]);
-
-  const nodes: Node<SchemaNodeData>[] = useMemo(() => {
-    const neighbors = activeNodeId ? neighborSet(activeNodeId, edges) : null;
-    return tables.map((table, i) => ({
-      id: table.name,
-      type: 'schemaTable',
-      position: tablePosition(i),
-      className: highlightClass(table.name, activeNodeId, neighbors),
-      data: {
-        table,
-        allTables: tables,
-        onUpdateTable: (next: DbTable) => updateTable(table.name, next),
-      },
-    }));
-  }, [tables, updateTable, edges, activeNodeId]);
-
   const sendToIdeas = async () => {
     const base = Date.now();
     const newNodes: Node[] = tables.map((t, i) => ({
@@ -357,6 +405,23 @@ function DatabaseDesignerInner() {
     setTimeout(() => setSentToIdeas(false), 1800);
   };
 
+  const hasInferred = useMemo(() => {
+    return tables.some((t) => t.isInferred || t.columns.some((c) => c.isInferred));
+  }, [tables]);
+
+  const acceptSuggestions = () => {
+    const cleanTables = tables.map((t) => ({
+      ...t,
+      isInferred: false,
+      columns: t.columns.map((c) => ({ ...c, isInferred: false })),
+    }));
+    const cleanSql = serializeSqlSchema(cleanTables);
+    setSql(cleanSql);
+    setTables(cleanTables);
+    saveSchema(cleanSql);
+    console.log('DatabaseDesigner: Accepted and saved suggestions to backend schema.');
+  };
+
   return (
     <div className="db-designer">
       {/* 1/3 Width SQL Editor Panel */}
@@ -364,6 +429,15 @@ function DatabaseDesignerInner() {
         <div className="db-editor-head">
           <h3>SQL Schema</h3>
           <div className="db-editor-actions">
+            {hasInferred && (
+              <button 
+                className="btn" 
+                onClick={acceptSuggestions}
+                style={{ background: '#0f766e', color: '#ffffff' }}
+              >
+                Accept Suggestions
+              </button>
+            )}
             <CopyPromptButton
               prompt={() =>
                 promptForSchema(
@@ -417,6 +491,8 @@ function DatabaseDesignerInner() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           fitView
           minZoom={0.2}
@@ -440,10 +516,14 @@ function DatabaseDesignerInner() {
   );
 }
 
-export function DatabaseDesigner() {
+interface DatabaseDesignerProps {
+  inferredSql: string | null;
+}
+
+export function DatabaseDesigner({ inferredSql }: DatabaseDesignerProps) {
   return (
     <ReactFlowProvider>
-      <DatabaseDesignerInner />
+      <DatabaseDesignerInner inferredSql={inferredSql} />
     </ReactFlowProvider>
   );
 }
