@@ -134,6 +134,7 @@ function IdeasCanvasInner() {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const kind = e.dataTransfer.getData(DRAG_MIME) as IdeaKind;
+    console.log('IdeasCanvas onDrop fired:', kind);
     if (!kind || !IDEA_KINDS.some(ik => ik.kind === kind)) return;
     // Exact drop position in flow coordinates.
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
@@ -203,8 +204,8 @@ function IdeasCanvasInner() {
           </div>
         ))}
       </aside>
-
-      <div className="ideas-canvas-area" ref={wrapRef} onDrop={onDrop} onDragOver={onDragOver}>
+ 
+      <div className="ideas-canvas-area" ref={wrapRef}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -222,6 +223,8 @@ function IdeasCanvasInner() {
             setLockedNodeId(null);
             setMenu(null);
           }}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
           defaultEdgeOptions={{ type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } }}
           deleteKeyCode={['Backspace', 'Delete']}
           fitView

@@ -235,7 +235,9 @@ function DatabaseDesignerInner() {
   useEffect(() => {
     loadSchema(SAMPLE_SQL).then((savedSql) => {
       setSql(savedSql);
-      setTables(parseSqlSchema(savedSql));
+      const parsed = parseSqlSchema(savedSql);
+      console.log('DatabaseDesigner: initial load parsed tables:', parsed);
+      setTables(parsed);
     });
   }, []);
 
@@ -251,12 +253,15 @@ function DatabaseDesignerInner() {
   // SQL editor -> canvas.
   const onSqlChange = (value: string) => {
     setSql(value);
-    setTables(parseSqlSchema(value));
+    const parsed = parseSqlSchema(value);
+    console.log('DatabaseDesigner: input changed parsed tables:', parsed);
+    setTables(parsed);
     saveSchema(value);
   };
 
   // Canvas -> SQL.
   const applyTables = useCallback((next: DbTable[]) => {
+    console.log('DatabaseDesigner: canvas updated applying tables:', next);
     setTables(next);
     const nextSql = serializeSqlSchema(next);
     setSql(nextSql);

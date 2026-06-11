@@ -8,11 +8,15 @@ export async function loadSchema(fallbackSql: string): Promise<string> {
   try {
     const res = await fetch(`${BASE}/schema`);
     const data = await res.json();
-    if (data?.ok) return data.sql ?? fallbackSql;
+    if (data?.ok && data.sql && data.sql.trim() !== '') {
+      return data.sql;
+    }
   } catch {
     /* backend offline; use local fallback */
   }
-  return loadJSON<string>(LOCAL_KEY, fallbackSql);
+  const local = loadJSON<string>(LOCAL_KEY, fallbackSql);
+  if (!local || local.trim() === '') return fallbackSql;
+  return local;
 }
 
 export async function saveSchema(sql: string): Promise<void> {
