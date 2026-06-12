@@ -51,12 +51,11 @@ npm run dev            # starts backend (4317), frontend (5317), and the MCP ser
 
 Then open http://127.0.0.1:5317. You can load a project two ways:
 
-**From the browser.** Paste an absolute folder path in the top bar, click
-**Analyze**, then **Run Checks**.
+**From the CLI (recommended).** `cd` into any project folder and run the `archlab` CLI to immediately map it onto the live browser canvas:
 
-**From the terminal (recommended).** `cd` into any project and run the `archlab`
-CLI. It tells the running backend to map *that* folder and the open browser tab
-lights up live:
+**From the in-app terminal.** Use the terminal in the bottom panel to `cd` into any project folder, which will automatically trigger a canvas re-map of that directory.
+
+To load a project from the CLI:
 
 ```bash
 cd ~/Desktop/React/SomeApp

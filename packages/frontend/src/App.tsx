@@ -21,7 +21,7 @@ import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 export type ArchTab = 'all' | 'frontend' | 'backend' | 'ideas' | 'database';
 
 export function App() {
-  const { state, analyzeProject, reanalyzeProject, runChecks, sendCommand } = useArchLab();
+  const { state, reanalyzeProject, runChecks, sendCommand } = useArchLab();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [brainOpen, setBrainOpen] = useState(false);
   const [bottomHeight, setBottomHeight] = useState(200);
@@ -59,7 +59,6 @@ export function App() {
         bottleneckCount={state.diagnostics.filter((d) => d.severity === 'bottleneck').length}
         analyzedAt={state.analyzedAt}
         reanalyzing={state.reanalyzing}
-        onAnalyze={analyzeProject}
         onReanalyze={reanalyzeProject}
         onRunChecks={runChecks}
         onOpenBrain={() => setBrainOpen(true)}

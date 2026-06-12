@@ -1,6 +1,5 @@
 /** Top bar: project name, folder path input + Analyze, Run Checks, brain status. */
 
-import { useState } from 'react';
 import type { ArchTab } from '../App.js';
 
 interface TopBarProps {
@@ -12,7 +11,6 @@ interface TopBarProps {
   bottleneckCount: number;
   analyzedAt: number | null;
   reanalyzing: boolean;
-  onAnalyze: (path: string) => void;
   onReanalyze: () => void;
   onRunChecks: () => void;
   onOpenBrain: () => void;
@@ -46,15 +44,12 @@ export function TopBar({
   bottleneckCount,
   analyzedAt,
   reanalyzing,
-  onAnalyze,
   onReanalyze,
   onRunChecks,
   onOpenBrain,
   tab,
   onTabChange,
 }: TopBarProps) {
-  const [path, setPath] = useState('');
-
   return (
     <header className="top-bar">
       <div className="top-bar-brand">
@@ -81,19 +76,6 @@ export function TopBar({
       </div>
 
       <div className="top-bar-actions">
-        <input
-          className="path-input"
-          placeholder="/absolute/path/to/project"
-          value={path}
-          spellCheck={false}
-          onChange={(e) => setPath(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && path.trim()) onAnalyze(path.trim());
-          }}
-        />
-        <button className="btn" disabled={!path.trim() || !connected} onClick={() => onAnalyze(path.trim())}>
-          Analyze
-        </button>
         <button
           className="btn"
           disabled={!hasProject || !connected || reanalyzing}
