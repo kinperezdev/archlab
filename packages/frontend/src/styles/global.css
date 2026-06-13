@@ -26,14 +26,18 @@ body {
   overflow: hidden;
 }
 
+/* Flex row: fixed-width sidebars, the center canvas takes all remaining space.
+   When a sidebar is removed the canvas grows to fill the gap automatically. */
 .app-body {
-  display: grid;
-  grid-template-columns: 240px 1fr 340px;
+  display: flex;
+  flex-direction: row;
   min-height: 0;
 }
 
 .app-center {
   position: relative;
+  flex: 1 1 0;
+  /* min-width:0 lets the canvas shrink/grow inside flex without clipping. */
   min-width: 0;
   border-left: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
@@ -41,6 +45,7 @@ body {
 
 /* ---------- Top bar ---------- */
 .top-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -93,11 +98,72 @@ body {
   margin-left: auto;
 }
 .canvas-filter-tabs-topbar {
+  /* Absolutely centered in the full top-bar width, independent of the logo and
+     the right-side badge sizes. */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   padding: 3px;
   border-radius: 30px;
+}
+/* Project loader: path input + Analyze, pinned just right of the brand. */
+.top-bar-loader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.project-path-input {
+  width: 260px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.project-path-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+/* Push the status cluster to the far right. */
+.top-bar-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+/* Pipeline controls live inside the Security tab canvas area. */
+.pipeline-controls {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+.pipeline-controls-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  color: var(--color-text-dim);
+}
+.pipeline-controls-row {
+  display: flex;
+  gap: var(--space-2);
 }
 .path-input {
   flex: 1;
@@ -163,14 +229,68 @@ body {
 }
 
 /* ---------- Sidebars ---------- */
+/* Sidebars are flex rows: a scrolling content column plus an edge toggle bar
+   that is a real flex child (never absolutely positioned over the canvas). */
 .left-sidebar,
 .right-sidebar {
+  position: relative;
   background: var(--color-surface);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Drag handle on a panel's left edge for resizing. */
+.panel-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  z-index: 40;
+  cursor: col-resize;
+  background: transparent;
+  transition: background var(--duration-fast) ease;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle:active {
+  background: var(--color-accent);
+}
+.panel-resize-handle.on-dark:hover,
+.panel-resize-handle.on-dark:active {
+  background: var(--code-accent);
+}
+.left-sidebar { width: 240px; }
+.right-sidebar { width: 340px; }
+.sidebar-scroll {
+  flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
+/* Edge toggle: a thin full-height bar attached to the sidebar's inner edge. */
+.sidebar-edge-toggle {
+  flex-shrink: 0;
+  width: 18px;
+  border: none;
+  background: var(--color-surface-2);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.sidebar-edge-toggle:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+.left-sidebar .sidebar-edge-toggle { border-left: 1px solid var(--color-border); order: 2; }
+.right-sidebar .sidebar-edge-toggle { border-right: 1px solid var(--color-border); order: 0; }
 .panel-block {
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
@@ -187,34 +307,38 @@ body {
   color: var(--color-text-dim);
 }
 
-/* Sidebar Toggle Buttons */
-.sidebar-toggle-btn {
-  position: absolute;
-  top: 16px;
-  z-index: 101;
+/* Reveal tab — shown on the far screen edge when a sidebar is collapsed. */
+.panel-reveal-tab {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 120;
+  width: 20px;
+  height: 52px;
+  display: grid;
+  place-items: center;
   background: var(--color-surface);
   color: var(--color-text-dim);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all var(--transition-fast) ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  transition: all var(--duration-fast) ease;
 }
-.sidebar-toggle-btn:hover {
+.panel-reveal-tab:hover {
   color: var(--color-text);
   border-color: var(--color-accent);
   background: var(--color-surface-hover);
 }
-.sidebar-toggle-btn.toggle-left {
-  left: 16px;
+.panel-reveal-tab.on-left {
+  left: 0;
+  border-radius: 0 8px 8px 0;
+  border-left: none;
 }
-.sidebar-toggle-btn.toggle-right {
-  right: 16px;
+.panel-reveal-tab.on-right {
+  right: 0;
+  border-radius: 8px 0 0 8px;
+  border-right: none;
 }
 
 
@@ -707,6 +831,52 @@ body {
 }
 .bottom-panel-resizer:hover {
   background: rgba(0, 0, 0, 0.05);
+}
+/* Collapse button pinned to the top edge of the bottom panel. */
+.bottom-collapse-btn {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 101;
+  width: 44px;
+  height: 18px;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: var(--color-surface);
+  color: var(--color-text-dim);
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.bottom-collapse-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
+/* Floating pill to reveal the bottom panel once it has been collapsed. */
+.bottom-reveal-btn {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  padding: 4px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-dim);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.bottom-reveal-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface-2);
 }
 .pipeline-track {
   display: flex;

@@ -23,9 +23,22 @@ interface BottomPanelProps {
   onCommand: (line: string) => void;
   height: number;
   onResize: (height: number) => void;
+  /** Collapse the whole panel to zero height. */
+  onCollapse: () => void;
+  /** Hide the collapse toggle (e.g. while a modal is open). */
+  toggleHidden?: boolean;
 }
 
-export function BottomPanel({ steps, logs, terminal, onCommand, height, onResize }: BottomPanelProps) {
+export function BottomPanel({
+  steps,
+  logs,
+  terminal,
+  onCommand,
+  height,
+  onResize,
+  onCollapse,
+  toggleHidden,
+}: BottomPanelProps) {
   const [tab, setTab] = useState<'terminal' | 'logs'>('terminal');
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -75,6 +88,14 @@ export function BottomPanel({ steps, logs, terminal, onCommand, height, onResize
   return (
     <footer className="bottom-panel">
       <div className="bottom-panel-resizer" onMouseDown={handleMouseDown} />
+      <button
+        className="bottom-collapse-btn"
+        onClick={onCollapse}
+        title="Hide bottom panel (M)"
+        style={toggleHidden ? { display: 'none' } : undefined}
+      >
+        ▼
+      </button>
       <div className="pipeline-track">
         <div className="pipeline-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '0 4px' }}>
           <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-dim)', fontWeight: 600 }}>Checks Pipeline</span>

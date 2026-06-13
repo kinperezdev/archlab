@@ -5,9 +5,8 @@
  * and the running findings list.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  PORTS,
   type CanvasGraph,
   type CanvasNode,
   type Diagnostic,
@@ -35,6 +34,12 @@ interface RightSidebarProps {
   diagnostics: Diagnostic[];
   selectedNode: CanvasNode | null;
   intelligence: ProjectIntelligence | null;
+  /** Collapse the sidebar (slides it out to the right). */
+  onCollapse: () => void;
+  /** Current panel width in px. */
+  width: number;
+  /** Begin a drag-resize from the left-edge handle. */
+  onResizeStart: (e: React.MouseEvent) => void;
 }
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
@@ -60,13 +65,15 @@ function buildFindingPrompt(
 }
 
 export function RightSidebar({
-  projectId,
   projectName,
   projectPath,
   graph,
   diagnostics,
   selectedNode,
   intelligence,
+  onCollapse,
+  width,
+  onResizeStart,
 }: RightSidebarProps) {
   const latest = diagnostics[diagnostics.length - 1] ?? null;
   const sorted = [...diagnostics].sort(
@@ -74,7 +81,22 @@ export function RightSidebar({
   );
 
   return (
-    <aside className="right-sidebar">
+    <aside className="right-sidebar" style={{ width }}>
+      <div
+        className="panel-resize-handle"
+        onMouseDown={onResizeStart}
+        title="Drag to resize"
+        role="separator"
+        aria-orientation="vertical"
+      />
+      <button
+        className="sidebar-edge-toggle"
+        onClick={onCollapse}
+        title="Hide right sidebar"
+      >
+        ▶
+      </button>
+      <div className="sidebar-scroll">
       {latest && (
         <DiagnosticPrompt
           diagnostic={latest}
@@ -86,7 +108,6 @@ export function RightSidebar({
 
       {selectedNode && (
         <NodeInspector
-          projectId={projectId}
           projectName={projectName}
           projectPath={projectPath}
           node={selectedNode}
@@ -147,6 +168,7 @@ export function RightSidebar({
           {diagnostics.length === 0 && <li className="file-empty">No findings yet. Run checks.</li>}
         </ul>
       </section>
+      </div>
     </aside>
   );
 }
@@ -220,98 +242,6 @@ function DiagnosticPrompt({
   );
 }
 
-/** Heuristically extract the most architecturally important lines based on node kind. */
-function getImportantSummary(content: string, kind: string): string {
-  const lines = content.split('\n');
-  const importantLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    // Skip generic imports to focus context on the core code structure
-    if (line.startsWith('import ') && !line.includes('express') && !line.includes('prisma') && !line.includes('mongoose')) {
-      continue;
-    }
-
-    let isImportant = false;
-
-    if (kind === 'endpoint' || kind === 'route') {
-      if (
-        /\.(get|post|put|delete|patch|use|all)\(/.test(line) ||
-        /router\./i.test(line) ||
-        /route\(/i.test(line) ||
-        /controller/i.test(line) ||
-        /handler/i.test(line) ||
-        /export\s+(const|function|default)/.test(line)
-      ) {
-        isImportant = true;
-      }
-    } else if (kind === 'database') {
-      if (
-        /schema|model|table|column|createTable|select|insert|update|delete/i.test(line) ||
-        /db\./i.test(line) ||
-        /prisma\./i.test(line) ||
-        /mongoose/i.test(line) ||
-        /connect/i.test(line)
-      ) {
-        isImportant = true;
-      }
-    } else if (kind === 'middleware' || kind === 'auth') {
-      if (
-        /jwt|auth|verify|passport|session|login|register|next\(|request|response|middleware|use\(/i.test(line) ||
-        /export\s+(const|function|default)/.test(line)
-      ) {
-        isImportant = true;
-      }
-    } else if (kind === 'mcp') {
-      if (
-        /mcp|server|tool|resource|prompt|callTool|register|Mcpserver|stdio|sse/i.test(line) ||
-        /export\s+(const|function|default)/.test(line)
-      ) {
-        isImportant = true;
-      }
-    } else {
-      if (
-        /export\s+(const|function|default|class|interface|type)/.test(line) ||
-        /interface\s+\w+Props/.test(line) ||
-        /use(State|Effect|Memo|Callback|Context)/.test(line)
-      ) {
-        isImportant = true;
-      }
-    }
-
-    if (isImportant) {
-      importantLines.push(`L${i + 1}: ${lines[i]}`);
-    }
-  }
-
-  if (importantLines.length === 0) {
-    return lines
-      .slice(0, 15)
-      .map((l, idx) => `L${idx + 1}: ${l}`)
-      .join('\n') + (lines.length > 15 ? `\n... (${lines.length - 15} lines truncated)` : '');
-  }
-
-  return importantLines.join('\n');
-}
-
-interface DbColumn {
-  name: string;
-  type: string;
-  isPk: boolean;
-  isFk: boolean;
-  fkRelation?: {
-    parentTable: string;
-    parentColumn: string;
-  };
-}
-
-interface DbTable {
-  name: string;
-  columns: DbColumn[];
-}
-
 /** Human-friendly label for a node kind, used in the inspector header. */
 const KIND_LABEL: Record<string, string> = {
   component: 'Component',
@@ -364,30 +294,18 @@ function describeNode(node: CanvasNode, outgoing: CanvasNode[], incoming: Canvas
 
 /** Node details plus a live preview of the file's contents (defaulting to a summary view). */
 function NodeInspector({
-  projectId,
   projectName,
   projectPath,
   node,
   graph,
   diagnostics,
 }: {
-  projectId: string | null;
   projectName: string | null;
   projectPath: string | null;
   node: CanvasNode;
   graph: CanvasGraph;
   diagnostics: Diagnostic[];
 }) {
-  const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  
-  // Parse dbSchema if available from node metadata
-  const dbSchema: DbTable[] | null = node.meta?.dbSchema
-    ? JSON.parse(String(node.meta.dbSchema))
-    : null;
-
-  const [viewMode, setViewMode] = useState<'summary' | 'raw' | 'schema'>(dbSchema ? 'schema' : 'summary');
-
   // Derive connections and related findings from the in-memory analysis only.
   const { outgoing, incoming, relatedFindings, description } = useMemo(() => {
     const byId = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -438,41 +356,6 @@ function NodeInspector({
       ),
     };
   }, [graph, node, diagnostics]);
-
-  useEffect(() => {
-    // If the node changes and has a dbSchema, default to schema view, otherwise summary
-    if (dbSchema) {
-      setViewMode('schema');
-    } else {
-      setViewMode('summary');
-    }
-  }, [node.id, Boolean(dbSchema)]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!projectId || !node.filePath) {
-      setContent(null);
-      return;
-    }
-    setLoading(true);
-    const url = `http://127.0.0.1:${PORTS.backend}/file?projectId=${encodeURIComponent(
-      projectId,
-    )}&path=${encodeURIComponent(node.filePath)}`;
-    fetch(url)
-      .then((r) => r.json())
-      .then((d: { ok?: boolean; content?: string }) => {
-        if (!cancelled) setContent(d.ok ? (d.content ?? '') : 'Could not load file.');
-      })
-      .catch(() => {
-        if (!cancelled) setContent('Could not load file.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, node.filePath]);
 
   return (
     <section className="panel-block">
@@ -572,81 +455,6 @@ function NodeInspector({
           </ul>
         )}
       </div>
-
-      {node.filePath && (
-        <div className="file-preview">
-          <div className="file-preview-tabs">
-            {dbSchema && (
-              <button
-                className={`tab-btn ${viewMode === 'schema' ? 'active' : ''}`}
-                onClick={() => setViewMode('schema')}
-              >
-                Schema
-              </button>
-            )}
-            <button
-              className={`tab-btn ${viewMode === 'summary' ? 'active' : ''}`}
-              onClick={() => setViewMode('summary')}
-            >
-              Summary
-            </button>
-            <button
-              className={`tab-btn ${viewMode === 'raw' ? 'active' : ''}`}
-              onClick={() => setViewMode('raw')}
-            >
-              Full Code
-            </button>
-          </div>
-          {loading ? (
-            <p className="file-empty">Loading…</p>
-          ) : viewMode === 'schema' && dbSchema ? (
-            <div className="db-schema-inspector">
-              {dbSchema.map((table) => (
-                <div key={table.name} className="db-table-card">
-                  <div className="db-table-header">
-                    <span className="table-glyph">⛁</span>
-                    <span className="table-name">{table.name}</span>
-                  </div>
-                  <table className="db-columns-table">
-                    <thead>
-                      <tr>
-                        <th>Field</th>
-                        <th>Type</th>
-                        <th>Keys</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {table.columns.map((col) => (
-                        <tr key={col.name} className={col.isPk ? 'row-pk' : col.isFk ? 'row-fk' : ''}>
-                          <td className="col-name">{col.name}</td>
-                          <td className="col-type">{col.type}</td>
-                          <td className="col-keys">
-                            {col.isPk && <span className="key-badge pk" title="Primary Key">PK</span>}
-                            {col.isFk && (
-                              <span
-                                className="key-badge fk"
-                                title={`Foreign Key references ${col.fkRelation?.parentTable}.${col.fkRelation?.parentColumn}`}
-                              >
-                                FK → {col.fkRelation?.parentTable}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <pre className="file-code">
-              {viewMode === 'summary' && content
-                ? getImportantSummary(content, node.kind)
-                : (content ?? '')}
-            </pre>
-          )}
-        </div>
-      )}
     </section>
   );
 }

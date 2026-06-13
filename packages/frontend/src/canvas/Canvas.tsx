@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -80,6 +80,22 @@ function degreeMap(graph: CanvasGraph): Map<string, number> {
   return d;
 }
 
+/** Why an isolated (edge-less) node of a given kind might be a problem. */
+function isolationReasonFor(kind: string): string {
+  switch (kind) {
+    case 'component': return 'Unused component';
+    case 'route': return 'Unreachable route';
+    case 'endpoint': return 'Unreachable endpoint';
+    case 'middleware': return 'Unused middleware';
+    case 'auth': return 'Detached auth layer';
+    case 'database': return 'Orphaned model';
+    case 'external-service': return 'Disconnected service';
+    case 'mcp': return 'Disconnected service';
+    case 'config': return 'Unreferenced config';
+    default: return 'Orphaned node';
+  }
+}
+
 // Estimated node footprint, used only to size the swim-lane background boxes.
 const NODE_W = 240;
 const NODE_H = 110;
@@ -117,7 +133,7 @@ interface CanvasProps {
   diagnostics: Diagnostic[];
   onSelectNode: (nodeId: string | null) => void;
   selectedNodeId: string | null;
-  filter: 'all' | 'frontend' | 'backend';
+  filter: 'all' | 'frontend' | 'backend' | 'api' | 'security';
 }
 
 interface EdgeRef {
@@ -151,10 +167,178 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Auto-center viewport ONLY when the node selection actually changes
+  // Node ids flagged by security: anything the security-checks step raised, or
+  // any critical/high finding, drives the Security tab's node selection.
+  const securityNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const d of diagnostics) {
+      if (d.step === 'security-checks' || d.severity === 'critical' || d.severity === 'high') {
+        for (const id of d.relatedNodeIds) ids.add(id);
+      }
+    }
+    return ids;
+  }, [diagnostics]);
+
+  // Which nodes belong on screen for the active filter. Lane tabs filter by
+  // lane; API shows route/endpoint nodes; Security shows auth, middleware, and
+  // security-flagged nodes. API and Security also pull in directly connected
+  // neighbors so the matched nodes are shown with their connections.
+  const filteredNodes = useMemo(() => {
+    const isMatch = (n: CanvasNode): boolean => {
+      switch (filter) {
+        case 'frontend':
+          return n.lane === 'frontend';
+        case 'backend':
+          return n.lane === 'backend' || n.lane === 'external';
+        case 'api':
+          return n.kind === 'route' || n.kind === 'endpoint';
+        case 'security':
+          return n.kind === 'auth' || n.kind === 'middleware' || securityNodeIds.has(n.id);
+        default:
+          return true;
+      }
+    };
+
+    const base = new Set<string>();
+    for (const n of graph.nodes) if (isMatch(n)) base.add(n.id);
+
+    if (filter === 'api' || filter === 'security') {
+      const seed = new Set(base);
+      for (const e of graph.edges) {
+        if (seed.has(e.source)) base.add(e.target);
+        if (seed.has(e.target)) base.add(e.source);
+      }
+    }
+
+    return graph.nodes.filter((n) => base.has(n.id));
+  }, [graph.nodes, graph.edges, filter, securityNodeIds]);
+
+  // Split the visible nodes into Connected (≥1 edge) and Isolated (no edges).
+  // Isolated nodes are relocated into a dedicated grid below the connected
+  // graph so the two regions read as clearly separate containers.
+  const { layoutNodes, isolatedIds } = useMemo(() => {
+    const visibleIds = new Set(filteredNodes.map((n) => n.id));
+    const degree = new Map<string, number>();
+    for (const e of graph.edges) {
+      if (visibleIds.has(e.source) && visibleIds.has(e.target)) {
+        degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+        degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+      }
+    }
+    const connected = filteredNodes.filter((n) => (degree.get(n.id) ?? 0) > 0);
+    const isolated = filteredNodes.filter((n) => (degree.get(n.id) ?? 0) === 0);
+
+    const baseX = connected.length ? Math.min(...connected.map((n) => n.position.x)) : 120;
+    const maxY = connected.length ? Math.max(...connected.map((n) => n.position.y)) + NODE_H : 120;
+    // Drop the Isolated zone well below the Connected graph, with room for its label.
+    const zoneTop = maxY + 280;
+
+    const COLS = 4;
+    const CELL_W = 320;
+    const CELL_H = 200;
+    const isoPos = new Map<string, { x: number; y: number }>();
+    isolated.forEach((n, i) => {
+      isoPos.set(n.id, {
+        x: baseX + (i % COLS) * CELL_W,
+        y: zoneTop + Math.floor(i / COLS) * CELL_H,
+      });
+    });
+
+    const laid = filteredNodes.map((n) =>
+      isoPos.has(n.id) ? { ...n, position: isoPos.get(n.id)! } : n,
+    );
+    return { layoutNodes: laid, isolatedIds: new Set(isolated.map((n) => n.id)) };
+  }, [filteredNodes, graph.edges]);
+
+  // Detect each lane's entry point and every node's depth from it. Entry points
+  // are matched by conventional filename first (main/index/app/server), with a
+  // fallback to the node that imports the most and is imported the least.
+  const { entryIds, depthByNode } = useMemo(() => {
+    const FRONTEND_ENTRY = /(^|\/)(main|index|app)\.(tsx|jsx|ts|js)$/i;
+    const BACKEND_ENTRY = /(^|\/)(index|app|server|main)\.(ts|js|mjs|cjs)$/i;
+
+    const outDeg = new Map<string, number>();
+    const inDeg = new Map<string, number>();
+    for (const e of graph.edges) {
+      outDeg.set(e.source, (outDeg.get(e.source) ?? 0) + 1);
+      inDeg.set(e.target, (inDeg.get(e.target) ?? 0) + 1);
+    }
+
+    const entries = new Set<string>();
+    const detectFor = (lane: string, re: RegExp) => {
+      const laneNodes = graph.nodes.filter((n) => n.lane === lane);
+      const named = laneNodes.filter((n) => n.filePath && re.test(n.filePath));
+      if (named.length > 0) {
+        named.forEach((n) => entries.add(n.id));
+        return;
+      }
+      // Fallback: the file that imports everything but is imported by nothing.
+      let best: string | null = null;
+      let bestScore = -Infinity;
+      for (const n of laneNodes) {
+        const score = (outDeg.get(n.id) ?? 0) - (inDeg.get(n.id) ?? 0);
+        if (score > bestScore) {
+          bestScore = score;
+          best = n.id;
+        }
+      }
+      if (best && (outDeg.get(best) ?? 0) > 0) entries.add(best);
+    };
+    detectFor('frontend', FRONTEND_ENTRY);
+    detectFor('backend', BACKEND_ENTRY);
+
+    // Multi-source BFS over undirected edges to assign a depth to every node.
+    const adj = new Map<string, string[]>();
+    const link = (a: string, b: string) => {
+      const list = adj.get(a);
+      if (list) list.push(b);
+      else adj.set(a, [b]);
+    };
+    for (const e of graph.edges) {
+      link(e.source, e.target);
+      link(e.target, e.source);
+    }
+
+    const depth = new Map<string, number>();
+    const queue: string[] = [];
+    for (const id of entries) {
+      depth.set(id, 0);
+      queue.push(id);
+    }
+    for (let head = 0; head < queue.length; head++) {
+      const cur = queue[head];
+      const d = depth.get(cur)!;
+      for (const nb of adj.get(cur) ?? []) {
+        if (!depth.has(nb)) {
+          depth.set(nb, d + 1);
+          queue.push(nb);
+        }
+      }
+    }
+
+    return { entryIds: entries, depthByNode: depth };
+  }, [graph.nodes, graph.edges]);
+
+  // Structural signature: only the SET of visible nodes and their (laid-out)
+  // positions. This intentionally excludes animation state, so the live
+  // pipeline (which streams hundreds of node-animate updates) does NOT rebuild.
+  const structureKey = useMemo(
+    () =>
+      layoutNodes
+        .map((n) => `${n.id}@${n.position.x},${n.position.y}${isolatedIds.has(n.id) ? '!' : ''}`)
+        .join('|') +
+      // Edge signature so backend connector ports refresh when edges change.
+      `#${graph.edges.length}` +
+      // Entry/depth signature so the hierarchy badges refresh on re-analysis.
+      `~${[...entryIds].sort().join(',')}~${depthByNode.size}`,
+    [layoutNodes, isolatedIds, graph.edges.length, entryIds, depthByNode],
+  );
+
+  // Auto-center viewport ONLY when the node selection actually changes. Uses the
+  // laid-out positions so selecting an isolated node pans to its relocated spot.
   useEffect(() => {
     if (!selectedNodeId) return;
-    const graphNode = graph.nodes.find((n) => n.id === selectedNodeId);
+    const graphNode = layoutNodes.find((n) => n.id === selectedNodeId);
     if (graphNode) {
       // Smoothly pan to the node coordinates, placing it in the center. Zoom scale: 1.1.
       setCenter(graphNode.position.x + 80, graphNode.position.y + 40, {
@@ -162,43 +346,21 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
         duration: 400,
       });
     }
-  }, [selectedNodeId, graph.nodes, setCenter]);
-
-  // Which nodes belong on screen for the active lane filter.
-  const matchesFilter = useCallback(
-    (lane: string) => {
-      if (filter === 'frontend') return lane === 'frontend';
-      if (filter === 'backend') return lane === 'backend' || lane === 'external';
-      return true;
-    },
-    [filter],
-  );
-
-  const filteredNodes = useMemo(
-    () => graph.nodes.filter((n) => matchesFilter(n.lane)),
-    [graph.nodes, matchesFilter],
-  );
-
-  // Structural signature: only the SET of visible nodes and their positions.
-  // This intentionally excludes animation state, so the live pipeline (which
-  // streams hundreds of node-animate updates) does NOT trigger a rebuild.
-  const structureKey = useMemo(
-    () =>
-      filteredNodes.map((n) => `${n.id}@${n.position.x},${n.position.y}`).join('|') +
-      // Edge signature so backend connector ports refresh when edges change.
-      `#${graph.edges.length}`,
-    [filteredNodes, graph.edges.length],
-  );
+  }, [selectedNodeId, layoutNodes, setCenter]);
 
   // Background swim-lane containers, sized to wrap each lane's nodes. Rendered
   // behind the real nodes (zIndex -1) so the Frontend/Backend split is obvious.
   // Memoized on structureKey so it does not recalculate on animation updates.
   const laneGroups = useMemo(() => {
     const groups: ReturnType<typeof buildLaneGroup>[] = [];
-    const frontend = filteredNodes.filter((n) => n.lane === 'frontend');
-    const backend = filteredNodes.filter((n) => n.lane === 'backend');
-    if (frontend.length > 0) groups.push(buildLaneGroup('__lane_frontend', 'Frontend', 'frontend', frontend));
-    if (backend.length > 0) groups.push(buildLaneGroup('__lane_backend', 'Backend', 'backend', backend));
+    const connected = layoutNodes.filter((n) => !isolatedIds.has(n.id));
+    const isolated = layoutNodes.filter((n) => isolatedIds.has(n.id));
+    if (connected.length > 0) {
+      groups.push(buildLaneGroup('__lane_connected', 'Connected', 'connected', connected));
+    }
+    if (isolated.length > 0) {
+      groups.push(buildLaneGroup('__lane_isolated', 'Isolated', 'isolated', isolated));
+    }
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structureKey]);
@@ -208,22 +370,29 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
   //    never cleared or rebuilt mid-run.
   useEffect(() => {
     const degree = degreeMap(graph);
-    const realNodes = filteredNodes.map((n) => ({
-      id: n.id,
-      type: 'arch',
-      position: n.position,
-      data: {
-        label: n.label,
-        kind: n.kind,
-        animation: n.animation,
-        filePath: n.filePath,
-        meta: n.meta,
-        isHighlighted: false,
-        isDimmed: false,
-        // Backend nodes get explicit operation-labeled connector ports.
-        ports: n.lane === 'backend' ? portsFor(n.id, graph, degree) : undefined,
-      },
-    }));
+    const realNodes = layoutNodes.map((n) => {
+      const isIsolated = isolatedIds.has(n.id);
+      return {
+        id: n.id,
+        type: 'arch',
+        position: n.position,
+        data: {
+          label: n.label,
+          kind: n.kind,
+          animation: n.animation,
+          filePath: n.filePath,
+          meta: n.meta,
+          isHighlighted: false,
+          isDimmed: false,
+          isIsolated,
+          isolationReason: isIsolated ? isolationReasonFor(n.kind) : undefined,
+          isEntry: entryIds.has(n.id),
+          depth: depthByNode.get(n.id),
+          // Backend nodes get explicit operation-labeled connector ports.
+          ports: n.lane === 'backend' && !isIsolated ? portsFor(n.id, graph, degree) : undefined,
+        },
+      };
+    });
     // Lane backgrounds first so they paint behind the real nodes.
     setNodes([...laneGroups, ...realNodes]);
     // filteredNodes is captured via structureKey and stable laneGroups to avoid
@@ -371,20 +540,27 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
 
   // 4. Auto Arrange nodes back to their default layout positions
   const handleAutoArrange = () => {
-    const realNodes = filteredNodes.map((n) => ({
-      id: n.id,
-      type: 'arch',
-      position: { ...n.position },
-      data: {
-        label: n.label,
-        kind: n.kind,
-        animation: n.animation,
-        filePath: n.filePath,
-        meta: n.meta,
-        isHighlighted: false,
-        isDimmed: false,
-      },
-    }));
+    const realNodes = layoutNodes.map((n) => {
+      const isIsolated = isolatedIds.has(n.id);
+      return {
+        id: n.id,
+        type: 'arch',
+        position: { ...n.position },
+        data: {
+          label: n.label,
+          kind: n.kind,
+          animation: n.animation,
+          filePath: n.filePath,
+          meta: n.meta,
+          isHighlighted: false,
+          isDimmed: false,
+          isIsolated,
+          isolationReason: isIsolated ? isolationReasonFor(n.kind) : undefined,
+          isEntry: entryIds.has(n.id),
+          depth: depthByNode.get(n.id),
+        },
+      };
+    });
     setNodes([...laneGroups, ...realNodes]);
   };
 

@@ -31,6 +31,14 @@ export interface ArchNodeData {
   isBottleneck?: boolean;
   bottleneckType?: string;
   bottleneckHint?: string;
+  /** Isolation flag (amber warning): node has no edges to anything else. */
+  isIsolated?: boolean;
+  /** Plain-English reason isolation might be a problem, e.g. "Unused component". */
+  isolationReason?: string;
+  /** Detected entry point of its lane — rendered larger with an ENTRY badge. */
+  isEntry?: boolean;
+  /** Depth from the nearest entry point (entry = 0). Undefined if unreachable. */
+  depth?: number;
 }
 
 interface DbColumn {
@@ -133,15 +141,37 @@ export function ArchNode({ data }: NodeProps<ArchNodeData>) {
     <div
       className={`arch-node kind-${data.kind} anim-${data.animation} ${highlightClass} ${dimClass} ${
         hasPorts ? 'has-ports' : ''
-      } ${data.isBottleneck ? 'is-bottleneck' : ''}`}
+      } ${data.isBottleneck ? 'is-bottleneck' : ''} ${data.isIsolated ? 'is-isolated' : ''} ${
+        data.isEntry ? 'is-entry' : ''
+      }`}
       title={data.isBottleneck ? data.bottleneckHint ?? data.bottleneckType : data.filePath ?? data.label}
     >
       <Handle type="target" position={Position.Left} />
+
+      {data.isEntry && (
+        <span className="entry-badge" title="Entry point of this lane">
+          <span className="entry-icon">★</span>
+          ENTRY
+        </span>
+      )}
+
+      {data.depth !== undefined && (
+        <span className="depth-badge" title={`Depth ${data.depth} from the entry point`}>
+          L{data.depth}
+        </span>
+      )}
 
       {data.isBottleneck && (
         <span className="bottleneck-badge" title={data.bottleneckHint}>
           <span className="bottleneck-icon">⚠</span>
           {data.bottleneckType}
+        </span>
+      )}
+
+      {data.isIsolated && data.isolationReason && (
+        <span className="isolation-badge" title={`${data.isolationReason} — this node has no connections to the rest of the project.`}>
+          <span className="isolation-icon">⚠</span>
+          {data.isolationReason}
         </span>
       )}
 

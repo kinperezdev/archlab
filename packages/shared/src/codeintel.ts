@@ -1,0 +1,125 @@
+/**
+ * Code Intelligence types — the contract behind the Code Intelligence Panel.
+ *
+ * The panel reads a file from disk, classifies every line, explains what each
+ * line does, offers context-aware actions, and (when an action is picked) runs
+ * a project-wide Impact Analysis that produces real before/after diffs the user
+ * can apply to disk. Everything is deterministic and computed from the code.
+ */
+
+/** Coarse syntactic role of a single source line, drives explanation + actions. */
+export type LineKind =
+  | 'empty'
+  | 'comment'
+  | 'import'
+  | 'export'
+  | 'function' // function / method declaration
+  | 'class'
+  | 'route' // an HTTP route / endpoint registration
+  | 'db-query' // a database read/write
+  | 'return'
+  | 'assignment'
+  | 'call'
+  | 'control' // if / for / while / switch
+  | 'jsx'
+  | 'brace' // a lone block delimiter
+  | 'type' // type / interface declaration
+  | 'code'; // anything else
+
+/** A clickable action offered in a line's "What you can do here" menu. */
+export interface LineAction {
+  /** Stable id consumed by the impact endpoint. */
+  id: string;
+  /** Button label shown in the menu. */
+  label: string;
+  /**
+   * Reference actions ("Find all references") open the connections popover
+   * instead of the impact panel. Edit actions run Impact Analysis.
+   */
+  kind: 'edit' | 'reference';
+  /** When true this action was promoted to the top by a pipeline finding. */
+  fromFinding?: boolean;
+}
+
+/** Everything the panel needs to render one line. */
+export interface LineInfo {
+  /** 1-based line number. */
+  n: number;
+  /** Raw source text of the line (untrimmed). */
+  text: string;
+  kind: LineKind;
+  /** Plain-English one-liner describing what this specific line does. */
+  explanation: string;
+  /** Context-aware actions for this line. */
+  actions: LineAction[];
+  /**
+   * Count of other files that reference the symbol declared on this line.
+   * Drives the "used in N files" connections badge. 0 means no badge.
+   */
+  refCount: number;
+  /** The symbol name this line declares/imports, used to resolve references. */
+  symbol?: string;
+}
+
+/** A navigable symbol (function / class / route / method) for the navigator. */
+export interface SymbolInfo {
+  name: string;
+  kind: 'function' | 'class' | 'method' | 'route' | 'type';
+  /** 1-based line where the symbol is declared. */
+  line: number;
+}
+
+/** The full code-intelligence payload for one file. */
+export interface FileIntel {
+  path: string;
+  ext: string;
+  lines: LineInfo[];
+  symbols: SymbolInfo[];
+}
+
+/** One place in the project that references a symbol. */
+export interface CodeReference {
+  /** Project-relative file path. */
+  path: string;
+  /** 1-based line number of the reference. */
+  line: number;
+  /** Trimmed source of the referencing line, for a preview snippet. */
+  snippet: string;
+}
+
+/** A contiguous change inside one file: replace `before` lines with `after`. */
+export interface DiffHunk {
+  /** 1-based line where the hunk starts in the original file. */
+  startLine: number;
+  /** Original lines being replaced (may be empty for a pure insertion). */
+  before: string[];
+  /** Replacement lines (may be empty for a pure deletion). */
+  after: string[];
+}
+
+/** Every change Impact Analysis wants to make to a single file. */
+export interface AffectedFile {
+  path: string;
+  /** Why this file is affected, e.g. "callers must await the now-async function". */
+  reason: string;
+  hunks: DiffHunk[];
+}
+
+/** The result of running Impact Analysis for one action on one line. */
+export interface ImpactAnalysis {
+  /** Echo of what was requested, so apply can re-run deterministically. */
+  request: { projectId: string; path: string; line: number; actionId: string };
+  /** Human summary, e.g. "This change affects 3 files. Here is what will update." */
+  summary: string;
+  affected: AffectedFile[];
+}
+
+/** Result of writing an Impact Analysis to disk. */
+export interface ApplyResult {
+  ok: boolean;
+  /** Absolute path of the timestamped backup folder created before writing. */
+  backupDir: string;
+  /** Project-relative paths that were written. */
+  written: string[];
+  error?: string;
+}

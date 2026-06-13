@@ -22,6 +22,9 @@ import { learnFromProject, loadBrain } from './brain/brainStore.js';
 import { BRAIN_DIR } from './brain/paths.js';
 import { createSession, runCommand, type ShellSession } from './terminal/shell.js';
 import { inferSchemaFromAppFlow } from './analyzer/inference.js';
+import { buildFileIntel, findReferences, readFileForIntel } from './analyzer/codeIntel.js';
+import { analyzeImpact, applyImpact, diffToImpact } from './analyzer/codeActions.js';
+import type { ImpactAnalysis } from '@archlab/shared';
 
 const HOST = '127.0.0.1';
 
@@ -154,6 +157,135 @@ app.get('/file', (req, res) => {
     ext: file.ext,
     content: content || '(binary or too large to preview)',
   });
+});
+
+// ---- Code Intelligence Panel ------------------------------------------
+
+/**
+ * Resolve an analyzed project by id. Returns it from the in-memory cache, or
+ * recovers it from the persisted project index (re-analyzing the remembered
+ * root path) so the Code Intelligence Panel keeps working after a backend
+ * restart or page refresh.
+ */
+function getAnalysis(projectId: string): AnalysisResult | null {
+  const inMem = projects.get(projectId);
+  if (inMem) return inMem;
+  const remembered = recallProject(projectId);
+  if (!remembered) return null;
+  try {
+    const analysis = analyzeProject(remembered.rootPath);
+    projects.set(analysis.projectId, analysis);
+    return analysis;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[code] failed to recover project ${projectId}: ${String(err)}`);
+    return null;
+  }
+}
+
+/**
+ * Build the absolute path for a node's stored file path. The path may already
+ * be absolute (starts with "/") — use it as-is — otherwise join it onto the
+ * analyzed project's root path.
+ */
+function resolveAbsolutePath(projectRoot: string, relPath: string): string {
+  return relPath.startsWith('/') ? relPath : path.join(projectRoot, relPath);
+}
+
+// Full code-intelligence view of one file: every line classified, explained,
+// and decorated with context-aware actions, plus a symbol navigator.
+app.get('/code/file', (req, res) => {
+  const projectId = String(req.query.projectId ?? '');
+  const relPath = String(req.query.path ?? '');
+
+  const analysis = getAnalysis(projectId);
+  if (!analysis) {
+    return res
+      .status(404)
+      .json({ ok: false, error: `Unknown project "${projectId}" — analyze a folder first.` });
+  }
+
+  // Build and log the exact absolute path before attempting the read.
+  const absPath = resolveAbsolutePath(analysis.rootPath, relPath);
+  // eslint-disable-next-line no-console
+  console.log(`[code/file] projectRoot="${analysis.rootPath}" relPath="${relPath}" -> reading: ${absPath}`);
+
+  if (!fs.existsSync(absPath)) {
+    // eslint-disable-next-line no-console
+    console.error(`[code/file] file does not exist on disk: ${absPath}`);
+    return res.status(404).json({ ok: false, error: `File not found on disk: ${absPath}` });
+  }
+
+  try {
+    const intel = buildFileIntel(analysis, relPath);
+    if (!intel) {
+      return res.status(500).json({ ok: false, error: `Could not read file: ${absPath}` });
+    }
+    return res.json({ ok: true, intel });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[code/file] read failed for ${absPath}: ${String(err)}`);
+    return res.status(500).json({ ok: false, error: `Failed to read ${absPath}: ${String(err)}` });
+  }
+});
+
+// Every place in the project that references the symbol on a given line.
+app.get('/code/references', (req, res) => {
+  const projectId = String(req.query.projectId ?? '');
+  const relPath = String(req.query.path ?? '');
+  const line = Number(req.query.line ?? 0);
+  const symbol = String(req.query.symbol ?? '');
+  const analysis = getAnalysis(projectId);
+  if (!analysis) return res.status(404).json({ ok: false, error: 'Unknown project' });
+  const references = findReferences(analysis, symbol, relPath, line);
+  return res.json({ ok: true, references });
+});
+
+// Run Impact Analysis for one action on one line: returns before/after diffs
+// across every affected file. Does NOT write anything.
+app.post('/code/impact', (req, res) => {
+  const projectId = String(req.body?.projectId ?? '');
+  const relPath = String(req.body?.path ?? '');
+  const line = Number(req.body?.line ?? 0);
+  const actionId = String(req.body?.actionId ?? '');
+  const analysis = getAnalysis(projectId);
+  if (!analysis) return res.status(404).json({ ok: false, error: 'Unknown project' });
+  const impact = analyzeImpact(analysis, projectId, relPath, line, actionId);
+  if (!impact) return res.status(404).json({ ok: false, error: 'File not found' });
+  return res.json({ ok: true, impact });
+});
+
+// Impact Analysis for a free-form edit made in the panel: diffs the submitted
+// content against the file on disk. Does NOT write anything.
+app.post('/code/edit-impact', (req, res) => {
+  const projectId = String(req.body?.projectId ?? '');
+  const relPath = String(req.body?.path ?? '');
+  const content = typeof req.body?.content === 'string' ? req.body.content : null;
+  const analysis = getAnalysis(projectId);
+  if (!analysis) return res.status(404).json({ ok: false, error: 'Unknown project' });
+  if (content === null) return res.status(400).json({ ok: false, error: 'content is required' });
+  const original = readFileForIntel(analysis, relPath);
+  if (original === null) return res.status(404).json({ ok: false, error: 'File not found' });
+  const impact = diffToImpact(projectId, relPath, original, content);
+  return res.json({ ok: true, impact });
+});
+
+// Apply an Impact Analysis to disk: backs up every file, writes the changes,
+// then re-analyzes so the canvas and brain reflect the new code state.
+app.post('/code/apply', (req, res) => {
+  const projectId = String(req.body?.projectId ?? '');
+  const impact = req.body?.impact as ImpactAnalysis | undefined;
+  const analysis = getAnalysis(projectId);
+  if (!analysis) return res.status(404).json({ ok: false, error: 'Unknown project' });
+  if (!impact || !Array.isArray(impact.affected)) {
+    return res.status(400).json({ ok: false, error: 'impact payload is required' });
+  }
+  const result = applyImpact(analysis, impact);
+  // Re-analyze the project so the live canvas + brain pick up the new code.
+  if (result.ok && clients.size > 0) {
+    void handleAnalyze(analysis.rootPath, broadcast);
+  }
+  return res.json(result);
 });
 
 // Get loaded MCP servers (both Claude Desktop and custom imported ones)

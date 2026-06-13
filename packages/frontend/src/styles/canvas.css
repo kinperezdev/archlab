@@ -57,6 +57,21 @@
 .lane-group-backend .lane-group-label {
   color: rgb(126, 34, 206);
 }
+/* Connected vs Isolated containers — the two primary partitions of the graph. */
+.lane-group-connected {
+  background: rgba(13, 153, 255, 0.06); /* subtle blue tint */
+  border-color: rgba(13, 153, 255, 0.3);
+}
+.lane-group-connected .lane-group-label {
+  color: rgb(13, 110, 200);
+}
+.lane-group-isolated {
+  background: rgba(245, 158, 11, 0.08); /* subtle amber tint */
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.lane-group-isolated .lane-group-label {
+  color: rgb(180, 83, 9);
+}
 
 /* ---------- The node ---------- */
 .arch-node {
@@ -306,9 +321,12 @@
   box-shadow: 0 4px 12px rgba(9, 9, 11, 0.08);
 }
 .canvas-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: none;
   background: transparent;
-  padding: 6px 16px;
+  padding: 6px 14px;
   border-radius: 20px;
   font-size: var(--text-sm);
   font-family: var(--font-sans);
@@ -317,6 +335,8 @@
   transition: all var(--duration-fast) ease;
   font-weight: 500;
 }
+.canvas-filter-btn .tab-icon { opacity: 0.8; flex-shrink: 0; }
+.canvas-filter-btn.active .tab-icon { opacity: 1; }
 .canvas-filter-btn:hover {
   color: var(--color-text);
 }

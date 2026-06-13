@@ -1,6 +1,7 @@
-/** Top bar: project name, folder path input + Analyze, Run Checks, brain status. */
+/** Top bar: logo, project path input, filter tabs, findings + brain status. */
 
 import type { ArchTab } from '../App.js';
+import { TabIcon } from './TabIcon.js';
 
 interface TopBarProps {
   connected: boolean;
@@ -9,10 +10,8 @@ interface TopBarProps {
   brainProjectCount: number;
   findingsCount: number;
   bottleneckCount: number;
+  isolatedCount: number;
   analyzedAt: number | null;
-  reanalyzing: boolean;
-  onReanalyze: () => void;
-  onRunChecks: () => void;
   onOpenBrain: () => void;
   tab: ArchTab;
   onTabChange: (tab: ArchTab) => void;
@@ -22,8 +21,10 @@ const TABS: { id: ArchTab; label: string }[] = [
   { id: 'all', label: 'Full Flow' },
   { id: 'frontend', label: 'Frontend' },
   { id: 'backend', label: 'Backend' },
-  { id: 'ideas', label: 'Ideas' },
   { id: 'database', label: 'Database' },
+  { id: 'api', label: 'API' },
+  { id: 'security', label: 'Security' },
+  { id: 'scratch', label: 'Scratch' },
 ];
 
 /** Compact local time stamp, e.g. "14:05:32". */
@@ -42,10 +43,8 @@ export function TopBar({
   brainProjectCount,
   findingsCount,
   bottleneckCount,
+  isolatedCount,
   analyzedAt,
-  reanalyzing,
-  onReanalyze,
-  onRunChecks,
   onOpenBrain,
   tab,
   onTabChange,
@@ -70,29 +69,10 @@ export function TopBar({
             className={`canvas-filter-btn ${tab === t.id ? 'active' : ''}`}
             onClick={() => onTabChange(t.id)}
           >
-            {t.label}
+            <TabIcon tab={t.id} />
+            <span>{t.label}</span>
           </button>
         ))}
-      </div>
-
-      <div className="top-bar-actions">
-        <button
-          className="btn"
-          disabled={!hasProject || !connected || reanalyzing}
-          onClick={onReanalyze}
-          title="Force a fresh full scan of the current project"
-        >
-          {reanalyzing ? (
-            <>
-              <span className="btn-spinner" aria-hidden="true" /> Re-analyzing…
-            </>
-          ) : (
-            'Re-analyze'
-          )}
-        </button>
-        <button className="btn btn-primary" disabled={!hasProject || !connected} onClick={onRunChecks}>
-          Run Checks
-        </button>
       </div>
 
       <div className="top-bar-status">
@@ -106,6 +86,12 @@ export function TopBar({
               title="Bottlenecks detected"
             >
               ⚠ {bottleneckCount} bottlenecks
+            </span>
+            <span
+              className={`count-badge isolated ${isolatedCount > 0 ? 'active' : ''}`}
+              title="Nodes with no connections to the rest of the project"
+            >
+              ⚠ {isolatedCount} isolated {isolatedCount === 1 ? 'node' : 'nodes'}
             </span>
           </div>
         )}

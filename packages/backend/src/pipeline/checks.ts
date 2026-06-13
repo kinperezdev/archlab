@@ -76,7 +76,7 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
       ),
     );
   }
-
+  
   // Possible SQL injection via string concatenation in queries.
   for (const f of scan.files) {
     if (/\b(select|insert|update|delete|drop)\b[\s\S]*?(\$\{[\s\S]*?\}|['"]\s*\+)/i.test(f.content)) {

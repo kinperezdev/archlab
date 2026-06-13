@@ -65,6 +65,92 @@
   font-size: 0.6rem;
 }
 
+/* Isolated (edge-less) node warning — amber, sits at the bottom of the node. */
+.arch-node.is-isolated {
+  border-style: dashed !important;
+  border-color: var(--sev-bottleneck) !important;
+  background: color-mix(in srgb, var(--sev-bottleneck) 8%, #ffffff);
+}
+.isolation-badge {
+  position: absolute;
+  bottom: -11px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--sev-bottleneck);
+  color: rgb(180, 83, 9);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+}
+.isolation-icon {
+  font-size: 0.6rem;
+}
+
+/* Entry-point node — larger, glowing, brighter, with an ENTRY crown badge. */
+.arch-node.is-entry {
+  transform: scale(1.16);
+  z-index: 5;
+  border-width: 2px !important;
+  border-color: var(--color-accent) !important;
+  background: color-mix(in srgb, var(--node-color) 18%, #ffffff);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 30%, transparent),
+    0 0 22px color-mix(in srgb, var(--color-accent) 45%, transparent),
+    0 8px 20px rgba(0, 0, 0, 0.18);
+}
+.entry-badge {
+  position: absolute;
+  top: -12px;
+  left: -8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  font-family: var(--font-mono);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+.entry-icon { font-size: 0.65rem; }
+
+/* Depth-from-entry badge in the top-right corner of every reachable node. */
+.depth-badge {
+  position: absolute;
+  top: -9px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-hover);
+  color: var(--color-text-dim);
+  font-size: 0.56rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+.arch-node.is-entry .depth-badge {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
 /* ---------- Top bar count badges ---------- */
 .count-badges {
   display: flex;
@@ -84,6 +170,11 @@
 .count-badge.bottlenecks.active {
   background: var(--sev-bottleneck);
   color: #fff;
+}
+.count-badge.isolated.active {
+  background: #fff;
+  color: rgb(180, 83, 9);
+  border: 1px solid var(--sev-bottleneck);
 }
 
 /* ---------- Backend connector ports ---------- */

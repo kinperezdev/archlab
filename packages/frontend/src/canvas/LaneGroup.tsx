@@ -6,7 +6,7 @@
 
 import type { NodeProps } from 'reactflow';
 
-export type LaneVariant = 'frontend' | 'backend';
+export type LaneVariant = 'frontend' | 'backend' | 'connected' | 'isolated';
 
 export interface LaneGroupData {
   label: string;

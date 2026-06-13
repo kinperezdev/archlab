@@ -2,6 +2,7 @@
 export * from './canvas.js';
 export * from './pipeline.js';
 export * from './intelligence.js';
+export * from './codeintel.js';
 export * from './brain.js';
 export * from './ws.js';
 
