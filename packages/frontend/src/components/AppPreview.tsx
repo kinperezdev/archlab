@@ -15,47 +15,128 @@ export function AppPreview({ projectId, projectPath, projectName }: AppPreviewPr
   const [loading, setLoading] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Auto-detect scripts and ports from package.json
+  // Auto-detect scripts and ports across multiple tech stacks (Node, Python, Go, Rust, Ruby)
   useEffect(() => {
     if (!projectId) return;
     
     const BASE = `http://127.0.0.1:${PORTS.backend}`;
-    fetch(`${BASE}/file?projectId=${encodeURIComponent(projectId)}&path=package.json`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.ok && data.content) {
-          try {
-            const pkg = JSON.parse(data.content);
-            const scripts = pkg.scripts || {};
-            
-            // Look for dev commands
-            const devCmd = scripts.dev || scripts.start || Object.keys(scripts)[0];
-            if (devCmd) {
-              setDevCommand(scripts.dev ? 'npm run dev' : scripts.start ? 'npm start' : `npm run ${devCmd}`);
-            }
+    
+    const checkFile = async (path: string): Promise<string | null> => {
+      try {
+        const res = await fetch(`${BASE}/file?projectId=${encodeURIComponent(projectId)}&path=${path}`);
+        const data = await res.json();
+        if (data.ok && data.content) return data.content;
+      } catch {
+        /* file doesn't exist or error */
+      }
+      return null;
+    };
 
-            // Guess port based on dependencies
-            const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-            let port = 3000;
-            if (deps.vite) {
-              port = 5173;
-            } else if (deps['next']) {
-              port = 3000;
-            } else if (deps['@remix-run/dev']) {
-              port = 3000;
-            } else if (deps.gatsby) {
-              port = 8000;
-            }
-            
-            setSuggestedPort(port);
-            setUrl(`http://localhost:${port}`);
-            setIframeUrl(`http://localhost:${port}`);
-          } catch (e) {
-            // Not a valid package.json or other project
+    const detect = async () => {
+      // 1. Try Node.js (package.json)
+      const pkgContent = await checkFile('package.json');
+      if (pkgContent) {
+        try {
+          const pkg = JSON.parse(pkgContent);
+          const scripts = pkg.scripts || {};
+          const devCmd = scripts.dev || scripts.start || Object.keys(scripts)[0];
+          if (devCmd) {
+            setDevCommand(scripts.dev ? 'npm run dev' : scripts.start ? 'npm start' : `npm run ${devCmd}`);
           }
+          const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+          let port = 3000;
+          if (deps.vite) port = 5173;
+          else if (deps['next']) port = 3000;
+          else if (deps['@remix-run/dev']) port = 3000;
+          else if (deps.gatsby) port = 8000;
+          
+          setSuggestedPort(port);
+          setUrl(`http://localhost:${port}`);
+          setIframeUrl(`http://localhost:${port}`);
+          return;
+        } catch {
+          // invalid package.json, continue with other checks
         }
-      })
-      .catch(() => {});
+      }
+
+      // 2. Try Python (Django, Flask, FastAPI, Streamlit)
+      const hasManagePy = await checkFile('manage.py');
+      if (hasManagePy !== null) {
+        setDevCommand('python3 manage.py runserver');
+        setSuggestedPort(8000);
+        setUrl('http://localhost:8000');
+        setIframeUrl('http://localhost:8000');
+        return;
+      }
+
+      const hasAppPy = await checkFile('app.py') || await checkFile('main.py');
+      const reqsContent = await checkFile('requirements.txt');
+      if (hasAppPy !== null || reqsContent !== null) {
+        let cmd = 'python3 app.py';
+        let port = 5000;
+        
+        if (reqsContent) {
+          const reqs = reqsContent.toLowerCase();
+          if (reqs.includes('fastapi') || reqs.includes('uvicorn')) {
+            cmd = 'uvicorn main:app --reload';
+            port = 8000;
+          } else if (reqs.includes('flask')) {
+            cmd = 'flask run';
+            port = 5000;
+          } else if (reqs.includes('streamlit')) {
+            cmd = 'streamlit run app.py';
+            port = 8501;
+          }
+        } else if (hasAppPy && hasAppPy.includes('FastAPI')) {
+          cmd = 'uvicorn main:app --reload';
+          port = 8000;
+        }
+        
+        setDevCommand(cmd);
+        setSuggestedPort(port);
+        setUrl(`http://localhost:${port}`);
+        setIframeUrl(`http://localhost:${port}`);
+        return;
+      }
+
+      // 3. Try Go (go.mod, main.go)
+      const hasGoMod = await checkFile('go.mod') || await checkFile('main.go');
+      if (hasGoMod !== null) {
+        setDevCommand('go run main.go');
+        setSuggestedPort(8080);
+        setUrl('http://localhost:8080');
+        setIframeUrl('http://localhost:8080');
+        return;
+      }
+
+      // 4. Try Rust (Cargo.toml)
+      const hasCargo = await checkFile('Cargo.toml');
+      if (hasCargo !== null) {
+        setDevCommand('cargo run');
+        setSuggestedPort(8080);
+        setUrl('http://localhost:8080');
+        setIframeUrl('http://localhost:8080');
+        return;
+      }
+
+      // 5. Try Ruby (Gemfile)
+      const hasGemfile = await checkFile('Gemfile');
+      if (hasGemfile !== null) {
+        setDevCommand('bundle exec rails server');
+        setSuggestedPort(3000);
+        setUrl('http://localhost:3000');
+        setIframeUrl('http://localhost:3000');
+        return;
+      }
+
+      // Default fallback
+      setDevCommand(null);
+      setSuggestedPort(3000);
+      setUrl('http://localhost:3000');
+      setIframeUrl('http://localhost:3000');
+    };
+
+    detect();
   }, [projectId]);
 
   const handleRefresh = () => {
