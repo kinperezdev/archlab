@@ -13,6 +13,7 @@ interface TopBarProps {
   isolatedCount: number;
   analyzedAt: number | null;
   onOpenBrain: () => void;
+  onOpenShortcuts: () => void;
   tab: ArchTab;
   onTabChange: (tab: ArchTab) => void;
 }
@@ -47,6 +48,7 @@ export function TopBar({
   isolatedCount,
   analyzedAt,
   onOpenBrain,
+  onOpenShortcuts,
   tab,
   onTabChange,
 }: TopBarProps) {
@@ -96,6 +98,9 @@ export function TopBar({
             </span>
           </div>
         )}
+        <button className="shortcuts-btn" onClick={onOpenShortcuts} title="Keyboard Shortcuts Guide">
+          ⌨ Shortcuts
+        </button>
         <button className="brain-status" onClick={onOpenBrain} title="Open global brain">
           <span className={`dot ${connected ? 'dot-on' : 'dot-off'}`} />
           Brain · {brainProjectCount} projects

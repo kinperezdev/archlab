@@ -1546,3 +1546,32 @@ body {
   }
 }
 
+.shortcut-kbd {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  box-shadow: 0 1px 0 var(--color-border);
+  color: var(--color-accent);
+}
+
+.shortcuts-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-dim);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.shortcuts-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+

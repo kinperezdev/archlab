@@ -50,6 +50,7 @@ import { CodeIntelPanel } from './components/CodeIntelPanel.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 import { AppPreview } from './components/AppPreview.js';
+import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 
 export type ArchTab =
   | 'all'
@@ -85,6 +86,7 @@ export function App() {
     fetchAccessStatus().then(setAccess).catch(() => setAccess(null));
   }, []);
   const [brainOpen, setBrainOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [bottomHeight, setBottomHeight] = useState(200);
   const [tab, setTab] = useState<ArchTab>('all');
   // Architecture canvas tabs map straight to a canvas filter; others fall to all.
@@ -104,26 +106,38 @@ export function App() {
   // Ignored while typing into the terminal or any text field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
       
-      if (e.key === 'b' || e.key === 'B') {
-        e.preventDefault();
-        toggleLeftSidebar();
-      } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        setShowRightSidebar((p) => !p);
-      } else if (e.key === 'm' || e.key === 'M') {
-        e.preventDefault();
-        toggleBottom();
-      } else if (e.key >= '1' && e.key <= '8') {
-        const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'scratch', 'preview'];
-        if (targetTabs[index]) {
+      const isMod = e.ctrlKey || e.metaKey;
+
+      if (isMod) {
+        if (e.key.toLowerCase() === 'b') {
           e.preventDefault();
-          setTab(targetTabs[index]);
+          toggleLeftSidebar();
+        } else if (e.key.toLowerCase() === 'j') {
+          e.preventDefault();
+          toggleBottom();
+        }
+      } else {
+        if (e.altKey) return;
+        if (e.key === 'b' || e.key === 'B') {
+          e.preventDefault();
+          toggleLeftSidebar();
+        } else if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          setShowRightSidebar((p) => !p);
+        } else if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          toggleBottom();
+        } else if (e.key >= '1' && e.key <= '8') {
+          const index = parseInt(e.key, 10) - 1;
+          const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'scratch', 'preview'];
+          if (targetTabs[index]) {
+            e.preventDefault();
+            setTab(targetTabs[index]);
+          }
         }
       }
     };
@@ -176,7 +190,7 @@ export function App() {
 
   // True whenever a full-screen overlay is showing. The bottom-panel toggle is
   // hidden while this is true so it never floats on top of a modal.
-  const isAnyModalOpen = brainOpen;
+  const isAnyModalOpen = brainOpen || shortcutsOpen;
 
   // Layer 1: a locked brain blocks the entire app at launch until unlocked.
   if (access?.locked) {
@@ -198,6 +212,7 @@ export function App() {
         isolatedCount={isolatedCount}
         analyzedAt={state.analyzedAt}
         onOpenBrain={() => setBrainOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
         tab={tab}
         onTabChange={setTab}
       />
@@ -350,6 +365,7 @@ export function App() {
       />
 
       {brainOpen && <BrainPanel brain={state.brain} onClose={() => setBrainOpen(false)} />}
+      {shortcutsOpen && <ShortcutsPanel onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
 }
