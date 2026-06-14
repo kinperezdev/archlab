@@ -34,12 +34,12 @@ const edgeTypes = { relationship: RelationshipEdge };
 
 // Group-aware layout constants.
 const NODE_W = 240;
-const NODE_H_EST = 230;
-const COL_PITCH = 300;
-const ROW_PITCH = 300;
-const GROUP_PAD = 44;
-const GROUP_LABEL_H = 34;
-const GROUP_GAP = 160;
+const NODE_H_EST = 250;
+const COL_PITCH = 420;
+const ROW_PITCH = 420;
+const GROUP_PAD = 60;
+const GROUP_LABEL_H = 40;
+const GROUP_GAP = 240;
 
 const SAMPLE_SQL = `CREATE TABLE users (
   id SERIAL PRIMARY KEY,
