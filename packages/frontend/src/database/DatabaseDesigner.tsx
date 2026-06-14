@@ -385,7 +385,19 @@ function mergeSchemas(explicit: DbTable[], inferred: DbTable[]): DbTable[] {
   return merged;
 }
 
-function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) {
+function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: string | null; hasProject: boolean }) {
+  if (!hasProject) {
+    return (
+      <div className="db-designer-empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 'var(--space-3)', color: 'var(--color-text-dim)', textAlign: 'center', background: 'var(--color-surface)', padding: 'var(--space-6)' }}>
+        <span style={{ fontSize: '48px', marginBottom: '8px' }}>📂</span>
+        <h3 style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--text-lg)' }}>No Active Project</h3>
+        <p style={{ margin: 0, fontSize: 'var(--text-sm)', maxWidth: '400px' }}>
+          Please load a project directory via the terminal below or run the <code>archlab</code> CLI in your terminal to start designing its database schema.
+        </p>
+      </div>
+    );
+  }
+
   const [sql, setSql] = useState<string>('');
   const [tables, setTables] = useState<DbTable[]>([]);
   const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNodeData>([]);
@@ -708,12 +720,13 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
 
 interface DatabaseDesignerProps {
   inferredSql: string | null;
+  hasProject: boolean;
 }
 
-export function DatabaseDesigner({ inferredSql }: DatabaseDesignerProps) {
+export function DatabaseDesigner({ inferredSql, hasProject }: DatabaseDesignerProps) {
   return (
     <ReactFlowProvider>
-      <DatabaseDesignerInner inferredSql={inferredSql} />
+      <DatabaseDesignerInner inferredSql={inferredSql} hasProject={hasProject} />
     </ReactFlowProvider>
   );
 }

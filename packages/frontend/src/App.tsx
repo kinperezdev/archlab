@@ -291,7 +291,7 @@ export function App() {
           {tab === 'scratch' ? (
             <IdeasCanvas />
           ) : tab === 'database' ? (
-            <DatabaseDesigner inferredSql={state.inferredSql} />
+            <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : tab === 'preview' ? (
             <AppPreview
               projectId={state.projectId}
