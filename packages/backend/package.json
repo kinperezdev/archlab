@@ -8,7 +8,7 @@
     "archlab": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --exclude ../../brain src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "cli": "tsx src/cli.ts",

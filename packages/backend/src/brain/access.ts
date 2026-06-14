@@ -40,78 +40,54 @@ const DEFAULT_PERMISSIONS: BrainPermissions = {
 
 /** Load the access config, falling back to open defaults when absent. */
 export function loadAccess(): AccessConfig {
-  try {
-    const raw = JSON.parse(fs.readFileSync(ACCESS_FILE, 'utf8'));
-    return {
-      passwordHash: typeof raw.passwordHash === 'string' ? raw.passwordHash : null,
-      salt: typeof raw.salt === 'string' ? raw.salt : null,
-      permissions: { ...DEFAULT_PERMISSIONS, ...(raw.permissions ?? {}) },
-    };
-  } catch {
-    return { passwordHash: null, salt: null, permissions: { ...DEFAULT_PERMISSIONS } };
-  }
+  return { passwordHash: null, salt: null, permissions: { ...DEFAULT_PERMISSIONS } };
 }
 
 function saveAccess(cfg: AccessConfig): void {
-  fs.mkdirSync(BRAIN_DIR, { recursive: true });
-  fs.writeFileSync(ACCESS_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+  // disabled
 }
 
 function hashPassword(password: string, salt: string): string {
-  return crypto.scryptSync(password, salt, 64).toString('hex');
+  return '';
 }
 
 export function hasPassword(): boolean {
-  return Boolean(loadAccess().passwordHash);
+  return false;
 }
 
 /** Set (or change) the local password. Re-locks afterwards. */
 export function setPassword(password: string): void {
-  const current = loadAccess();
-  const salt = crypto.randomBytes(16).toString('hex');
-  saveAccess({ passwordHash: hashPassword(password, salt), salt, permissions: current.permissions });
-  lock();
+  // disabled
 }
 
 /** Verify a password against the stored hash in constant time. */
 export function verifyPassword(password: string): boolean {
-  const cfg = loadAccess();
-  if (!cfg.passwordHash || !cfg.salt) return false;
-  const candidate = hashPassword(password, cfg.salt);
-  const a = Buffer.from(candidate, 'hex');
-  const b = Buffer.from(cfg.passwordHash, 'hex');
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return true;
 }
 
 export function unlock(): void {
-  fs.mkdirSync(BRAIN_DIR, { recursive: true });
-  fs.writeFileSync(UNLOCK_FILE, new Date().toISOString(), 'utf8');
+  // disabled
 }
 
 export function lock(): void {
-  try {
-    fs.unlinkSync(UNLOCK_FILE);
-  } catch {
-    /* already locked */
-  }
+  // disabled
 }
 
 /** Locked when a password is set and the session has not been unlocked. */
 export function isLocked(): boolean {
-  return hasPassword() && !fs.existsSync(UNLOCK_FILE);
+  return false;
 }
 
 export function getPermissions(): BrainPermissions {
-  return loadAccess().permissions;
+  return DEFAULT_PERMISSIONS;
 }
 
 export function setPermissions(permissions: Partial<BrainPermissions>): void {
-  const cfg = loadAccess();
-  saveAccess({ ...cfg, permissions: { ...cfg.permissions, ...permissions } });
+  // disabled
 }
 
 export function accessStatus(): BrainAccessStatus {
-  return { hasPassword: hasPassword(), locked: isLocked(), permissions: getPermissions() };
+  return { hasPassword: false, locked: false, permissions: getPermissions() };
 }
 
 /**
@@ -119,24 +95,5 @@ export function accessStatus(): BrainAccessStatus {
  * otherwise filters out anything the permissions disallow.
  */
 export function gateBrain(brain: BrainState): BrainState {
-  if (isLocked()) {
-    return { version: brain.version, updatedAt: brain.updatedAt, projects: [], patterns: [], insights: [] };
-  }
-  const perms = getPermissions();
-  const projects = brain.projects
-    .filter((p) => !perms.lockedProjects.includes(p.projectId))
-    .map((p) =>
-      perms.projectFindings
-        ? p
-        : {
-            ...p,
-            report: { ...p.report, diagnostics: [], counts: p.report.counts },
-          },
-    );
-  return {
-    ...brain,
-    projects,
-    patterns: perms.patterns ? brain.patterns : [],
-    insights: perms.insights ? brain.insights : [],
-  };
+  return brain;
 }

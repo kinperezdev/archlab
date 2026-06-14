@@ -25,6 +25,7 @@ const TABS: { id: ArchTab; label: string }[] = [
   { id: 'api', label: 'API' },
   { id: 'security', label: 'Security' },
   { id: 'scratch', label: 'Scratch' },
+  { id: 'preview', label: 'Preview' },
 ];
 
 /** Compact local time stamp, e.g. "14:05:32". */

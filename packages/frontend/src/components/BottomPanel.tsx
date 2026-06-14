@@ -34,7 +34,7 @@ function loadTabs(): TermTab[] {
   try {
     const raw = sessionStorage.getItem(TABS_KEY);
     const parsed = raw ? (JSON.parse(raw) as TermTab[]) : null;
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed.some((t) => t.id === 'term-1')) {
+    if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed;
     }
   } catch {
@@ -115,8 +115,8 @@ export function BottomPanel({
   };
 
   const closeTab = (id: string) => {
-    // The first terminal can never be closed.
-    if (id === 'term-1') return;
+    // We should only prevent closing if it's the last terminal tab left.
+    if (tabs.length <= 1) return;
     terminalApi.closeTerminal(id);
     try {
       sessionStorage.removeItem(`archlab:term-buf:${id}`);
@@ -126,11 +126,21 @@ export function BottomPanel({
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === id);
       const next = prev.filter((t) => t.id !== id);
+      
+      // Auto-renumber default titles to keep them sequential
+      const renumbered = next.map((tab, index) => {
+        const defaultTitleRegex = /^Terminal \d+$/;
+        if (defaultTitleRegex.test(tab.title)) {
+          return { ...tab, title: `Terminal ${index + 1}` };
+        }
+        return tab;
+      });
+      
       if (active === id) {
-        const fallback = next[Math.max(0, idx - 1)] ?? next[0];
+        const fallback = renumbered[Math.max(0, idx - 1)] ?? renumbered[0];
         setActive(fallback ? fallback.id : 'logs');
       }
-      return next;
+      return renumbered;
     });
     setMenu(null);
   };
@@ -201,7 +211,7 @@ export function BottomPanel({
               ) : (
                 <span className="term-tab-label">{t.title}</span>
               )}
-              {t.id !== 'term-1' && (
+              {tabs.length > 1 && (
                 <button
                   className="term-tab-close"
                   title="Close terminal"
@@ -267,7 +277,7 @@ export function BottomPanel({
           <button onClick={() => duplicateTab(menu.tabId)}>Duplicate</button>
           <button
             className="term-context-danger"
-            disabled={menu.tabId === 'term-1'}
+            disabled={tabs.length <= 1}
             onClick={() => closeTab(menu.tabId)}
           >
             Close

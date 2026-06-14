@@ -49,6 +49,7 @@ import { Canvas } from './canvas/Canvas.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
+import { AppPreview } from './components/AppPreview.js';
 
 export type ArchTab =
   | 'all'
@@ -57,7 +58,8 @@ export type ArchTab =
   | 'database'
   | 'api'
   | 'security'
-  | 'scratch';
+  | 'scratch'
+  | 'preview';
 
 /** Tabs that render the architecture canvas (vs. the Database/Scratch surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
@@ -264,6 +266,12 @@ export function App() {
             <IdeasCanvas />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} />
+          ) : tab === 'preview' ? (
+            <AppPreview
+              projectId={state.projectId}
+              projectPath={state.projectPath}
+              projectName={state.projectName}
+            />
           ) : (
             <ReactFlowProvider>
               <Canvas

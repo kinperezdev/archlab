@@ -207,11 +207,7 @@ export function Terminal({ id, api }: TerminalProps) {
           {busy && <div className="preview-busy">Saving file…</div>}
           {staged.map((f, i) => (
             <div key={`${f.path}-${i}`} className="preview-card" title={f.path}>
-              {f.isImage && f.previewUrl ? (
-                <img className="preview-thumb" src={f.previewUrl} alt={f.name} />
-              ) : (
-                <span className="preview-icon">{f.kind === 'folder' ? '📁' : '📄'}</span>
-              )}
+              <span className="preview-icon">{f.kind === 'folder' ? '📁' : '📄'}</span>
               <span className="preview-meta">
                 <span className="preview-name">{f.name}</span>
                 <span className="preview-sub">

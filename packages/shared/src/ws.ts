@@ -25,7 +25,7 @@ export type ClientMessage =
   | { type: 'request-brain' }
   // In-app terminal (real PTY). Multiple independent sessions per tab, keyed by
   // `id`: create/close a session, stream raw stdin, and resize the viewport.
-  | { type: 'term-create'; id: string }
+  | { type: 'term-create'; id: string; cwd?: string }
   | { type: 'term-close'; id: string }
   | { type: 'term-input'; id: string; data: string }
   | { type: 'term-resize'; id: string; cols: number; rows: number }

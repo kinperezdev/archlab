@@ -48,20 +48,21 @@ export interface ShellSession {
 }
 
 /** Spawn a real shell in a PTY and start streaming its output. */
-export function createSession(handlers: SessionHandlers): ShellSession {
+export function createSession(handlers: SessionHandlers, initialCwd?: string): ShellSession {
   ensureSpawnHelperExecutable();
 
   const home = os.homedir();
+  const startCwd = (initialCwd && fs.existsSync(initialCwd)) ? initialCwd : home;
   const term = pty.spawn(SHELL, os.platform() === 'win32' ? [] : ['-l'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
-    cwd: home,
+    cwd: startCwd,
     env: { ...process.env, TERM: 'xterm-256color' },
   });
 
   const session: ShellSession = {
-    cwd: home,
+    cwd: startCwd,
     write: (data) => {
       try {
         term.write(data);
