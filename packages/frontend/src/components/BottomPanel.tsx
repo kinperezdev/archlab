@@ -152,10 +152,10 @@ export function BottomPanel({
       const isAlt = e.altKey;
 
       if (isMod && isAlt) {
-        if (e.key.toLowerCase() === 't') {
+        if (e.code === 'KeyT') {
           e.preventDefault();
           addTab();
-        } else if (e.key.toLowerCase() === 'w') {
+        } else if (e.code === 'KeyW') {
           e.preventDefault();
           if (active !== 'logs') {
             closeTab(active);
