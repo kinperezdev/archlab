@@ -93,6 +93,16 @@ export function Terminal({ id, api }: TerminalProps) {
     term.open(host);
     writeRef.current = (data: string) => api.sendInput(id, data);
 
+    // Allow custom shortcuts to bubble past xterm.js
+    term.attachCustomKeyEventHandler((e) => {
+      const isMod = e.ctrlKey || e.metaKey;
+      const isAlt = e.altKey;
+      if (isMod && isAlt && (e.code === 'KeyT' || e.code === 'KeyW')) {
+        return false;
+      }
+      return true;
+    });
+
     const safeFit = () => {
       try {
         fit.fit();
