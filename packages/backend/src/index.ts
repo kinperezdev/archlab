@@ -11,6 +11,8 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { PORTS, type ClientMessage, type ServerMessage, type DiagnosticReport } from '@archlab/shared';
@@ -20,7 +22,18 @@ import { runPipeline } from './pipeline/pipeline.js';
 import { detectBottlenecks } from './pipeline/bottleneck.js';
 import { learnFromProject, loadBrain } from './brain/brainStore.js';
 import { BRAIN_DIR } from './brain/paths.js';
-import { createSession, runCommand, type ShellSession } from './terminal/shell.js';
+import {
+  accessStatus,
+  gateBrain,
+  isLocked,
+  lock,
+  setPassword,
+  setPermissions,
+  unlock,
+  verifyPassword,
+} from './brain/access.js';
+import { createSession, type ShellSession } from './terminal/shell.js';
+import { countProjectFiles } from './analyzer/scan.js';
 import { inferSchemaFromAppFlow } from './analyzer/inference.js';
 import { buildFileIntel, findReferences, readFileForIntel } from './analyzer/codeIntel.js';
 import { analyzeImpact, applyImpact, diffToImpact } from './analyzer/codeActions.js';
@@ -63,7 +76,8 @@ function saveCustomMcps(mcps: Record<string, any>): void {
 }
 
 const app = express();
-app.use(express.json());
+// Generous limit so files dropped into the terminal (base64) fit in one request.
+app.use(express.json({ limit: '128mb' }));
 
 // Enable CORS for frontend requests
 app.use((req, res, next) => {
@@ -79,6 +93,85 @@ app.use((req, res, next) => {
 
 // Health check.
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'archlab-backend' }));
+
+// ---- Terminal file uploads --------------------------------------------
+// Files dropped onto the terminal are copied into a temp folder inside the
+// brain directory, with a timestamped filename; the absolute path is handed
+// back so the front-end can type it into the shell. Zip archives are
+// auto-extracted to a folder.
+const UPLOAD_ROOT = path.join(BRAIN_DIR, 'terminal-uploads');
+
+/** Ensure the upload root exists and return it. */
+function uploadRoot(): string {
+  fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
+  return UPLOAD_ROOT;
+}
+
+/** A timestamp prefix that keeps dropped files unique and ordered. */
+function stamp(): string {
+  return `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+}
+
+/** Reject path segments that try to escape the upload dir. */
+function safeRelPath(rel: string): string {
+  return rel
+    .split('/')
+    .filter((seg) => seg && seg !== '.' && seg !== '..')
+    .join('/');
+}
+
+app.post('/terminal/upload', (req, res) => {
+  const name = path.basename(String(req.body?.name ?? 'file'));
+  const dataBase64 = String(req.body?.dataBase64 ?? '');
+  if (!dataBase64) return res.status(400).json({ ok: false, error: 'No file data.' });
+  try {
+    const root = uploadRoot();
+    const ts = stamp();
+    const filePath = path.join(root, `${ts}-${name}`);
+    const buf = Buffer.from(dataBase64, 'base64');
+    fs.writeFileSync(filePath, buf);
+
+    // Auto-extract zip archives into a timestamped folder.
+    if (path.extname(name).toLowerCase() === '.zip') {
+      const folder = path.join(root, `${ts}-${name.replace(/\.zip$/i, '') || 'archive'}`);
+      fs.mkdirSync(folder, { recursive: true });
+      try {
+        execFileSync('unzip', ['-q', '-o', filePath, '-d', folder], { stdio: 'ignore' });
+        fs.rmSync(filePath, { force: true }); // drop the archive, keep the folder
+        return res.json({ ok: true, path: folder, kind: 'folder', name, size: buf.length });
+      } catch {
+        // Extraction failed (no unzip / corrupt): keep the archive itself.
+        return res.json({ ok: true, path: filePath, kind: 'file', name, size: buf.length });
+      }
+    }
+
+    return res.json({ ok: true, path: filePath, kind: 'file', name, size: buf.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post('/terminal/upload-batch', (req, res) => {
+  const folderName = path.basename(String(req.body?.folderName ?? 'folder')) || 'folder';
+  const files = Array.isArray(req.body?.files) ? req.body.files : [];
+  if (files.length === 0) return res.status(400).json({ ok: false, error: 'No files.' });
+  try {
+    const root = path.join(uploadRoot(), `${stamp()}-${folderName}`);
+    let size = 0;
+    for (const f of files) {
+      const rel = safeRelPath(String(f?.relPath ?? ''));
+      if (!rel) continue;
+      const dest = path.join(root, rel);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      const buf = Buffer.from(String(f?.dataBase64 ?? ''), 'base64');
+      fs.writeFileSync(dest, buf);
+      size += buf.length;
+    }
+    return res.json({ ok: true, path: root, kind: 'folder', name: folderName, size });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 // ---- Ideas canvas persistence (brain/ideas.json) ----------------------
 const IDEAS_FILE = path.join(BRAIN_DIR, 'ideas.json');
@@ -127,8 +220,48 @@ app.post('/schema', (req, res) => {
   }
 });
 
-// Read-only brain snapshot over HTTP (handy for tools and debugging).
-app.get('/brain', (_req, res) => res.json(loadBrain()));
+// Read-only brain snapshot over HTTP (handy for tools and debugging). Gated by
+// the access layer: empty when locked, filtered by permissions otherwise.
+app.get('/brain', (_req, res) => res.json(gateBrain(loadBrain())));
+
+// ---- Brain access control (Layer 1 lock + Layer 2 permissions) ----------
+app.get('/access/status', (_req, res) => res.json({ ok: true, ...accessStatus() }));
+
+app.post('/access/set-password', (req, res) => {
+  const password = String(req.body?.password ?? '');
+  if (password.length < 4) {
+    return res.status(400).json({ ok: false, error: 'Password must be at least 4 characters.' });
+  }
+  setPassword(password);
+  return res.json({ ok: true, ...accessStatus() });
+});
+
+app.post('/access/unlock', (req, res) => {
+  const password = String(req.body?.password ?? '');
+  if (!verifyPassword(password)) {
+    return res.status(401).json({ ok: false, error: 'Incorrect password.' });
+  }
+  unlock();
+  sendBrain(broadcast); // refresh every open panel now that it is unlocked
+  return res.json({ ok: true, ...accessStatus() });
+});
+
+app.post('/access/lock', (_req, res) => {
+  lock();
+  sendBrain(broadcast); // every panel goes blank
+  return res.json({ ok: true, ...accessStatus() });
+});
+
+app.post('/access/permissions', (req, res) => {
+  if (isLocked()) return res.status(403).json({ ok: false, error: 'Unlock the brain first.' });
+  const permissions = req.body?.permissions;
+  if (!permissions || typeof permissions !== 'object') {
+    return res.status(400).json({ ok: false, error: 'permissions object is required.' });
+  }
+  setPermissions(permissions);
+  sendBrain(broadcast);
+  return res.json({ ok: true, ...accessStatus() });
+});
 
 // Serve the source of a node's file so the UI can show "what's inside" on click.
 // Content is served from the in-memory scan captured at analysis time.
@@ -358,14 +491,32 @@ wss.on('connection', (socket) => {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
   };
 
-  // Each tab gets its own terminal session (its own working directory).
-  const session = createSession();
+  // Each browser tab can run multiple independent PTY sessions (terminal tabs),
+  // keyed by id. Output streams straight to the browser; a `cd` in any session
+  // triggers auto-analysis of that folder.
+  const sessions = new Map<string, ShellSession>();
+  const ensureSession = (id: string): ShellSession => {
+    const existing = sessions.get(id);
+    if (existing) return existing;
+    const session = createSession({
+      onData: (data) => emit({ type: 'term-data', id, data }),
+      onCwdChange: (cwd) => {
+        emit({ type: 'term-cwd', id, cwd });
+        void handleAnalyze(cwd, emit, undefined, id);
+      },
+    });
+    sessions.set(id, session);
+    return session;
+  };
 
   log(emit, 'info', 'Connected to ArchLab backend.');
   sendBrain(emit);
-  emit({ type: 'term-cwd', cwd: session.cwd });
 
-  socket.on('close', () => clients.delete(socket));
+  socket.on('close', () => {
+    clients.delete(socket);
+    for (const s of sessions.values()) s.kill();
+    sessions.clear();
+  });
 
   socket.on('message', (raw) => {
     let msg: ClientMessage;
@@ -375,7 +526,7 @@ wss.on('connection', (socket) => {
       log(emit, 'error', 'Received malformed message.');
       return;
     }
-    handleClientMessage(msg, emit, session).catch((err: unknown) => {
+    handleClientMessage(msg, emit, { sessions, ensureSession }).catch((err: unknown) => {
       log(emit, 'error', `Pipeline error: ${String(err)}`);
     });
   });
@@ -385,11 +536,16 @@ wss.on('connection', (socket) => {
   });
 });
 
+interface TerminalRouter {
+  sessions: Map<string, ShellSession>;
+  ensureSession: (id: string) => ShellSession;
+}
+
 /** Route a client message to the right handler. */
 async function handleClientMessage(
   msg: ClientMessage,
   emit: (m: ServerMessage) => void,
-  session: ShellSession,
+  term: TerminalRouter,
 ) {
   switch (msg.type) {
     case 'analyze-project':
@@ -403,31 +559,24 @@ async function handleClientMessage(
     case 'request-brain':
       return sendBrain(emit);
     case 'term-init':
-      emit({ type: 'term-cwd', cwd: session.cwd });
       return;
+    case 'term-create':
+      term.ensureSession(msg.id);
+      return;
+    case 'term-close': {
+      const s = term.sessions.get(msg.id);
+      if (s) {
+        s.kill();
+        term.sessions.delete(msg.id);
+      }
+      return;
+    }
     case 'term-input':
-      return handleTerminalInput(msg.line, emit, session);
-  }
-}
-
-/**
- * Run a terminal command. When the command changes directory (a `cd`), ArchLab
- * immediately reads the new folder and maps it onto the canvas — this is the
- * core "cd into a folder and it analyzes it" behaviour.
- */
-async function handleTerminalInput(
-  line: string,
-  emit: (m: ServerMessage) => void,
-  session: ShellSession,
-) {
-  const result = await runCommand(session, line);
-  if (result.output) {
-    emit({ type: 'term-output', data: result.output, stream: result.stream });
-  }
-  if (result.cwdChanged) {
-    emit({ type: 'term-cwd', cwd: session.cwd });
-    // Auto-analyze the folder we just stepped into.
-    await handleAnalyze(session.cwd, emit);
+      term.ensureSession(msg.id).write(msg.data);
+      return;
+    case 'term-resize':
+      term.ensureSession(msg.id).resize(msg.cols, msg.rows);
+      return;
   }
 }
 
@@ -436,7 +585,25 @@ async function handleAnalyze(
   rootPath: string,
   emit: (m: ServerMessage) => void,
   customMcps?: Record<string, any>,
+  termId?: string,
 ): Promise<AnalysisResult | null> {
+  // Guard: a folder with too many files (e.g. a home directory or a monorepo
+  // root) is not a useful analysis target. Warn and bail so the user picks a
+  // specific project subfolder instead.
+  const FOLDER_FILE_LIMIT = 500;
+  const fileCount = countProjectFiles(rootPath, FOLDER_FILE_LIMIT * 4);
+  if (fileCount > FOLDER_FILE_LIMIT) {
+    const message = `This folder contains ${fileCount}${
+      fileCount >= FOLDER_FILE_LIMIT * 4 ? '+' : ''
+    } files which is too large to analyze effectively. Please cd into a specific project subfolder instead.`;
+    log(emit, 'warn', message);
+    // Surface it right in the originating terminal too (amber, on its own line).
+    if (termId) {
+      emit({ type: 'term-data', id: termId, data: `\r\n\x1b[33m${message}\x1b[0m\r\n` });
+    }
+    return null;
+  }
+
   log(emit, 'info', `Analyzing project at ${rootPath} ...`);
   let analysis: AnalysisResult;
   try {
@@ -606,9 +773,9 @@ async function handleRunChecks(projectId: string, emit: (m: ServerMessage) => vo
   sendBrain(emit);
 }
 
-/** Push the current brain summary to the client. */
+/** Push the current brain summary to the client, gated by the access layer. */
 function sendBrain(emit: (m: ServerMessage) => void) {
-  const brain = loadBrain();
+  const brain = gateBrain(loadBrain());
   emit({
     type: 'brain',
     projectCount: brain.projects.length,
@@ -624,6 +791,10 @@ function log(
 ) {
   emit({ type: 'log', level, message, at: new Date().toISOString() });
 }
+
+// Re-lock the brain on every startup: a fresh launch always requires the
+// password again before anything is served (Layer 1).
+lock();
 
 server.listen(PORTS.backend, HOST, () => {
   // eslint-disable-next-line no-console

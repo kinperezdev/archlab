@@ -1,26 +1,20 @@
 /**
- * Bottom panel: the 7-step pipeline (always visible on the left) and a tabbed
- * right side that switches between the live Terminal and the log stream.
+ * Bottom panel: a tabbed surface with multiple independent terminal sessions
+ * plus the backend log stream.
+ *
+ * Each terminal tab is its own PTY (own cwd, history, and running process), so
+ * you can have `npm run dev` in one, git in another, and an AI agent CLI in a
+ * third — all live at once. The first terminal can't be closed. Right-click a
+ * tab to rename, duplicate, or close it.
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { PipelineStep, StepStatus } from '@archlab/shared';
-import type { LogLine, TerminalState } from '../state/useArchLab.js';
-import { Terminal } from './Terminal.js';
-
-const STATUS_GLYPH: Record<StepStatus, string> = {
-  pending: '○',
-  running: '◐',
-  passed: '●',
-  failed: '✕',
-  skipped: '–',
-};
+import type { LogLine } from '../state/useArchLab.js';
+import { Terminal, type TerminalApi } from './Terminal.js';
 
 interface BottomPanelProps {
-  steps: PipelineStep[];
   logs: LogLine[];
-  terminal: TerminalState;
-  onCommand: (line: string) => void;
+  terminalApi: TerminalApi;
   height: number;
   onResize: (height: number) => void;
   /** Collapse the whole panel to zero height. */
@@ -29,64 +23,106 @@ interface BottomPanelProps {
   toggleHidden?: boolean;
 }
 
+interface TermTab {
+  id: string;
+  title: string;
+}
+
+interface ContextMenu {
+  tabId: string;
+  x: number;
+  y: number;
+}
+
+/** Monotonic id source so reused titles never collide with live sessions. */
+let nextTermSeq = 2;
+const newTermId = () => `term-${nextTermSeq++}-${Date.now().toString(36)}`;
+
 export function BottomPanel({
-  steps,
   logs,
-  terminal,
-  onCommand,
+  terminalApi,
   height,
   onResize,
   onCollapse,
   toggleHidden,
 }: BottomPanelProps) {
-  const [tab, setTab] = useState<'terminal' | 'logs'>('terminal');
+  const [tabs, setTabs] = useState<TermTab[]>([{ id: 'term-1', title: 'Terminal 1' }]);
+  const [active, setActive] = useState<string>('term-1'); // a tab id, or 'logs'
+  const [menu, setMenu] = useState<ContextMenu | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (tab === 'logs') logEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [logs, tab]);
+    if (active === 'logs') logEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [logs, active]);
+
+  // Dismiss the context menu on any outside click.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('resize', close);
+    };
+  }, [menu]);
+
+  const addTab = () => {
+    const id = newTermId();
+    const title = `Terminal ${tabs.length + 1}`;
+    setTabs((t) => [...t, { id, title }]);
+    setActive(id);
+  };
+
+  const duplicateTab = (sourceId: string) => {
+    const src = tabs.find((t) => t.id === sourceId);
+    const id = newTermId();
+    setTabs((t) => [...t, { id, title: `${src?.title ?? 'Terminal'} copy` }]);
+    setActive(id);
+    setMenu(null);
+  };
+
+  const closeTab = (id: string) => {
+    // The first terminal can never be closed.
+    if (id === 'term-1') return;
+    terminalApi.closeTerminal(id);
+    setTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      const next = prev.filter((t) => t.id !== id);
+      if (active === id) {
+        const fallback = next[Math.max(0, idx - 1)] ?? next[0];
+        setActive(fallback ? fallback.id : 'logs');
+      }
+      return next;
+    });
+    setMenu(null);
+  };
+
+  const renameTab = (id: string, title: string) => {
+    const trimmed = title.trim();
+    if (trimmed) setTabs((t) => t.map((tab) => (tab.id === id ? { ...tab, title: trimmed } : tab)));
+    setRenaming(null);
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     const startY = e.clientY;
     const startHeight = height;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = moveEvent.clientY - startY;
-      const newHeight = Math.max(100, Math.min(600, startHeight - deltaY));
-      onResize(newHeight);
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(100, Math.min(600, startHeight - (ev.clientY - startY)));
+      onResize(next);
     };
-
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
     };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   };
 
-  const isRunning = steps.some((s) => s.status === 'running');
-  const hasFinished = steps.length > 0 && steps.every((s) => s.status === 'passed' || s.status === 'failed' || s.status === 'skipped');
-  const [elapsed, setElapsed] = useState(0);
-
-  // Track elapsed pipeline time when running
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (isRunning) {
-      setElapsed(0);
-      const startTime = Date.now();
-      interval = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - startTime) / 100) / 10);
-      }, 100);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning]);
-
   return (
-    <footer className="bottom-panel">
+    <footer className="bottom-panel bottom-panel-solo">
       <div className="bottom-panel-resizer" onMouseDown={handleMouseDown} />
       <button
         className="bottom-collapse-btn"
@@ -96,54 +132,73 @@ export function BottomPanel({
       >
         ▼
       </button>
-      <div className="pipeline-track">
-        <div className="pipeline-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '0 4px' }}>
-          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-dim)', fontWeight: 600 }}>Checks Pipeline</span>
-          {isRunning && (
-            <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--color-accent)', fontWeight: 600 }}>
-              ELAPSED: {elapsed.toFixed(1)}s
-            </span>
-          )}
-          {hasFinished && !isRunning && (
-            <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--state-green)', fontWeight: 600 }}>
-              DONE ({elapsed.toFixed(1)}s)
-            </span>
-          )}
-        </div>
-        {steps.length === 0 ? (
-          <span className="file-empty">Pipeline idle — run checks to begin.</span>
-        ) : (
-          <div className="pipeline-steps-list" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {steps.map((s, i) => (
-              <div key={s.id} className={`pipeline-step status-${s.status}`} title={s.summary}>
-                <span className="step-glyph">{STATUS_GLYPH[s.status]}</span>
-                <span className="step-index">{i + 1}</span>
-                <span className="step-title">{s.title}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div className="bottom-right">
-        <div className="tab-bar">
-          <button
-            className={`tab ${tab === 'terminal' ? 'tab-active' : ''}`}
-            onClick={() => setTab('terminal')}
-          >
-            Terminal
+        <div className="tab-bar term-tab-bar">
+          {tabs.map((t) => (
+            <div
+              key={t.id}
+              className={`tab term-tab ${active === t.id ? 'tab-active' : ''}`}
+              onClick={() => setActive(t.id)}
+              onDoubleClick={() => setRenaming(t.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setActive(t.id);
+                setMenu({ tabId: t.id, x: e.clientX, y: e.clientY });
+              }}
+            >
+              {renaming === t.id ? (
+                <input
+                  className="term-tab-rename"
+                  autoFocus
+                  defaultValue={t.title}
+                  onBlur={(e) => renameTab(t.id, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') renameTab(t.id, (e.target as HTMLInputElement).value);
+                    if (e.key === 'Escape') setRenaming(null);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="term-tab-label">{t.title}</span>
+              )}
+              {t.id !== 'term-1' && (
+                <button
+                  className="term-tab-close"
+                  title="Close terminal"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(t.id);
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          <button className="term-tab-add" title="New terminal" onClick={addTab}>
+            +
           </button>
           <button
-            className={`tab ${tab === 'logs' ? 'tab-active' : ''}`}
-            onClick={() => setTab('logs')}
+            className={`tab term-logs-tab ${active === 'logs' ? 'tab-active' : ''}`}
+            onClick={() => setActive('logs')}
           >
             Logs
           </button>
         </div>
 
-        {tab === 'terminal' ? (
-          <Terminal terminal={terminal} onCommand={onCommand} />
-        ) : (
+        {/* Every terminal stays mounted (hidden when inactive) so its PTY session
+            and scrollback survive tab switches. */}
+        {tabs.map((t) => (
+          <div
+            key={t.id}
+            style={{ display: active === t.id ? 'flex' : 'none', flex: 1, minHeight: 0 }}
+          >
+            <Terminal id={t.id} api={terminalApi} />
+          </div>
+        ))}
+
+        {active === 'logs' && (
           <div className="log-stream">
             {logs.map((l, i) => (
               <div key={i} className={`log-line log-${l.level}`}>
@@ -155,6 +210,31 @@ export function BottomPanel({
           </div>
         )}
       </div>
+
+      {menu && (
+        <div
+          className="term-context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              setRenaming(menu.tabId);
+              setMenu(null);
+            }}
+          >
+            Rename
+          </button>
+          <button onClick={() => duplicateTab(menu.tabId)}>Duplicate</button>
+          <button
+            className="term-context-danger"
+            disabled={menu.tabId === 'term-1'}
+            onClick={() => closeTab(menu.tabId)}
+          >
+            Close
+          </button>
+        </div>
+      )}
     </footer>
   );
 }

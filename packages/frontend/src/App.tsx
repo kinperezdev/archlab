@@ -35,10 +35,15 @@ function makeResizeHandler(current: number, set: (n: number) => void) {
     document.addEventListener('mouseup', onUp);
   };
 }
+import type { PipelineStepId } from '@archlab/shared';
 import { TopBar } from './components/TopBar.js';
 import { LeftSidebar } from './components/LeftSidebar.js';
 import { RightSidebar } from './components/RightSidebar.js';
 import { BottomPanel } from './components/BottomPanel.js';
+import { PipelineTags } from './components/PipelineTags.js';
+import { LockScreen } from './components/LockScreen.js';
+import { fetchAccessStatus } from './lib/brainAccess.js';
+import type { BrainAccessStatus } from '@archlab/shared';
 import { BrainPanel } from './components/BrainPanel.js';
 import { Canvas } from './canvas/Canvas.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
@@ -58,8 +63,25 @@ export type ArchTab =
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
 
 export function App() {
-  const { state, reanalyzeProject, runChecks, sendCommand } = useArchLab();
+  const {
+    state,
+    reanalyzeProject,
+    runChecks,
+    onTerminalData,
+    createTerminal,
+    closeTerminal,
+    sendTerminalInput,
+    resizeTerminal,
+  } = useArchLab();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  // Security tab: which pipeline step the findings panel is filtered to (if any).
+  const [securityStep, setSecurityStep] = useState<PipelineStepId | null>(null);
+  // Launch lock (Layer 1). `null` until we know the status, then gates the app.
+  const [access, setAccess] = useState<BrainAccessStatus | null>(null);
+
+  useEffect(() => {
+    fetchAccessStatus().then(setAccess).catch(() => setAccess(null));
+  }, []);
   const [brainOpen, setBrainOpen] = useState(false);
   const [bottomHeight, setBottomHeight] = useState(200);
   const [tab, setTab] = useState<ArchTab>('all');
@@ -101,6 +123,18 @@ export function App() {
     [state.canvas.nodes, selectedNodeId],
   );
 
+  // Stable terminal API for xterm.js (identity must not change between renders).
+  const terminalApi = useMemo(
+    () => ({
+      onData: onTerminalData,
+      createTerminal,
+      closeTerminal,
+      sendInput: sendTerminalInput,
+      resize: resizeTerminal,
+    }),
+    [onTerminalData, createTerminal, closeTerminal, sendTerminalInput, resizeTerminal],
+  );
+
   const isArchitecture =
     tab === 'all' || tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security';
 
@@ -130,6 +164,11 @@ export function App() {
   // True whenever a full-screen overlay is showing. The bottom-panel toggle is
   // hidden while this is true so it never floats on top of a modal.
   const isAnyModalOpen = brainOpen;
+
+  // Layer 1: a locked brain blocks the entire app at launch until unlocked.
+  if (access?.locked) {
+    return <LockScreen onUnlocked={setAccess} />;
+  }
 
   return (
     <div
@@ -182,9 +221,10 @@ export function App() {
             </button>
           )}
 
-          {/* Security tab owns the pipeline controls — that is where findings
-              are reviewed and fresh scans are triggered. */}
+          {/* Security tab owns the pipeline controls (top-left) plus the step
+              tags that filter the findings panel. */}
           {tab === 'security' && (
+            <div className="security-overlay">
             <div className="pipeline-controls">
               <span className="pipeline-controls-label">Pipeline Controls</span>
               <div className="pipeline-controls-row">
@@ -210,6 +250,13 @@ export function App() {
                   Run Checks
                 </button>
               </div>
+            </div>
+            <PipelineTags
+              steps={state.steps}
+              diagnostics={state.diagnostics}
+              activeStep={securityStep}
+              onSelect={setSecurityStep}
+            />
             </div>
           )}
 
@@ -242,6 +289,8 @@ export function App() {
             onCollapse={() => setShowRightSidebar((p) => !p)}
             width={rightWidth}
             onResizeStart={makeResizeHandler(rightWidth, setRightWidth)}
+            stepFilter={tab === 'security' ? securityStep : null}
+            onClearStepFilter={() => setSecurityStep(null)}
           />
         )}
 
@@ -268,10 +317,8 @@ export function App() {
         </button>
       ) : (
         <BottomPanel
-          steps={state.steps}
           logs={state.logs}
-          terminal={state.terminal}
-          onCommand={sendCommand}
+          terminalApi={terminalApi}
           height={bottomHeight}
           onResize={setBottomHeight}
           onCollapse={toggleBottom}

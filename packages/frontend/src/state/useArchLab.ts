@@ -32,14 +32,9 @@ export interface BrainSummary {
   insights: BrainInsight[];
 }
 
-export interface TerminalLine {
-  text: string;
-  stream: 'stdout' | 'stderr' | 'system' | 'input';
-}
-
 export interface TerminalState {
+  /** Current working directory of the PTY (drives auto-analysis on the backend). */
   cwd: string;
-  lines: TerminalLine[];
 }
 
 export interface ArchLabState {
@@ -80,9 +75,14 @@ export function useArchLab() {
     report: null,
     brain: { projectCount: 0, patterns: [], insights: [] },
     logs: [],
-    terminal: { cwd: '~', lines: [] },
+    terminal: { cwd: '~' },
     inferredSql: null,
   });
+
+  // Subscribers for raw PTY output, keyed by terminal-session id. Terminal data
+  // bypasses React state and is pushed straight to xterm.js to avoid
+  // re-rendering the whole app per chunk.
+  const termListeners = useRef<Map<string, Set<(data: string) => void>>>(new Map());
 
   // Reduce one server message into the next immutable state.
   const reduce = useCallback((prev: ArchLabState, msg: ServerMessage): ArchLabState => {
@@ -160,15 +160,6 @@ export function useArchLab() {
           },
         };
 
-      case 'term-output':
-        return {
-          ...prev,
-          terminal: {
-            ...prev.terminal,
-            lines: [...prev.terminal.lines.slice(-500), { text: msg.data, stream: msg.stream }],
-          },
-        };
-
       case 'term-cwd':
         return { ...prev, terminal: { ...prev.terminal, cwd: msg.cwd } };
 
@@ -197,6 +188,13 @@ export function useArchLab() {
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data as string) as ServerMessage;
+          // PTY output is high-frequency: push it straight to subscribers
+          // (xterm.js) instead of through React state.
+          if (msg.type === 'term-data') {
+            const set = termListeners.current.get(msg.id);
+            if (set) for (const fn of set) fn(msg.data);
+            return;
+          }
           setState((p) => reduce(p, msg));
         } catch {
           /* ignore malformed frames */
@@ -233,23 +231,61 @@ export function useArchLab() {
 
   const refreshBrain = useCallback(() => send({ type: 'request-brain' }), [send]);
 
-  // Send a terminal command, echoing it locally as a prompt line immediately.
-  const sendCommand = useCallback(
-    (line: string) => {
-      setState((p) => ({
-        ...p,
-        terminal: {
-          ...p.terminal,
-          lines: [...p.terminal.lines.slice(-500), { text: `$ ${line}`, stream: 'input' }],
-        },
-      }));
-      send({ type: 'term-input', line });
-    },
+  // ---- Real-terminal (PTY) API, per session id ----------------------------
+  // Subscribe to one session's raw PTY output. Returns an unsubscribe function.
+  const onTerminalData = useCallback((id: string, cb: (data: string) => void) => {
+    let set = termListeners.current.get(id);
+    if (!set) {
+      set = new Set();
+      termListeners.current.set(id, set);
+    }
+    set.add(cb);
+    return () => {
+      set?.delete(cb);
+      if (set && set.size === 0) termListeners.current.delete(id);
+    };
+  }, []);
+
+  // Spawn / tear down a backend PTY session for a terminal tab.
+  const createTerminal = useCallback((id: string) => send({ type: 'term-create', id }), [send]);
+  const closeTerminal = useCallback((id: string) => send({ type: 'term-close', id }), [send]);
+
+  // Stream raw keystrokes to a session's stdin.
+  const sendTerminalInput = useCallback(
+    (id: string, data: string) => send({ type: 'term-input', id, data }),
+    [send],
+  );
+
+  // Keep a session's PTY viewport in sync with the on-screen terminal size.
+  const resizeTerminal = useCallback(
+    (id: string, cols: number, rows: number) => send({ type: 'term-resize', id, cols, rows }),
     [send],
   );
 
   return useMemo(
-    () => ({ state, analyzeProject, reanalyzeProject, runChecks, refreshBrain, sendCommand }),
-    [state, analyzeProject, reanalyzeProject, runChecks, refreshBrain, sendCommand],
+    () => ({
+      state,
+      analyzeProject,
+      reanalyzeProject,
+      runChecks,
+      refreshBrain,
+      onTerminalData,
+      createTerminal,
+      closeTerminal,
+      sendTerminalInput,
+      resizeTerminal,
+    }),
+    [
+      state,
+      analyzeProject,
+      reanalyzeProject,
+      runChecks,
+      refreshBrain,
+      onTerminalData,
+      createTerminal,
+      closeTerminal,
+      sendTerminalInput,
+      resizeTerminal,
+    ],
   );
 }

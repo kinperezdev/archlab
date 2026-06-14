@@ -43,6 +43,31 @@ export interface BrainInsight {
   patternId?: string;
 }
 
+/**
+ * Brain access permissions (Layer 2). Controls what the MCP server and brain
+ * panel are allowed to surface. Enforced at the access layer, not by encrypting
+ * the files — reads and writes stay fast.
+ */
+export interface BrainPermissions {
+  /** Allow reading cross-project architecture/learned patterns. */
+  patterns: boolean;
+  /** Allow reading proactive cross-project insights. */
+  insights: boolean;
+  /** Allow reading per-project diagnostics/findings. */
+  projectFindings: boolean;
+  /** Project ids fully blocked from any AI tool via MCP, even when unlocked. */
+  lockedProjects: string[];
+}
+
+/** Status of the brain access gate (Layer 1 lock + Layer 2 permissions). */
+export interface BrainAccessStatus {
+  /** Whether a local password has been set. */
+  hasPassword: boolean;
+  /** Whether the brain is currently locked (password set and not unlocked). */
+  locked: boolean;
+  permissions: BrainPermissions;
+}
+
 /** The full in-memory shape of the global brain. */
 export interface BrainState {
   version: number;

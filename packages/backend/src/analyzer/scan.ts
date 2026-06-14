@@ -53,6 +53,39 @@ export interface ScanResult {
   files: ScannedFile[];
 }
 
+/**
+ * Count the files a folder would contribute to an analysis, applying the same
+ * directory-skipping rules as the scanner (node_modules, dotdirs, etc.). Stops
+ * early once `cap` is exceeded so huge trees never block the UI; the returned
+ * count is therefore "at least this many" when it reaches the cap.
+ */
+export function countProjectFiles(root: string, cap = 20_000): number {
+  const absRoot = path.resolve(root);
+  if (!fs.existsSync(absRoot) || !fs.statSync(absRoot).isDirectory()) return 0;
+
+  let count = 0;
+  const stack: string[] = [absRoot];
+  while (stack.length > 0 && count <= cap) {
+    const dir = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
+          stack.push(path.join(dir, entry.name));
+        }
+      } else if (entry.isFile()) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
 /** Recursively scan a project folder into a flat file list. */
 export function scanProject(root: string): ScanResult {
   const absRoot = path.resolve(root);

@@ -137,16 +137,27 @@ body {
   gap: var(--space-3);
   margin-left: auto;
 }
-/* Pipeline controls live inside the Security tab canvas area. */
-.pipeline-controls {
+/* Security tab overlay: pipeline controls + step tags, pinned top-left. */
+.security-overlay {
   position: absolute;
   top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 12px;
+  right: 12px;
   z-index: 20;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.security-overlay > * {
+  pointer-events: auto;
+}
+/* Pipeline controls, left-aligned in the Security tab canvas area. */
+.pipeline-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -164,6 +175,112 @@ body {
 .pipeline-controls-row {
   display: flex;
   gap: var(--space-2);
+}
+
+/* ---------- Security pipeline tags ---------- */
+.pipeline-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-width: 720px;
+}
+.pipeline-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.pipeline-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.pipeline-tag.tag-active {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.pipeline-tag-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.pipeline-tag-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 0.6rem;
+}
+/* Grey — not yet run. */
+.pipeline-tag.tag-pending {
+  background: var(--color-surface-2);
+  color: var(--color-text-dim);
+  border-color: var(--color-border);
+}
+.pipeline-tag.tag-pending .pipeline-tag-num {
+  background: var(--color-text-dim);
+}
+/* Green — completed cleanly. */
+.pipeline-tag.tag-passed {
+  background: color-mix(in srgb, var(--state-green) 16%, var(--color-surface));
+  border-color: var(--state-green);
+  color: var(--state-green);
+}
+.pipeline-tag.tag-passed .pipeline-tag-num {
+  background: var(--state-green);
+}
+/* Blue + pulse — currently running. */
+.pipeline-tag.tag-running {
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  animation: tag-pulse 1.2s ease-in-out infinite;
+}
+.pipeline-tag.tag-running .pipeline-tag-num {
+  background: var(--color-accent);
+}
+/* Red — raised issues / failed. */
+.pipeline-tag.tag-issues {
+  background: color-mix(in srgb, var(--sev-critical) 16%, var(--color-surface));
+  border-color: var(--sev-critical);
+  color: var(--sev-critical);
+}
+.pipeline-tag.tag-issues .pipeline-tag-num {
+  background: var(--sev-critical);
+}
+@keyframes tag-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent);
+  }
+}
+.finding-filter-clear {
+  margin-left: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  cursor: pointer;
 }
 .path-input {
   flex: 1;
@@ -819,6 +936,10 @@ body {
   border-top: 1px solid var(--color-border);
   min-height: 0;
 }
+/* Pipeline track removed from the bottom panel: terminal/logs take full width. */
+.bottom-panel.bottom-panel-solo {
+  grid-template-columns: 1fr;
+}
 .bottom-panel-resizer {
   position: absolute;
   top: -4px;
@@ -949,61 +1070,238 @@ body {
   border-bottom-color: var(--color-accent);
 }
 
-/* ---------- Terminal ---------- */
-.terminal {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  cursor: text;
-}
-.terminal-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-2) var(--space-3);
-  min-height: 0;
-}
-.term-line {
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.5;
-}
-.term-input {
-  color: var(--color-accent);
-}
-.term-stderr {
-  color: var(--sev-critical);
-}
-.term-system {
-  color: var(--color-text-dim);
-  font-style: italic;
-}
-.term-stdout {
-  color: var(--color-text);
-}
-.terminal-input-row {
-  display: flex;
+/* ---------- Multi-terminal tabs ---------- */
+.term-tab-bar {
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg);
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 2px;
 }
-.term-prompt {
-  color: var(--color-accent);
+.term-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 2px solid transparent;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  user-select: none;
+  max-width: 180px;
+}
+.term-tab .term-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.terminal-input {
-  flex: 1;
-  background: transparent;
+.term-tab-close {
   border: none;
-  outline: none;
+  background: transparent;
+  color: var(--color-text-dim);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 1px 2px;
+  border-radius: 3px;
+}
+.term-tab-close:hover {
   color: var(--color-text);
-  font-family: var(--font-mono);
+  background: var(--color-surface-2);
+}
+.term-tab-add {
+  border: none;
+  background: transparent;
+  color: var(--color-text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.term-tab-add:hover {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
+.term-logs-tab {
+  margin-left: auto;
+}
+.term-tab-rename {
+  background: var(--color-bg);
+  border: 1px solid var(--color-accent);
+  border-radius: 3px;
+  color: var(--color-text);
   font-size: var(--text-xs);
+  font-family: inherit;
+  width: 96px;
+  padding: 0 4px;
+  outline: none;
+}
+.term-context-menu {
+  position: fixed;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  padding: 4px;
+}
+.term-context-menu button {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.term-context-menu button:hover:not(:disabled) {
+  background: var(--color-surface-2);
+}
+.term-context-menu button:disabled {
+  color: var(--color-text-dim);
+  cursor: not-allowed;
+}
+.term-context-danger:not(:disabled) {
+  color: var(--sev-critical);
+}
+
+/* ---------- Terminal (xterm.js / real PTY) ---------- */
+.terminal-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+/* Subtle blue highlight while a file is dragged over the terminal. */
+.terminal-pane.drag-over {
+  outline: 2px solid #4d8dff;
+  outline-offset: -4px;
+}
+.terminal-pane.drag-over::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(77, 141, 255, 0.1);
+  pointer-events: none;
+  z-index: 4;
+}
+.terminal.xterm-host {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-1) var(--space-3);
+  background: #0b0e14;
+  overflow: hidden;
+  cursor: text;
+}
+.terminal-drop-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-accent) 22%, #0b0e14);
+  border: 1px dashed var(--color-accent);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+/* Preview cards floating inside the terminal output area. */
+.terminal-preview-layer {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(360px, 70%);
+}
+.preview-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #2b3550;
+  border-left: 3px solid #4d8dff;
+  border-radius: var(--radius-sm);
+  background: rgba(15, 20, 32, 0.95);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
+}
+.preview-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.preview-icon {
+  font-size: 22px;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.preview-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.preview-name {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: #e6e9f2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-sub {
+  font-size: 0.6rem;
+  letter-spacing: 0.4px;
+  color: #8c97b3;
+  text-transform: uppercase;
+}
+.preview-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.preview-btn {
+  border: none;
+  background: transparent;
+  color: #8c97b3;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.preview-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.preview-busy {
+  font-size: var(--text-xs);
+  color: #4d8dff;
+}
+.preview-error {
+  font-size: var(--text-xs);
+  color: var(--sev-critical);
+}
+/* Let the xterm viewport own its own scrolling. */
+.terminal.xterm-host .xterm,
+.terminal.xterm-host .xterm-viewport {
+  width: 100% !important;
+  height: 100% !important;
+}
+.terminal.xterm-host .xterm-viewport {
+  overflow-y: auto;
 }
 
 .log-stream {
@@ -1063,6 +1361,135 @@ body {
 }
 .brain-section {
   margin-bottom: var(--space-6);
+}
+
+/* ---------- Full-screen launch lock ---------- */
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    1200px 800px at 50% 30%,
+    color-mix(in srgb, var(--color-accent) 10%, var(--color-bg)),
+    var(--color-bg)
+  );
+}
+.lock-screen-card {
+  width: 360px;
+  max-width: 90vw;
+  text-align: center;
+  padding: var(--space-8) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+.lock-screen-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-3);
+}
+.lock-screen-title {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-2);
+}
+.lock-screen-sub {
+  color: var(--color-text-dim);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-5);
+}
+.lock-screen-input {
+  width: 100%;
+  max-width: none;
+  margin-bottom: var(--space-3);
+  text-align: center;
+}
+.lock-screen-btn {
+  width: 100%;
+}
+.lock-screen-error {
+  margin-top: var(--space-3);
+  color: var(--sev-critical);
+  font-size: var(--text-sm);
+}
+
+/* ---------- Brain security / lock ---------- */
+.brain-lock {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+.brain-lock-icon {
+  font-size: 2.4rem;
+  margin-bottom: var(--space-2);
+}
+.brain-lock h3 {
+  font-size: var(--text-md);
+  margin-bottom: var(--space-2);
+}
+.brain-lock-row {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  align-items: center;
+  margin-top: var(--space-4);
+  flex-wrap: wrap;
+}
+.brain-lock-error {
+  margin-top: var(--space-2);
+  color: var(--sev-critical);
+  font-size: var(--text-sm);
+}
+.brain-sec-sub {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-text-dim);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.brain-sec-note {
+  color: var(--state-green);
+  margin-bottom: var(--space-2);
+}
+.brain-perm-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.brain-perm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.brain-perm-label {
+  font-size: var(--text-sm);
+}
+.brain-perm-toggle {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.brain-perm-toggle.is-open {
+  color: var(--state-green);
+  border-color: var(--state-green);
+}
+.brain-perm-toggle.is-locked {
+  color: var(--sev-critical);
+  border-color: var(--sev-critical);
 }
 .brain-section h3 {
   font-size: var(--text-sm);

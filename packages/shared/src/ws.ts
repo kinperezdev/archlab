@@ -23,8 +23,12 @@ export type ClientMessage =
   | { type: 'run-checks'; projectId: string }
   | { type: 'run-bottlenecks'; projectId: string }
   | { type: 'request-brain' }
-  // In-app terminal: a typed command line, and a request for the initial cwd.
-  | { type: 'term-input'; line: string }
+  // In-app terminal (real PTY). Multiple independent sessions per tab, keyed by
+  // `id`: create/close a session, stream raw stdin, and resize the viewport.
+  | { type: 'term-create'; id: string }
+  | { type: 'term-close'; id: string }
+  | { type: 'term-input'; id: string; data: string }
+  | { type: 'term-resize'; id: string; cols: number; rows: number }
   | { type: 'term-init' };
 
 /** Messages the server sends to the client. */
@@ -49,6 +53,7 @@ export type ServerMessage =
       patterns: BrainPattern[];
       insights: BrainInsight[];
     }
-  // In-app terminal: streamed command output and the live working directory.
-  | { type: 'term-output'; data: string; stream: 'stdout' | 'stderr' | 'system' }
-  | { type: 'term-cwd'; cwd: string };
+  // In-app terminal: raw PTY output (ANSI) and the live working directory, per
+  // session `id`.
+  | { type: 'term-data'; id: string; data: string }
+  | { type: 'term-cwd'; id: string; cwd: string };

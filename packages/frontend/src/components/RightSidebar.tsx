@@ -10,6 +10,7 @@ import {
   type CanvasGraph,
   type CanvasNode,
   type Diagnostic,
+  type PipelineStepId,
   type ProjectIntelligence,
   type Severity,
 } from '@archlab/shared';
@@ -40,6 +41,10 @@ interface RightSidebarProps {
   width: number;
   /** Begin a drag-resize from the left-edge handle. */
   onResizeStart: (e: React.MouseEvent) => void;
+  /** When set (Security tab), the findings list shows only this step's findings. */
+  stepFilter?: PipelineStepId | null;
+  /** Clear the active step filter. */
+  onClearStepFilter?: () => void;
 }
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
@@ -74,9 +79,15 @@ export function RightSidebar({
   onCollapse,
   width,
   onResizeStart,
+  stepFilter,
+  onClearStepFilter,
 }: RightSidebarProps) {
   const latest = diagnostics[diagnostics.length - 1] ?? null;
-  const sorted = [...diagnostics].sort(
+  // When a Security step tag is active, show only that step's findings.
+  const visibleDiagnostics = stepFilter
+    ? diagnostics.filter((d) => d.step === stepFilter)
+    : diagnostics;
+  const sorted = [...visibleDiagnostics].sort(
     (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity),
   );
 
@@ -145,7 +156,14 @@ export function RightSidebar({
       )}
 
       <section className="panel-block panel-grow">
-        <h3 className="panel-title">Findings ({diagnostics.length})</h3>
+        <h3 className="panel-title">
+          Findings ({sorted.length})
+          {stepFilter && (
+            <button className="finding-filter-clear" onClick={onClearStepFilter}>
+              filtered · clear ✕
+            </button>
+          )}
+        </h3>
         <ul className="finding-list">
           {sorted.map((d) => (
             <li key={d.id} className={`finding sev-border-${d.severity}`}>
@@ -165,7 +183,11 @@ export function RightSidebar({
               />
             </li>
           ))}
-          {diagnostics.length === 0 && <li className="file-empty">No findings yet. Run checks.</li>}
+          {sorted.length === 0 && (
+            <li className="file-empty">
+              {stepFilter ? 'No findings for this step.' : 'No findings yet. Run checks.'}
+            </li>
+          )}
         </ul>
       </section>
       </div>

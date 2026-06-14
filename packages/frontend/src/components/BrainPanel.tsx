@@ -1,10 +1,12 @@
 /** Brain panel: a modal overlay showing global brain contents and insights. */
 
-import { useState } from 'react';
-import { PORTS } from '@archlab/shared';
+import { useEffect, useState } from 'react';
+import { PORTS, type BrainAccessStatus } from '@archlab/shared';
 import type { BrainSummary } from '../state/useArchLab.js';
 import { CopyPromptButton } from './CopyPromptButton.js';
 import { promptForInsight } from '../lib/prompts.js';
+import { fetchAccessStatus } from '../lib/brainAccess.js';
+import { BrainSecurity } from './BrainSecurity.js';
 
 interface BrainPanelProps {
   brain: BrainSummary;
@@ -16,6 +18,11 @@ export function BrainPanel({ brain, onClose }: BrainPanelProps) {
   const [copied, setCopied] = useState(false);
   const [pasteConfig, setPasteConfig] = useState('');
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [access, setAccess] = useState<BrainAccessStatus | null>(null);
+
+  useEffect(() => {
+    fetchAccessStatus().then(setAccess).catch(() => setAccess(null));
+  }, []);
 
   const mcpConfig = {
     mcpServers: {
@@ -88,6 +95,11 @@ export function BrainPanel({ brain, onClose }: BrainPanelProps) {
           </button>
         </header>
 
+        {/* Layer 1: while locked, the panel shows nothing but the unlock gate. */}
+        {access?.locked ? (
+          <BrainSecurity access={access} onChange={setAccess} lockedView />
+        ) : (
+          <>
         <section className="brain-section">
           <h3>Proactive insights</h3>
           {brain.insights.length === 0 ? (
@@ -185,6 +197,10 @@ export function BrainPanel({ brain, onClose }: BrainPanelProps) {
             </div>
           </div>
         </section>
+
+        {access && <BrainSecurity access={access} onChange={setAccess} />}
+          </>
+        )}
       </div>
     </div>
   );
