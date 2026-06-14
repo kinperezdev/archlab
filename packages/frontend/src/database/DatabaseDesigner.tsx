@@ -16,14 +16,30 @@ import { loadSchema, saveSchema } from '../lib/schemaStore.js';
 import {
   parseSqlSchema,
   serializeSqlSchema,
+  type DbColumn,
   type DbTable,
 } from '../lib/sqlSchema.js';
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
 import { promptForSchema } from '../lib/prompts.js';
 import { neighborSet, highlightClass } from '../lib/highlight.js';
 import { SchemaTableNode, type SchemaNodeData } from './SchemaTableNode.js';
+import {
+  GroupContainer,
+  RelationshipEdge,
+  type RelationshipEdgeData,
+} from './SchemaGraphParts.js';
 
-const nodeTypes = { schemaTable: SchemaTableNode };
+const nodeTypes = { schemaTable: SchemaTableNode, dbGroup: GroupContainer };
+const edgeTypes = { relationship: RelationshipEdge };
+
+// Group-aware layout constants.
+const NODE_W = 240;
+const NODE_H_EST = 230;
+const COL_PITCH = 300;
+const ROW_PITCH = 300;
+const GROUP_PAD = 44;
+const GROUP_LABEL_H = 34;
+const GROUP_GAP = 160;
 
 const SAMPLE_SQL = `CREATE TABLE users (
   id SERIAL PRIMARY KEY,
@@ -37,11 +53,67 @@ CREATE TABLE posts (
   author_id INT REFERENCES users(id)
 );`;
 
-/** Lay tables out in a simple grid. */
-function tablePosition(index: number): { x: number; y: number } {
-  const col = index % 3;
-  const row = Math.floor(index / 3);
-  return { x: 80 + col * 340, y: 80 + row * 400 };
+/** Is a table confirmed (from a real schema file) vs inferred from app flow? */
+function isInferredTable(t: DbTable): boolean {
+  return Boolean(t.isInferred);
+}
+
+/**
+ * Resolve every foreign-key reference against the columns that actually exist in
+ * the referenced table. When the referenced column is missing, snap it to the
+ * parent's primary key (auto-correct) or flag it unresolved. Display-only: this
+ * never rewrites the user's SQL, it only informs the canvas + validation so we
+ * never draw a broken connection.
+ */
+function resolveReferences(tables: DbTable[]): DbTable[] {
+  const byName = new Map(tables.map((t) => [t.name.toLowerCase(), t]));
+  return tables.map((t) => ({
+    ...t,
+    columns: t.columns.map((col) => {
+      if (!col.isFk || !col.fkRelation) return col;
+      const parent = byName.get(col.fkRelation.parentTable.toLowerCase());
+      if (!parent) return { ...col, fkAutoCorrected: false, fkUnresolved: true };
+
+      const exact = parent.columns.find(
+        (c) => c.name.toLowerCase() === col.fkRelation!.parentColumn.toLowerCase(),
+      );
+      if (exact) {
+        return {
+          ...col,
+          fkRelation: { parentTable: parent.name, parentColumn: exact.name },
+          fkAutoCorrected: false,
+          fkUnresolved: false,
+        };
+      }
+
+      const pk = parent.columns.find((c) => c.isPk);
+      if (pk) {
+        return {
+          ...col,
+          fkRelation: { parentTable: parent.name, parentColumn: pk.name },
+          fkAutoCorrected: true,
+          fkUnresolved: false,
+        };
+      }
+      return { ...col, fkAutoCorrected: false, fkUnresolved: true };
+    }),
+  }));
+}
+
+/** Whether a FK is an inferred / unverified relationship (amber) vs confirmed. */
+function isInferredRelation(child: DbTable, col: DbColumn, parent: DbTable | undefined): boolean {
+  return Boolean(
+    col.isInferred ||
+      col.fkAutoCorrected ||
+      col.fkUnresolved ||
+      child.isInferred ||
+      parent?.isInferred,
+  );
+}
+
+/** Relationship cardinality from the FK shape: unique/pk FK is one-to-one. */
+function relationshipType(col: DbColumn): string {
+  return col.isPk || col.isUnique ? 'one-to-one' : 'many-to-one';
 }
 
 /** 1. Circular dependency checking */
@@ -89,41 +161,69 @@ function checkCircularDependencies(tables: DbTable[]): string | null {
   return null;
 }
 
-/** 2. Check if referenced column is a primary key */
+/** 2. Validate FK references against the columns that actually exist. */
 interface FkValidationError {
   table: string;
   column: string;
   message: string;
+  /** "amber" for inferred / auto-corrected / unverified, "critical" otherwise. */
+  severity: 'amber' | 'critical';
 }
 
+/**
+ * Run on already-resolved tables: auto-corrected references resolve cleanly, so
+ * the only things surfaced are genuine confirmed-schema problems (critical) and
+ * inferred / unverified relationships (amber). No inferred reference is ever
+ * flagged critical.
+ */
 function checkFkValidity(tables: DbTable[]): FkValidationError[] {
   const errors: FkValidationError[] = [];
   for (const t of tables) {
     for (const col of t.columns) {
-      if (col.isFk && col.fkRelation) {
-        const parent = tables.find((p) => p.name === col.fkRelation!.parentTable);
-        if (!parent) {
-          errors.push({
-            table: t.name,
-            column: col.name,
-            message: `Table "${t.name}" references non-existent table "${col.fkRelation.parentTable}".`,
-          });
-        } else {
-          const parentCol = parent.columns.find((c) => c.name === col.fkRelation!.parentColumn);
-          if (!parentCol) {
-            errors.push({
-              table: t.name,
-              column: col.name,
-              message: `Table "${t.name}" references non-existent column "${col.fkRelation.parentColumn}" in table "${parent.name}".`,
-            });
-          } else if (!parentCol.isPk) {
-            errors.push({
-              table: t.name,
-              column: col.name,
-              message: `Warning: Column "${col.name}" references "${parent.name}.${parentCol.name}" which is not a PRIMARY KEY.`,
-            });
-          }
-        }
+      if (!col.isFk || !col.fkRelation) continue;
+      const parent = tables.find((p) => p.name === col.fkRelation!.parentTable);
+      const inferred = isInferredRelation(t, col, parent);
+
+      if (!parent) {
+        errors.push({
+          table: t.name,
+          column: col.name,
+          severity: inferred ? 'amber' : 'critical',
+          message: inferred
+            ? `Inferred relationship: "${t.name}.${col.name}" → "${col.fkRelation.parentTable}" needs verification (table not in schema yet).`
+            : `Table "${t.name}" references non-existent table "${col.fkRelation.parentTable}".`,
+        });
+        continue;
+      }
+
+      if (col.fkUnresolved) {
+        errors.push({
+          table: t.name,
+          column: col.name,
+          severity: 'amber',
+          message: `Inferred relationship: "${t.name}.${col.name}" → "${parent.name}" could not be matched to a column or primary key. Needs verification.`,
+        });
+        continue;
+      }
+
+      if (col.fkAutoCorrected) {
+        errors.push({
+          table: t.name,
+          column: col.name,
+          severity: 'amber',
+          message: `Inferred relationship: "${t.name}.${col.name}" was auto-corrected to "${parent.name}.${col.fkRelation.parentColumn}" (primary key). Verify this is correct.`,
+        });
+        continue;
+      }
+
+      const parentCol = parent.columns.find((c) => c.name === col.fkRelation!.parentColumn);
+      if (parentCol && !parentCol.isPk) {
+        errors.push({
+          table: t.name,
+          column: col.name,
+          severity: 'amber',
+          message: `Column "${col.name}" references "${parent.name}.${parentCol.name}" which is not a PRIMARY KEY.`,
+        });
       }
     }
   }
@@ -178,51 +278,81 @@ function checkFkTypeMismatches(tables: DbTable[]): TypeMismatchError[] {
   return mismatches;
 }
 
-/** Build the FK relationship edges between table nodes. */
-function buildEdges(
-  tables: DbTable[],
-  mismatches: TypeMismatchError[],
-  validationErrors: FkValidationError[]
-): Edge[] {
-  const names = new Set(tables.map((t) => t.name));
-  const edges: Edge[] = [];
+const EDGE_BLUE = '#2563eb';
+const EDGE_AMBER = '#f59e0b';
+
+/**
+ * Build FK relationship edges. Confirmed references render as solid blue lines;
+ * inferred / auto-corrected / unverified references render as dashed amber.
+ * Each edge carries a relationship-type label and a column tooltip. No edge is
+ * ever drawn unless the reference resolves to a real column (after auto-correct).
+ */
+function buildEdges(tables: DbTable[]): Edge<RelationshipEdgeData>[] {
+  const byName = new Map(tables.map((t) => [t.name, t]));
+  const edges: Edge<RelationshipEdgeData>[] = [];
   for (const table of tables) {
     for (const col of table.columns) {
-      if (col.isFk && col.fkRelation && names.has(col.fkRelation.parentTable)) {
-        const hasMismatch = mismatches.some(
-          (m) => m.table === table.name && m.column === col.name
-        );
-        const hasInvalid = validationErrors.some(
-          (e) => e.table === table.name && e.column === col.name && e.message.includes('not a PRIMARY KEY')
-        );
+      if (!col.isFk || !col.fkRelation) continue;
+      const parent = byName.get(col.fkRelation.parentTable);
+      if (!parent) continue; // unresolved table: surfaced as a warning, not a line
 
-        const isCriticalError = validationErrors.some(
-          (e) => e.table === table.name && e.column === col.name && !e.message.includes('not a PRIMARY KEY')
-        );
+      const inferred = isInferredRelation(table, col, parent);
+      const color = inferred ? EDGE_AMBER : EDGE_BLUE;
+      const relType = relationshipType(col);
 
-        let strokeColor = '#60a5fa'; 
-        let strokeDash = undefined;
+      let note = '';
+      if (col.fkAutoCorrected) note = ' (auto-corrected to primary key — verify)';
+      else if (col.fkUnresolved) note = ' (unresolved — inferred, needs verification)';
+      else if (inferred) note = ' (inferred relationship — needs verification)';
 
-        if (hasMismatch || isCriticalError) {
-          strokeColor = '#ef4444'; 
-        } else if (hasInvalid) {
-          strokeColor = '#f59e0b'; 
-          strokeDash = '5 5';
-        }
-
-        edges.push({
-          id: `fk_${table.name}_${col.name}`,
-          source: table.name,
-          target: col.fkRelation.parentTable,
-          type: 'smoothstep',
-          label: `${col.name} → ${col.fkRelation.parentColumn}`,
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { stroke: strokeColor, strokeWidth: 2, strokeDasharray: strokeDash },
-        });
-      }
+      edges.push({
+        id: `fk_${table.name}_${col.name}`,
+        source: table.name,
+        target: parent.name,
+        type: 'relationship',
+        markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
+        style: { stroke: color, strokeWidth: 2, strokeDasharray: inferred ? '6 4' : undefined },
+        data: {
+          relType,
+          inferred,
+          tooltip: `${table.name}.${col.name} → ${parent.name}.${col.fkRelation.parentColumn} · ${relType}${note}`,
+        },
+      });
     }
   }
   return edges;
+}
+
+/** Bounding box that wraps a set of node positions, with group padding + label. */
+function groupBox(positions: { x: number; y: number }[]): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  const xs = positions.map((p) => p.x);
+  const ys = positions.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs) + NODE_W;
+  const maxY = Math.max(...ys) + NODE_H_EST;
+  return {
+    x: minX - GROUP_PAD,
+    y: minY - GROUP_PAD - GROUP_LABEL_H,
+    width: maxX - minX + GROUP_PAD * 2,
+    height: maxY - minY + GROUP_PAD * 2 + GROUP_LABEL_H,
+  };
+}
+
+/** Default grid position for a table within its group column. */
+function defaultPos(originX: number, index: number, count: number): { x: number; y: number } {
+  const cols = count <= 3 ? 1 : 2;
+  const c = index % cols;
+  const r = Math.floor(index / cols);
+  return {
+    x: originX + GROUP_PAD + c * COL_PITCH,
+    y: GROUP_PAD + GROUP_LABEL_H + r * ROW_PITCH,
+  };
 }
 
 /** Merge explicit schema tables with inferred tables. */
@@ -283,35 +413,93 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
     });
   }, [inferredSql]);
 
-  // Compute errors & validation warnings
-  const circularWarning = useMemo(() => checkCircularDependencies(tables), [tables]);
-  const validationErrors = useMemo(() => checkFkValidity(tables), [tables]);
-  const typeMismatches = useMemo(() => checkFkTypeMismatches(tables), [tables]);
+  // Resolve FK references (auto-correct to PK / flag unresolved) for display.
+  const resolvedTables = useMemo(() => resolveReferences(tables), [tables]);
+
+  // Compute errors & validation warnings against the resolved schema.
+  const circularWarning = useMemo(() => checkCircularDependencies(resolvedTables), [resolvedTables]);
+  const validationErrors = useMemo(() => checkFkValidity(resolvedTables), [resolvedTables]);
+  const typeMismatches = useMemo(() => checkFkTypeMismatches(resolvedTables), [resolvedTables]);
 
   // Sync React Flow nodes/edges with tables whenever they or selection changes.
   useEffect(() => {
-    const computedEdges = buildEdges(tables, typeMismatches, validationErrors);
+    const computedEdges = buildEdges(resolvedTables);
     const neighbors = activeNodeId ? neighborSet(activeNodeId, computedEdges) : null;
-    
-    const nextNodes = tables.map((table, i) => {
+
+    const confirmed = resolvedTables.filter((t) => !isInferredTable(t));
+    const inferred = resolvedTables.filter((t) => isInferredTable(t));
+
+    // Confirmed group sits on the left; inferred to its right.
+    const confCols = confirmed.length <= 3 ? 1 : 2;
+    const confWidth = GROUP_PAD * 2 + (confCols - 1) * COL_PITCH + NODE_W;
+    const inferredOriginX = confirmed.length > 0 ? confWidth + GROUP_GAP : 0;
+
+    const positionFor = (table: DbTable, list: DbTable[], idx: number, originX: number) => {
       const existing = nodesRef.current.find((n) => n.id === table.name);
-      return {
-        id: table.name,
-        type: 'schemaTable',
-        position: existing?.position || tablePosition(i),
-        className: highlightClass(table.name, activeNodeId, neighbors),
+      return existing?.position || defaultPos(originX, idx, list.length);
+    };
+    const confPositions = confirmed.map((t, i) => positionFor(t, confirmed, i, 0));
+    const infPositions = inferred.map((t, i) => positionFor(t, inferred, i, inferredOriginX));
+
+    // Tinted group backdrops behind the table nodes.
+    const groupNodes: Node[] = [];
+    if (confirmed.length > 0) {
+      const box = groupBox(confPositions);
+      groupNodes.push({
+        id: '__group_confirmed',
+        type: 'dbGroup',
+        position: { x: box.x, y: box.y },
+        data: { label: 'Confirmed Schema', variant: 'confirmed', width: box.width, height: box.height },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        zIndex: 0,
+        style: { width: box.width, height: box.height },
+      });
+    }
+    if (inferred.length > 0) {
+      const box = groupBox(infPositions);
+      groupNodes.push({
+        id: '__group_inferred',
+        type: 'dbGroup',
+        position: { x: box.x, y: box.y },
         data: {
-          table,
-          allTables: tables,
-          onUpdateTable: (next: DbTable) => updateTable(table.name, next),
+          label: 'Inferred from App Flow',
+          variant: 'inferred',
+          width: box.width,
+          height: box.height,
         },
-      };
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        zIndex: 0,
+        style: { width: box.width, height: box.height },
+      });
+    }
+
+    const tableNode = (table: DbTable, position: { x: number; y: number }): Node<SchemaNodeData> => ({
+      id: table.name,
+      type: 'schemaTable',
+      position,
+      zIndex: 1,
+      className: highlightClass(table.name, activeNodeId, neighbors),
+      data: {
+        table,
+        allTables: resolvedTables,
+        onUpdateTable: (next: DbTable) => updateTable(table.name, next),
+      },
     });
 
-    setNodes(nextNodes);
+    const tableNodes: Node<SchemaNodeData>[] = [
+      ...confirmed.map((t, i) => tableNode(t, confPositions[i])),
+      ...inferred.map((t, i) => tableNode(t, infPositions[i])),
+    ];
+
+    // Group backdrops first so they render behind the table nodes.
+    setNodes([...groupNodes, ...tableNodes] as Node<SchemaNodeData>[]);
     setEdges(computedEdges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables, activeNodeId, setNodes, setEdges]);
+  }, [resolvedTables, activeNodeId, setNodes, setEdges]);
 
   // Escape releases the locked highlight.
   useEffect(() => {
@@ -462,8 +650,9 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
               </div>
             )}
             {validationErrors.map((err, i) => (
-              <div key={`val-${i}`} className={`warning-item ${err.message.startsWith('Warning') ? 'amber' : 'critical'}`}>
-                <strong>⚠️ Validation:</strong> {err.message}
+              <div key={`val-${i}`} className={`warning-item ${err.severity}`}>
+                <strong>{err.severity === 'amber' ? '💡 Inferred:' : '⚠️ Validation:'}</strong>{' '}
+                {err.message}
               </div>
             ))}
             {typeMismatches.map((err, i) => (
@@ -494,6 +683,7 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           minZoom={0.2}
           onNodeMouseEnter={(_e, n) => setHoveredNodeId(n.id)}

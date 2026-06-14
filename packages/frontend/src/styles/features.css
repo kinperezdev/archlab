@@ -944,3 +944,102 @@
   display: inline-block;
 }
 
+/* ---------- Database: group containers (confirmed vs inferred) ---------- */
+.db-group {
+  box-sizing: border-box;
+  border-radius: 16px;
+  border: 1.5px dashed transparent;
+  position: relative;
+  pointer-events: none;
+}
+.db-group-confirmed {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+.db-group-inferred {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+.db-group-label {
+  position: absolute;
+  top: 10px;
+  left: 16px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+.db-group-confirmed .db-group-label {
+  color: #15803d;
+}
+.db-group-inferred .db-group-label {
+  color: #1d4ed8;
+}
+.db-group-bulb {
+  font-size: 0.85rem;
+}
+
+/* ---------- Database: relationship edge labels ---------- */
+.rel-edge-label {
+  position: absolute;
+  pointer-events: all;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: help;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.rel-edge-label.confirmed {
+  color: #1d4ed8;
+  border: 1px solid #2563eb;
+}
+.rel-edge-label.inferred {
+  color: #b45309;
+  border: 1px dashed #f59e0b;
+}
+
+/* ---------- Database: node readability (Fix 4) ---------- */
+.schema-table-head {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.schema-table-count {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.col-icon {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.col-icon.fk-unverified {
+  filter: saturate(1.4);
+}
+.schema-col-name.col-nn {
+  font-weight: 800;
+}
+.schema-row-more {
+  display: block;
+  text-align: center;
+  color: var(--color-text-dim);
+  font-style: italic;
+  cursor: pointer;
+}
+.schema-row-more:hover {
+  color: var(--color-text);
+}
+

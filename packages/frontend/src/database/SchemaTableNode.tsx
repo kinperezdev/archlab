@@ -84,6 +84,13 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
 
   const refOptions = getReferenceOptions();
 
+  // Collapsed view stays readable: show up to 5 columns, else first 4 + "+N more".
+  // When the node is selected we expand to all columns for editing.
+  const COLLAPSED_CAP = 5;
+  const overCap = !selected && table.columns.length > COLLAPSED_CAP;
+  const visibleColumns = overCap ? table.columns.slice(0, 4) : table.columns;
+  const moreCount = overCap ? table.columns.length - 4 : 0;
+
   // Generate copy prompt context
   const getCopyPromptText = () => {
     const ddl = serializeSqlSchema([table]);
@@ -122,39 +129,57 @@ Please review this and suggest optimizations for performance, indexing strategy,
             }}
           />
         ) : (
-          <span 
-            className="schema-table-name"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingTableName(true);
-            }}
-          >
-            {table.name}
-            {table.isInferred && (
-              <span className="inferred-badge" title="Inferred from app flow">💡 Suggested</span>
-            )}
+          <span className="schema-table-head">
+            <span
+              className="schema-table-name"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingTableName(true);
+              }}
+            >
+              {table.name}
+            </span>
+            <span className="schema-table-count">
+              {table.columns.length} column{table.columns.length === 1 ? '' : 's'}
+            </span>
           </span>
         )}
 
-        <div className="schema-node-header-actions" onClick={e => e.stopPropagation()}>
+        {table.isInferred && (
+          <span className="inferred-badge" title="Inferred from app flow — needs verification">
+            💡
+          </span>
+        )}
+
+        <div className="schema-node-header-actions" onClick={(e) => e.stopPropagation()}>
           <CopyPromptButton prompt={getCopyPromptText} label="Copy Prompt" />
         </div>
       </div>
 
-      {/* Main Body */}
+      {/* Main Body — readable summary (collapsed) or full editor (selected). */}
       <div className="schema-node-body">
-        {table.columns.map((col, i) => {
+        {visibleColumns.map((col, i) => {
+          const fkUnverified = col.isFk && (col.fkAutoCorrected || col.fkUnresolved);
           return (
             <div key={i} className="schema-row-wrapper">
               <div className={`schema-row ${col.isPk ? 'row-pk' : col.isFk ? 'row-fk' : ''}`}>
                 <span className="schema-keys">
-                  {col.isPk && <span className="key-badge pk" title="Primary Key">PK</span>}
-                  {col.isFk && <span className="key-badge fk" title="Foreign Key">FK</span>}
-                  {col.isNotNull && !col.isPk && <span className="key-badge nn" title="Not Null">NN</span>}
-                  {col.isUnique && !col.isPk && <span className="key-badge uq" title="Unique">UQ</span>}
+                  {col.isPk && <span className="col-icon pk" title="Primary Key">🔑</span>}
+                  {col.isFk && (
+                    <span
+                      className={`col-icon fk ${fkUnverified ? 'fk-unverified' : ''}`}
+                      title={
+                        fkUnverified
+                          ? `Foreign key → ${col.fkRelation?.parentTable}.${col.fkRelation?.parentColumn} (inferred — needs verification)`
+                          : `Foreign key → ${col.fkRelation?.parentTable}.${col.fkRelation?.parentColumn}`
+                      }
+                    >
+                      🔗
+                    </span>
+                  )}
                 </span>
-                
-                <span className="schema-col-name">
+
+                <span className={`schema-col-name ${col.isNotNull ? 'col-nn' : ''}`}>
                   {col.name}
                   {col.isInferred && (
                     <span className="inferred-col-bullet" title="Inferred from app flow">💡</span>
@@ -263,6 +288,11 @@ Please review this and suggest optimizations for performance, indexing strategy,
             </div>
           );
         })}
+        {moreCount > 0 && (
+          <div className="schema-row schema-row-more" title="Select the table to see all columns">
+            +{moreCount} more column{moreCount === 1 ? '' : 's'}
+          </div>
+        )}
       </div>
 
       {selected && (

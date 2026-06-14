@@ -21,6 +21,26 @@ interface BottomPanelProps {
   onCollapse: () => void;
   /** Hide the collapse toggle (e.g. while a modal is open). */
   toggleHidden?: boolean;
+  /** Hide the panel with CSS (display:none) WITHOUT unmounting it, so every
+   *  terminal's PTY session, scrollback, and cwd survive being collapsed. */
+  hidden?: boolean;
+}
+
+const TABS_KEY = 'archlab:term-tabs';
+const ACTIVE_KEY = 'archlab:term-active';
+
+/** Restore the tab list from sessionStorage so a refresh keeps the same tabs. */
+function loadTabs(): TermTab[] {
+  try {
+    const raw = sessionStorage.getItem(TABS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as TermTab[]) : null;
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.some((t) => t.id === 'term-1')) {
+      return parsed;
+    }
+  } catch {
+    /* fall through to default */
+  }
+  return [{ id: 'term-1', title: 'Terminal 1' }];
 }
 
 interface TermTab {
@@ -45,9 +65,12 @@ export function BottomPanel({
   onResize,
   onCollapse,
   toggleHidden,
+  hidden,
 }: BottomPanelProps) {
-  const [tabs, setTabs] = useState<TermTab[]>([{ id: 'term-1', title: 'Terminal 1' }]);
-  const [active, setActive] = useState<string>('term-1'); // a tab id, or 'logs'
+  const [tabs, setTabs] = useState<TermTab[]>(() => loadTabs());
+  const [active, setActive] = useState<string>(
+    () => sessionStorage.getItem(ACTIVE_KEY) ?? 'term-1',
+  );
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
@@ -55,6 +78,14 @@ export function BottomPanel({
   useEffect(() => {
     if (active === 'logs') logEndRef.current?.scrollIntoView({ block: 'end' });
   }, [logs, active]);
+
+  // Persist tabs + active selection so a refresh restores the same layout.
+  useEffect(() => {
+    sessionStorage.setItem(TABS_KEY, JSON.stringify(tabs));
+  }, [tabs]);
+  useEffect(() => {
+    sessionStorage.setItem(ACTIVE_KEY, active);
+  }, [active]);
 
   // Dismiss the context menu on any outside click.
   useEffect(() => {
@@ -87,6 +118,11 @@ export function BottomPanel({
     // The first terminal can never be closed.
     if (id === 'term-1') return;
     terminalApi.closeTerminal(id);
+    try {
+      sessionStorage.removeItem(`archlab:term-buf:${id}`);
+    } catch {
+      /* ignore */
+    }
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === id);
       const next = prev.filter((t) => t.id !== id);
@@ -122,7 +158,10 @@ export function BottomPanel({
   };
 
   return (
-    <footer className="bottom-panel bottom-panel-solo">
+    <footer
+      className="bottom-panel bottom-panel-solo"
+      style={hidden ? { display: 'none' } : undefined}
+    >
       <div className="bottom-panel-resizer" onMouseDown={handleMouseDown} />
       <button
         className="bottom-collapse-btn"

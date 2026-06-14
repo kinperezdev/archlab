@@ -103,7 +103,26 @@ export function Terminal({ id, api }: TerminalProps) {
     };
     safeFit();
 
-    const unsubscribe = api.onData(id, (data) => term.write(data));
+    // Restore prior output after a refresh, then keep the rolling buffer in
+    // sessionStorage so the last session's output survives an accidental reload.
+    const bufKey = `archlab:term-buf:${id}`;
+    const BUF_CAP = 200_000;
+    let buf = sessionStorage.getItem(bufKey) ?? '';
+    if (buf) term.write(buf);
+    const persist = () => {
+      try {
+        sessionStorage.setItem(bufKey, buf.length > BUF_CAP ? buf.slice(-BUF_CAP) : buf);
+      } catch {
+        /* sessionStorage full or unavailable */
+      }
+    };
+    const flushTimer = setInterval(persist, 1000);
+
+    const unsubscribe = api.onData(id, (data) => {
+      term.write(data);
+      buf += data;
+      if (buf.length > BUF_CAP) buf = buf.slice(-BUF_CAP);
+    });
     const inputDisposable = term.onData((data) => api.sendInput(id, data));
     const resizeDisposable = term.onResize(({ cols, rows }) => api.resize(id, cols, rows));
 
@@ -113,6 +132,8 @@ export function Terminal({ id, api }: TerminalProps) {
     term.focus();
 
     return () => {
+      clearInterval(flushTimer);
+      persist();
       unsubscribe();
       inputDisposable.dispose();
       resizeDisposable.dispose();

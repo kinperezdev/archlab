@@ -306,7 +306,7 @@ export function App() {
         )}
       </div>
 
-      {bottomCollapsed ? (
+      {bottomCollapsed && (
         <button
           className="bottom-reveal-btn"
           onClick={toggleBottom}
@@ -315,16 +315,20 @@ export function App() {
         >
           ▲ Pipeline &amp; Terminal
         </button>
-      ) : (
-        <BottomPanel
-          logs={state.logs}
-          terminalApi={terminalApi}
-          height={bottomHeight}
-          onResize={setBottomHeight}
-          onCollapse={toggleBottom}
-          toggleHidden={isAnyModalOpen}
-        />
       )}
+
+      {/* The bottom panel is NEVER unmounted — collapsing only hides it with CSS
+          so every terminal's PTY session, scrollback, cwd, and running processes
+          survive collapse and tab switches. */}
+      <BottomPanel
+        logs={state.logs}
+        terminalApi={terminalApi}
+        height={bottomHeight}
+        onResize={setBottomHeight}
+        onCollapse={toggleBottom}
+        toggleHidden={isAnyModalOpen}
+        hidden={bottomCollapsed}
+      />
 
       {brainOpen && <BrainPanel brain={state.brain} onClose={() => setBrainOpen(false)} />}
     </div>

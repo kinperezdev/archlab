@@ -15,6 +15,10 @@ export interface DbColumn {
   isNotNull?: boolean;
   isUnique?: boolean;
   isInferred?: boolean;
+  /** Display-only: the referenced column was missing and snapped to the PK. */
+  fkAutoCorrected?: boolean;
+  /** Display-only: the reference could not be resolved (no matching col / PK). */
+  fkUnresolved?: boolean;
 }
 
 export interface DbTable {
