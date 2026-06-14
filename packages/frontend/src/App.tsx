@@ -106,38 +106,43 @@ export function App() {
   // Ignored while typing into the terminal or any text field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      const tag = el?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
-      
       const isMod = e.ctrlKey || e.metaKey;
 
+      // 1. Modifier-based shortcuts (should work even inside inputs/terminal)
       if (isMod) {
         if (e.key.toLowerCase() === 'b') {
           e.preventDefault();
           toggleLeftSidebar();
+          return;
         } else if (e.key.toLowerCase() === 'j') {
           e.preventDefault();
           toggleBottom();
+          return;
         }
-      } else {
-        if (e.altKey) return;
-        if (e.key === 'b' || e.key === 'B') {
+      }
+
+      // 2. Ignore raw keys when focused inside inputs, textareas, or content-editables
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+      
+      // 3. Raw-key shortcuts
+      if (e.altKey) return;
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        toggleLeftSidebar();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setShowRightSidebar((p) => !p);
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleBottom();
+      } else if (e.key >= '1' && e.key <= '8') {
+        const index = parseInt(e.key, 10) - 1;
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'scratch', 'preview'];
+        if (targetTabs[index]) {
           e.preventDefault();
-          toggleLeftSidebar();
-        } else if (e.key === 'r' || e.key === 'R') {
-          e.preventDefault();
-          setShowRightSidebar((p) => !p);
-        } else if (e.key === 'm' || e.key === 'M') {
-          e.preventDefault();
-          toggleBottom();
-        } else if (e.key >= '1' && e.key <= '8') {
-          const index = parseInt(e.key, 10) - 1;
-          const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'scratch', 'preview'];
-          if (targetTabs[index]) {
-            e.preventDefault();
-            setTab(targetTabs[index]);
-          }
+          setTab(targetTabs[index]);
         }
       }
     };
