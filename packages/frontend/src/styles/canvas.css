@@ -354,7 +354,6 @@
 .arch-node.node-highlight {
   border-color: var(--color-accent) !important;
   box-shadow: 0 0 0 4px var(--color-accent-soft), 0 12px 24px rgba(9, 9, 11, 0.12);
-  transform: translateY(-4px) scale(1.04);
   z-index: 1000 !important;
 }
 
