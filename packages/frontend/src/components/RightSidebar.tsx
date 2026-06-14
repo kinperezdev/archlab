@@ -103,7 +103,7 @@ export function RightSidebar({
       <button
         className="sidebar-edge-toggle"
         onClick={onCollapse}
-        title="Hide right sidebar"
+        title="Hide right sidebar (R)"
       >
         ▶
       </button>

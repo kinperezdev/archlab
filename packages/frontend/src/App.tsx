@@ -100,7 +100,7 @@ export function App() {
   const [codeWidth, setCodeWidth] = usePersistentNumber('archlab:codeWidth', 480, 300, 800);
   const [rightWidth, setRightWidth] = usePersistentNumber('archlab:rightWidth', 340, 200, 500);
 
-  // Keyboard shortcuts: B toggles the left sidebar, M toggles the bottom panel.
+  // Keyboard shortcuts: B toggles left sidebar, R toggles right sidebar, M toggles bottom panel, 1-8 switches tabs.
   // Ignored while typing into the terminal or any text field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -108,17 +108,28 @@ export function App() {
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+      
       if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         toggleLeftSidebar();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setShowRightSidebar((p) => !p);
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         toggleBottom();
+      } else if (e.key >= '1' && e.key <= '8') {
+        const index = parseInt(e.key, 10) - 1;
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'scratch', 'preview'];
+        if (targetTabs[index]) {
+          e.preventDefault();
+          setTab(targetTabs[index]);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleLeftSidebar, toggleBottom]);
+  }, [toggleLeftSidebar, toggleBottom, setShowRightSidebar, setTab]);
 
   const selectedNode = useMemo(
     () => state.canvas.nodes.find((n) => n.id === selectedNodeId) ?? null,
@@ -215,13 +226,13 @@ export function App() {
           )}
           {isArchitecture && !showRightSidebar && (
             <button
-              className="panel-reveal-tab on-right"
-              onClick={() => setShowRightSidebar((p) => !p)}
-              title="Show right sidebar"
-            >
-              ◀
-            </button>
-          )}
+               className="panel-reveal-tab on-right"
+               onClick={() => setShowRightSidebar((p) => !p)}
+               title="Show right sidebar (R)"
+             >
+               ◀
+             </button>
+           )}
 
           {/* Security tab owns the pipeline controls (top-left) plus the step
               tags that filter the findings panel. */}
