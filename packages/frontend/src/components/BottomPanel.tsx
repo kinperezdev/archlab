@@ -8,7 +8,7 @@
  * tab to rename, duplicate, or close it.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { LogLine } from '../state/useArchLab.js';
 import { Terminal, type TerminalApi } from './Terminal.js';
 
@@ -99,12 +99,12 @@ export function BottomPanel({
     };
   }, [menu]);
 
-  const addTab = () => {
+  const addTab = useCallback(() => {
     const id = newTermId();
     const title = `Terminal ${tabs.length + 1}`;
     setTabs((t) => [...t, { id, title }]);
     setActive(id);
-  };
+  }, [tabs.length]);
 
   const duplicateTab = (sourceId: string) => {
     const src = tabs.find((t) => t.id === sourceId);
@@ -114,7 +114,7 @@ export function BottomPanel({
     setMenu(null);
   };
 
-  const closeTab = (id: string) => {
+  const closeTab = useCallback((id: string) => {
     // We should only prevent closing if it's the last terminal tab left.
     if (tabs.length <= 1) return;
     terminalApi.closeTerminal(id);
@@ -143,7 +143,29 @@ export function BottomPanel({
       return renumbered;
     });
     setMenu(null);
-  };
+  }, [tabs.length, active, terminalApi]);
+
+  // Terminal tab keyboard shortcuts: Cmd+Opt+T / Ctrl+Alt+T (new tab), Cmd+Opt+W / Ctrl+Alt+W (close tab)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey;
+      const isAlt = e.altKey;
+
+      if (isMod && isAlt) {
+        if (e.key.toLowerCase() === 't') {
+          e.preventDefault();
+          addTab();
+        } else if (e.key.toLowerCase() === 'w') {
+          e.preventDefault();
+          if (active !== 'logs') {
+            closeTab(active);
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [addTab, closeTab, active]);
 
   const renameTab = (id: string, title: string) => {
     const trimmed = title.trim();
@@ -214,7 +236,7 @@ export function BottomPanel({
               {tabs.length > 1 && (
                 <button
                   className="term-tab-close"
-                  title="Close terminal"
+                  title="Close terminal (⌘⌥W)"
                   onClick={(e) => {
                     e.stopPropagation();
                     closeTab(t.id);
@@ -225,7 +247,7 @@ export function BottomPanel({
               )}
             </div>
           ))}
-          <button className="term-tab-add" title="New terminal" onClick={addTab}>
+          <button className="term-tab-add" title="New terminal (⌘⌥T)" onClick={addTab}>
             +
           </button>
           <button

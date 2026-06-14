@@ -55,6 +55,18 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
                   <kbd className="shortcut-kbd">⌘ J</kbd> or <kbd className="shortcut-kbd">Ctrl J</kbd> or <kbd className="shortcut-kbd">M</kbd>
                 </td>
               </tr>
+              <tr style={{ borderBottom: '1px solid var(--color-border-dim)' }}>
+                <td style={{ padding: '10px 0', fontSize: 'var(--text-sm)' }}>Create Terminal Tab</td>
+                <td style={{ padding: '10px 0', textAlign: 'right' }}>
+                  <kbd className="shortcut-kbd">⌘ ⌥ T</kbd> or <kbd className="shortcut-kbd">Ctrl Alt T</kbd>
+                </td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--color-border-dim)' }}>
+                <td style={{ padding: '10px 0', fontSize: 'var(--text-sm)' }}>Close Active Terminal Tab</td>
+                <td style={{ padding: '10px 0', textAlign: 'right' }}>
+                  <kbd className="shortcut-kbd">⌘ ⌥ W</kbd> or <kbd className="shortcut-kbd">Ctrl Alt W</kbd>
+                </td>
+              </tr>
             </tbody>
           </table>
 
