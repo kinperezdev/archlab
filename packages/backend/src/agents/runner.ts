@@ -1,24 +1,26 @@
 /**
  * Agent Team runner.
  *
- * Drives the six agents against an analyzed project using the Anthropic API
- * (streaming). Workers run in sequential or parallel mode (or a single agent in
- * isolation), coordinating through an in-memory message bus; the orchestrator
- * then synthesizes everything into a final team report. Output, status, and
- * findings stream back to the UI through the provided emit callback.
+ * Drives the six agents against an analyzed project using Anthropic, OpenAI, or Gemini APIs.
+ * Workers run in sequential or parallel mode (or a single agent in isolation), coordinating
+ * through an in-memory message bus; the orchestrator then synthesizes everything into a final
+ * team report. Output, status, and findings stream back to the UI through the provided emit callback.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { BRAIN_DIR } from '../brain/paths.js';
 import type {
   AgentFinding,
   AgentId,
   AgentMessage,
   AgentMode,
-  ServerMessage,
   Severity,
   TeamReport,
 } from '@archlab/shared';
+import type { Emit } from '../pipeline/pipeline.js';
 import type { AnalysisResult } from '../analyzer/analyzer.js';
 import { buildAgentContext, contextToBlock } from './context.js';
 import {
@@ -26,20 +28,160 @@ import {
   orchestratorSystemPrompt,
   workerSystemPrompt,
 } from './agentDefs.js';
-import { saveAgentRun, writeReportToProjectRoot, persistentIssues } from './store.js';
 
-type Emit = (m: ServerMessage) => void;
-
-/** Model + effort are overridable via env; default to the documented 3.7 Sonnet. */
-const MODEL = process.env.ARCHLAB_AGENT_MODEL || 'claude-3-7-sonnet-20250219';
 const VALID_SEVERITY: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
+import { saveAgentRun, writeReportToProjectRoot, persistentIssues } from './store.js';
+import { absorbAgentTeamFindings } from '../brain/brainStore.js';
 
-function client(): Anthropic {
-  // Reads ANTHROPIC_API_KEY from the environment. Throws a clear error if absent.
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set. Export it before running the Agent Team.');
+// Global controller to abort active Agent Team runs.
+let activeAbortController: AbortController | null = null;
+
+export function abortAgentTeam(): void {
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
   }
-  return new Anthropic();
+}
+
+function getProvider(): 'anthropic' | 'openai' | 'gemini' {
+  // 1. Prioritize keys from api_keys.json configured in the UI
+  const keysFile = path.join(BRAIN_DIR, 'api_keys.json');
+  if (fs.existsSync(keysFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(keysFile, 'utf8'));
+      if (data.anthropic && data.anthropic.trim()) return 'anthropic';
+      if (data.openai && data.openai.trim()) return 'openai';
+      if (data.gemini && data.gemini.trim()) return 'gemini';
+    } catch {
+      // ignore parsing error, fallback to env vars
+    }
+  }
+
+  // 2. Fallback to system environment variables
+  if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim()) return 'anthropic';
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) return 'openai';
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) return 'gemini';
+  throw new Error('No AI API key found. Click the 🔑 API Keys button in the top bar to configure one.');
+}
+
+/** Helper for OpenAI-compatible completions streaming */
+async function runOpenAiCompatibleStream(
+  url: string,
+  headers: Record<string, string>,
+  body: any,
+  onChunk: (text: string) => void
+): Promise<string> {
+  const signal = activeAbortController?.signal;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Response body is not readable');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+
+  while (true) {
+    if (signal?.aborted) {
+      throw new Error('Agent run stopped by user.');
+    }
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === 'data: [DONE]') continue;
+      if (trimmed.startsWith('data: ')) {
+        try {
+          const json = JSON.parse(trimmed.slice(6));
+          const content = json.choices?.[0]?.delta?.content || '';
+          if (content) {
+            fullText += content;
+            onChunk(content);
+          }
+        } catch {
+          // ignore parsing error for partial lines
+        }
+      }
+    }
+  }
+  return fullText;
+}
+
+/** Unified stream runner for Anthropic, OpenAI, and Gemini */
+async function runProviderStream(
+  systemPrompt: string,
+  userContent: string,
+  onChunk: (text: string) => void,
+  isOrchestrator: boolean = false
+): Promise<string> {
+  const provider = getProvider();
+  const signal = activeAbortController?.signal;
+
+  if (provider === 'anthropic') {
+    const api = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const params: any = {
+      model: process.env.ARCHLAB_AGENT_MODEL || 'claude-3-7-sonnet-20250219',
+      max_tokens: 4000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
+    };
+    if (params.model.includes('3-7-sonnet')) {
+      params.max_tokens = 8000;
+      params.thinking = { type: 'enabled', budget_tokens: isOrchestrator ? 4096 : 2048 };
+    }
+    const stream = api.messages.stream(params, signal ? { signal } : {});
+    let fullText = '';
+    for await (const event of stream) {
+      if (signal?.aborted) {
+        throw new Error('Agent run stopped by user.');
+      }
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        fullText += event.delta.text;
+        onChunk(event.delta.text);
+      }
+    }
+    return fullText;
+  }
+
+  let url = '';
+  let headers: Record<string, string> = {};
+  let modelName = '';
+
+  if (provider === 'gemini') {
+    url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+    headers = { 'Authorization': `Bearer ${process.env.GEMINI_API_KEY}` };
+    modelName = process.env.ARCHLAB_AGENT_MODEL || 'gemini-2.5-flash';
+  } else {
+    url = 'https://api.openai.com/v1/chat/completions';
+    headers = { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` };
+    modelName = process.env.ARCHLAB_AGENT_MODEL || 'gpt-4o';
+  }
+
+  const body = {
+    model: modelName,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userContent }
+    ],
+    stream: true
+  };
+
+  return runOpenAiCompatibleStream(url, headers, body, onChunk);
 }
 
 /** Strip markdown fences and parse the first JSON object in a string. */
@@ -61,7 +203,6 @@ function coerceSeverity(s: unknown): Severity {
 
 /** Run one worker agent end to end, streaming output and emitting findings. */
 async function runWorker(
-  api: Anthropic,
   id: AgentId,
   contextBlock: string,
   bus: AgentMessage[],
@@ -80,25 +221,13 @@ async function runWorker(
 
   let full = '';
   try {
-    const params: any = {
-      model: MODEL,
-      max_tokens: 4000,
-      system: workerSystemPrompt(id),
-      messages: [{ role: 'user', content: userContent }],
-    };
-    if (MODEL.includes('3-7-sonnet')) {
-      params.max_tokens = 8000;
-      params.thinking = { type: 'enabled', budget_tokens: 2048 };
-    }
-    const stream = api.messages.stream(params);
-
     emit({ type: 'agent-status', agentId: id, status: 'working' });
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        full += event.delta.text;
-        emit({ type: 'agent-output', agentId: id, chunk: event.delta.text });
-      }
-    }
+    full = await runProviderStream(
+      workerSystemPrompt(id),
+      userContent,
+      (chunk) => emit({ type: 'agent-output', agentId: id, chunk }),
+      false
+    );
   } catch (err) {
     emit({ type: 'agent-error', agentId: id, message: err instanceof Error ? err.message : String(err) });
     emit({ type: 'agent-status', agentId: id, status: 'error' });
@@ -145,7 +274,6 @@ interface RawFinding {
 
 /** Run the orchestrator to synthesize all findings into the team report. */
 async function runOrchestrator(
-  api: Anthropic,
   contextBlock: string,
   findings: AgentFinding[],
   bus: AgentMessage[],
@@ -160,25 +288,13 @@ async function runOrchestrator(
 
   let full = '';
   try {
-    const params: any = {
-      model: MODEL,
-      max_tokens: 4000,
-      system: orchestratorSystemPrompt(),
-      messages: [{ role: 'user', content: userContent }],
-    };
-    if (MODEL.includes('3-7-sonnet')) {
-      params.max_tokens = 8000;
-      params.thinking = { type: 'enabled', budget_tokens: 4096 };
-    }
-    const stream = api.messages.stream(params);
-
     emit({ type: 'agent-status', agentId: 'orchestrator', status: 'working' });
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        full += event.delta.text;
-        emit({ type: 'agent-output', agentId: 'orchestrator', chunk: event.delta.text });
-      }
-    }
+    full = await runProviderStream(
+      orchestratorSystemPrompt(),
+      userContent,
+      (chunk) => emit({ type: 'agent-output', agentId: 'orchestrator', chunk }),
+      true
+    );
   } catch (err) {
     emit({ type: 'agent-error', agentId: 'orchestrator', message: err instanceof Error ? err.message : String(err) });
     emit({ type: 'agent-status', agentId: 'orchestrator', status: 'error' });
@@ -205,12 +321,18 @@ export async function runAgentTeam(
   agentId: AgentId | undefined,
   emit: Emit,
 ): Promise<void> {
-  let api: Anthropic;
+  // Abort any existing run first
+  abortAgentTeam();
+  activeAbortController = new AbortController();
+  const signal = activeAbortController.signal;
+
   try {
-    api = client();
+    getProvider();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    for (const id of WORKER_AGENTS) emit({ type: 'agent-error', agentId: id, message });
+    const affectedAgents = mode === 'single' && agentId ? [agentId] : WORKER_AGENTS;
+    for (const id of affectedAgents) emit({ type: 'agent-error', agentId: id, message });
+    activeAbortController = null;
     return;
   }
 
@@ -218,42 +340,83 @@ export async function runAgentTeam(
   const bus: AgentMessage[] = [];
   let allFindings: AgentFinding[] = [];
 
-  if (mode === 'single' && agentId) {
-    if (agentId === 'orchestrator') {
-      await runOrchestrator(api, contextBlock, [], bus, emit);
+  try {
+    if (mode === 'single' && agentId) {
+      if (agentId === 'orchestrator') {
+        await runOrchestrator(contextBlock, [], bus, emit);
+      } else {
+        allFindings = await runWorker(agentId, contextBlock, bus, emit);
+      }
+    } else if (mode === 'parallel') {
+      const results = await Promise.all(
+        WORKER_AGENTS.map(async (id) => {
+          if (signal.aborted) return [];
+          try {
+            return await runWorker(id, contextBlock, bus, emit);
+          } catch (err) {
+            return [];
+          }
+        }),
+      );
+      allFindings = results.flat();
     } else {
-      allFindings = await runWorker(api, agentId, contextBlock, bus, emit);
+      // sequential: each agent sees messages the previous ones posted.
+      for (const id of WORKER_AGENTS) {
+        if (signal.aborted) break;
+        try {
+          const f = await runWorker(id, contextBlock, bus, emit);
+          allFindings = allFindings.concat(f);
+        } catch (err) {
+          // ignore individual worker error to keep sequential going unless aborted
+        }
+      }
     }
-  } else if (mode === 'parallel') {
-    const results = await Promise.all(
-      WORKER_AGENTS.map((id) => runWorker(api, id, contextBlock, bus, emit)),
-    );
-    allFindings = results.flat();
-  } else {
-    // sequential: each agent sees messages the previous ones posted.
-    for (const id of WORKER_AGENTS) {
-      const f = await runWorker(api, id, contextBlock, bus, emit);
-      allFindings = allFindings.concat(f);
+
+    if (signal.aborted) {
+      const affectedAgents = mode === 'single' && agentId ? [agentId] : [...WORKER_AGENTS, 'orchestrator' as AgentId];
+      for (const id of affectedAgents) {
+        emit({ type: 'agent-error', agentId: id, message: 'Agent run stopped by user.' });
+        emit({ type: 'agent-status', agentId: id, status: 'error' });
+      }
+      return;
     }
-  }
 
-  // Orchestrator runs after the workers (not for single-worker runs).
-  let report: TeamReport | null = null;
-  if (mode !== 'single') {
-    report = await runOrchestrator(api, contextBlock, allFindings, bus, emit);
-  }
+    // Orchestrator runs after the workers (not for single-worker runs).
+    let report: TeamReport | null = null;
+    if (mode !== 'single') {
+      report = await runOrchestrator(contextBlock, allFindings, bus, emit);
+    }
 
-  // Auto-write the report to the project root when the orchestrator produced one.
-  if (report) {
+    if (signal.aborted) {
+      const affectedAgents = mode === 'single' && agentId ? [agentId] : [...WORKER_AGENTS, 'orchestrator' as AgentId];
+      for (const id of affectedAgents) {
+        emit({ type: 'agent-error', agentId: id, message: 'Agent run stopped by user.' });
+        emit({ type: 'agent-status', agentId: id, status: 'error' });
+      }
+      return;
+    }
+
+    // Auto-write the report to the project root when the orchestrator produced one.
+    if (report) {
+      try {
+        const reportPath = writeReportToProjectRoot(analysis, report);
+        emit({ type: 'agent-report-saved', path: reportPath });
+      } catch {
+        /* non-fatal: the user can still download it from the panel */
+      }
+    }
+
+    const summary = saveAgentRun(analysis, mode, allFindings, report ?? undefined);
     try {
-      const reportPath = writeReportToProjectRoot(analysis, report);
-      emit({ type: 'agent-report-saved', path: reportPath });
+      absorbAgentTeamFindings(analysis.projectId, analysis.name, allFindings, report ?? undefined);
     } catch {
-      /* non-fatal: the user can still download it from the panel */
+      /* non-fatal */
+    }
+    emit({ type: 'agent-run-saved', summary });
+    emit({ type: 'agent-persistent-issues', issues: persistentIssues(analysis.projectId) });
+  } finally {
+    if (activeAbortController === activeAbortController) {
+      activeAbortController = null;
     }
   }
-
-  const summary = saveAgentRun(analysis, mode, allFindings, report ?? undefined);
-  emit({ type: 'agent-run-saved', summary });
-  emit({ type: 'agent-persistent-issues', issues: persistentIssues(analysis.projectId) });
 }

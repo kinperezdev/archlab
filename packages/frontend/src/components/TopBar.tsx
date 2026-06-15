@@ -6,12 +6,9 @@ import { TabIcon } from './TabIcon.js';
 
 interface TopBarProps {
   connected: boolean;
-  projectName: string | null;
+  projectName: string;
   hasProject: boolean;
   brainProjectCount: number;
-  findingsCount: number;
-  bottleneckCount: number;
-  isolatedCount: number;
   analyzedAt: number | null;
   onOpenBrain: () => void;
   onOpenShortcuts: () => void;
@@ -48,9 +45,6 @@ export function TopBar({
   projectName,
   hasProject,
   brainProjectCount,
-  findingsCount,
-  bottleneckCount,
-  isolatedCount,
   analyzedAt,
   onOpenBrain,
   onOpenShortcuts,
@@ -66,10 +60,10 @@ export function TopBar({
       <div className="tb-left">
         <span className="tb-logo-mark" aria-hidden="true" />
         <span className="tb-logo-text">ArchLab</span>
-        {projectName && (
+        {hasProject && (
           <>
             <span className="tb-slash">/</span>
-            <span className="tb-project">{projectName}</span>
+            <span className="tb-project" title={projectName}>{projectName}</span>
             {analyzedAt && (
               <>
                 <span className="tb-dot" />
@@ -82,22 +76,25 @@ export function TopBar({
         )}
       </div>
 
-      {/* Center: animated tab bar */}
-      <nav className="tb-tabs">
+      {/* Middle: section tab selector */}
+      <nav className="tb-tabs" aria-label="Sections">
         {TABS.map((t) => {
-          const active = tab === t.id;
+          const isActive = tab === t.id;
           return (
             <motion.button
               key={t.id}
-              className={`tb-tab ${active ? 'active' : ''}`}
+              className={`tb-tab ${isActive ? 'active' : ''}`}
               onClick={() => onTabChange(t.id)}
               whileTap={{ scale: 0.97 }}
             >
-              {active && (
-                <motion.span className="tb-tab-bg" layoutId="tb-tab-indicator" transition={SPRING} />
+              {isActive && (
+                <motion.span
+                  className="tb-tab-bg"
+                  layoutId="tb-tab-indicator"
+                  transition={SPRING}
+                />
               )}
               <span className="tb-tab-content">
-                <TabIcon tab={t.id} />
                 <span>{t.label}</span>
               </span>
             </motion.button>
@@ -105,23 +102,10 @@ export function TopBar({
         })}
       </nav>
 
-      {/* Right: badges + actions */}
+      {/* Right: status indicators & utility buttons */}
       <div className="tb-right">
         {hasProject && (
           <>
-            <span className="tb-badge badge-error" title="Total findings">
-              {findingsCount} findings
-            </span>
-            {bottleneckCount > 0 && (
-              <span className="tb-badge badge-warning" title="Bottlenecks detected">
-                {bottleneckCount} bottlenecks
-              </span>
-            )}
-            {isolatedCount > 0 && (
-              <span className="tb-badge badge-info" title="Nodes with no connections">
-                {isolatedCount} isolated
-              </span>
-            )}
           </>
         )}
         <motion.button

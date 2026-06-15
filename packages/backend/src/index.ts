@@ -45,7 +45,7 @@ try {
 }
 import { learnFromProject, loadBrain } from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
-import { runAgentTeam } from './agents/runner.js';
+import { runAgentTeam, abortAgentTeam } from './agents/runner.js';
 import { listAgentRuns } from './agents/store.js';
 import { BRAIN_DIR } from './brain/paths.js';
 import {
@@ -128,9 +128,9 @@ function loadApiKeys(): void {
   try {
     if (fs.existsSync(KEYS_FILE)) {
       const data = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
-      if (data.anthropic) process.env.ANTHROPIC_API_KEY = data.anthropic;
-      if (data.openai) process.env.OPENAI_API_KEY = data.openai;
-      if (data.gemini) process.env.GEMINI_API_KEY = data.gemini;
+      process.env.ANTHROPIC_API_KEY = data.anthropic || '';
+      process.env.OPENAI_API_KEY = data.openai || '';
+      process.env.GEMINI_API_KEY = data.gemini || '';
     }
   } catch {
     // ignore
@@ -159,10 +159,10 @@ app.post('/api/keys', (req, res) => {
     fs.mkdirSync(path.dirname(KEYS_FILE), { recursive: true });
     fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), 'utf8');
     
-    // Load them into environment immediately
-    if (keys.anthropic) process.env.ANTHROPIC_API_KEY = keys.anthropic;
-    if (keys.openai) process.env.OPENAI_API_KEY = keys.openai;
-    if (keys.gemini) process.env.GEMINI_API_KEY = keys.gemini;
+    // Load them into environment immediately (overwriting/clearing any old values)
+    process.env.ANTHROPIC_API_KEY = keys.anthropic || '';
+    process.env.OPENAI_API_KEY = keys.openai || '';
+    process.env.GEMINI_API_KEY = keys.gemini || '';
     
     return res.json({ ok: true, message: 'API keys saved successfully.' });
   } catch (err) {
@@ -562,6 +562,33 @@ app.post('/mcp/import', (req, res) => {
   return res.json({ ok: true, message: 'MCP configurations imported successfully.' });
 });
 
+// Add a single custom MCP server
+app.post('/mcp/add', (req, res) => {
+  const { name, command, args, env } = req.body || {};
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Server name is required' });
+  }
+  if (!command || typeof command !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Command is required' });
+  }
+
+  const customMcps = loadCustomMcps();
+  customMcps[name] = {
+    command,
+    args: Array.isArray(args) ? args : (args ? String(args).trim().split(/\s+/).filter(Boolean) : []),
+    env: env || undefined,
+  };
+
+  saveCustomMcps(customMcps);
+
+  // Trigger live re-analysis to update canvas live!
+  for (const [_, analysis] of projects.entries()) {
+    void handleAnalyze(analysis.rootPath, broadcast, customMcps);
+  }
+
+  return res.json({ ok: true, message: `MCP server ${name} added successfully.`, customMcpServers: customMcps });
+});
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -702,6 +729,9 @@ async function handleClientMessage(
       return sendBrain(emit);
     case 'run-agent-team':
       return handleRunAgentTeam(msg.projectId, msg.mode, msg.agentId, emit);
+    case 'stop-agent-team':
+      abortAgentTeam();
+      return;
     case 'request-agent-runs':
       emit({ type: 'agent-runs', runs: listAgentRuns() });
       return;
@@ -918,6 +948,7 @@ async function handleRunAgentTeam(
   log(emit, 'info', `Running Agent Team (${mode} mode) on ${analysis.name} ...`);
   await runAgentTeam(analysis, mode, agentId, emit);
   log(emit, 'info', 'Agent Team run complete.');
+  sendBrain(emit);
 }
 
 /** Run the animated 7-step pipeline, then fold results into the brain. */
@@ -942,6 +973,20 @@ async function handleRunChecks(projectId: string, emit: (m: ServerMessage) => vo
   const { report } = await runPipeline(analysis, emit);
 
   // The brain learns after every single scan.
+  let readme = '';
+  try {
+    const readmeNames = ['README.md', 'README.txt', 'readme.md', 'README'];
+    for (const name of readmeNames) {
+      const p = path.join(analysis.rootPath, name);
+      if (fs.existsSync(p)) {
+        readme = fs.readFileSync(p, 'utf8').substring(0, 5000);
+        break;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
   learnFromProject({
     projectId: analysis.projectId,
     name: analysis.name,
@@ -950,6 +995,7 @@ async function handleRunChecks(projectId: string, emit: (m: ServerMessage) => vo
     intelligence: analysis.intelligence,
     canvas: analysis.canvas,
     report,
+    readme: readme || undefined,
   });
   log(emit, 'info', 'Global brain updated with this scan.');
   sendBrain(emit);

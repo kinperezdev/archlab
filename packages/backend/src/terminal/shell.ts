@@ -108,11 +108,17 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
     },
   };
 
+  let hasEmittedInitialCwd = false;
+
   term.onData((data) => {
     const cwd = parseOsc7Cwd(data);
-    if (cwd && cwd !== session.cwd) {
+    if (cwd) {
+      const isChanged = cwd !== session.cwd;
       session.cwd = cwd;
-      current?.onCwdChange(cwd);
+      if (isChanged || !hasEmittedInitialCwd) {
+        hasEmittedInitialCwd = true;
+        current?.onCwdChange(cwd);
+      }
     }
     if (current) {
       current.onData(data);

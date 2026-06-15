@@ -18,6 +18,7 @@ interface AgentTeamProps {
   projectName: string | null;
   hasProject: boolean;
   onRun: (mode: AgentMode, agentId?: AgentId) => void;
+  onStop: () => void;
   onRequestRuns: () => void;
   onClose: () => void;
 }
@@ -30,7 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
   complete: 'Complete',
 };
 
-export function AgentTeam({ team, projectName, hasProject, onRun, onRequestRuns, onClose }: AgentTeamProps) {
+export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequestRuns, onClose }: AgentTeamProps) {
   const [mode, setMode] = useState<AgentMode>('sequential');
   const [single, setSingle] = useState<AgentId>('security');
   const [showHistory, setShowHistory] = useState(false);
@@ -82,9 +83,20 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onRequestRuns,
           </select>
         )}
         <div className="agent-run-row">
-          <button className="btn btn-primary agent-run-btn" disabled={!hasProject || team.running} onClick={run}>
-            {team.running ? 'Running…' : 'Run Agent Team'}
-          </button>
+          {team.running ? (
+            <>
+              <button className="btn btn-primary agent-run-btn" disabled style={{ opacity: 0.6 }}>
+                Running…
+              </button>
+              <button className="btn agent-stop-btn" onClick={onStop}>
+                Stop
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary agent-run-btn" disabled={!hasProject} onClick={run}>
+              Run Agent Team
+            </button>
+          )}
           <button className="btn" onClick={() => setShowHistory((s) => !s)}>
             {showHistory ? 'Hide History' : 'History'}
           </button>

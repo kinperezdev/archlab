@@ -7,12 +7,14 @@
  * brain. This is injected into each agent prompt so no agent starts from zero.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AnalysisResult } from '../analyzer/analyzer.js';
 import { loadBrain } from '../brain/brainStore.js';
 import { inferSchemaFromAppFlow } from '../analyzer/inference.js';
 
 export interface AgentContext {
-  project: { id: string; name: string; techStack: string[] };
+  project: { id: string; name: string; techStack: string[]; readme?: string };
   intelligence: unknown;
   architecture: {
     nodes: { id: string; kind: string; lane: string; label: string; file?: string }[];
@@ -40,8 +42,28 @@ export function buildAgentContext(analysis: AnalysisResult): AgentContext {
   }
   const isolatedNodes = nodes.filter((n) => !degree.has(n.id)).map((n) => n.id);
 
+  // Read README for high-level project purpose
+  let readme = '';
+  try {
+    const readmeNames = ['README.md', 'README.txt', 'readme.md', 'README'];
+    for (const name of readmeNames) {
+      const p = path.join(analysis.rootPath, name);
+      if (fs.existsSync(p)) {
+        readme = fs.readFileSync(p, 'utf8').substring(0, 5000);
+        break;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
   return {
-    project: { id: analysis.projectId, name: analysis.name, techStack: analysis.techStack },
+    project: {
+      id: analysis.projectId,
+      name: analysis.name,
+      techStack: analysis.techStack,
+      readme: readme || undefined,
+    },
     intelligence: analysis.intelligence,
     architecture: {
       nodes: nodes.map((n) => ({ id: n.id, kind: n.kind, lane: n.lane, label: n.label, file: n.filePath })),

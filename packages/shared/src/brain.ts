@@ -18,6 +18,7 @@ export interface BrainProjectRecord {
   intelligence: ProjectIntelligence;
   canvas: CanvasGraph;
   report: DiagnosticReport;
+  readme?: string;
 }
 
 /** A recurring pattern the brain has learned across projects. */

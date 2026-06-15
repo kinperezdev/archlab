@@ -27,6 +27,7 @@ interface PipelineTagsProps {
   diagnostics: Diagnostic[];
   activeStep: PipelineStepId | null;
   onSelect: (stepId: PipelineStepId | null) => void;
+  isVertical?: boolean;
 }
 
 function tagState(
@@ -42,9 +43,9 @@ function tagState(
   return 'pending';
 }
 
-export function PipelineTags({ steps, diagnostics, activeStep, onSelect }: PipelineTagsProps) {
+export function PipelineTags({ steps, diagnostics, activeStep, onSelect, isVertical }: PipelineTagsProps) {
   return (
-    <div className="pipeline-tags" role="list" aria-label="Pipeline steps">
+    <div className={`pipeline-tags ${isVertical ? 'flat-vertical' : ''}`} role="list" aria-label="Pipeline steps">
       {PIPELINE_STEPS.map((id, i) => {
         const state = tagState(id, steps, diagnostics);
         const count = diagnostics.filter((d) => d.step === id).length;

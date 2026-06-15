@@ -52,6 +52,11 @@ code, pre, .code-text, .terminal, .xterm { font-family: var(--font-mono); }
   grid-template-rows: 52px 1fr 200px;
   height: 100vh;
   overflow: hidden;
+  transition: grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.is-resizing .app-shell {
+  transition: none !important;
 }
 
 /* Flex row: fixed-width sidebars, the center canvas takes all remaining space.
@@ -165,44 +170,102 @@ code, pre, .code-text, .terminal, .xterm { font-family: var(--font-mono); }
   gap: var(--space-3);
   margin-left: auto;
 }
-/* Security tab overlay: pipeline controls + step tags, pinned top-left. */
-.security-overlay {
+/* Clean Flat Left Overlay on Canvas */
+.canvas-left-overlay {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  z-index: 20;
+  top: 20px;
+  left: 20px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-5);
+  z-index: 10;
   pointer-events: none;
+  font-family: var(--font-sans, inherit);
+  max-height: calc(100% - 40px);
+  overflow-y: auto;
+  padding-right: 10px;
+  color: var(--color-text, #f8f8ff) !important;
 }
-.security-overlay > * {
+.canvas-left-overlay > * {
   pointer-events: auto;
 }
-/* Pipeline controls, left-aligned in the Security tab canvas area. */
-.pipeline-controls {
+
+.flat-section {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: var(--space-2) var(--space-3);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
-}
-.pipeline-controls-label {
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  font-weight: 700;
-  color: var(--color-text-dim);
-}
-.pipeline-controls-row {
-  display: flex;
   gap: var(--space-2);
+}
+
+.flat-section-title {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: var(--color-text-dim, #8b8b9a) !important;
+  opacity: 0.8;
+  margin-bottom: 2px;
+}
+
+.flat-button-group-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+/* Flat action buttons */
+.flat-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text, #f8f8ff) !important;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 4px 0px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  transition: color 0.12s ease, opacity 0.12s ease;
+  opacity: 0.85;
+}
+.flat-action-btn:hover:not(:disabled) {
+  color: var(--color-primary, #6366f1) !important;
+  opacity: 1;
+}
+.flat-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Flat status indicators */
+.flat-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.flat-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text, #f8f8ff) !important;
+  opacity: 0.9;
+}
+.flat-status-icon {
+  font-size: 0.95rem;
+}
+.flat-status-label {
+  font-weight: 500;
+  color: var(--color-text, #f8f8ff) !important;
+}
+.flat-status-count {
+  font-weight: 600;
+  color: var(--color-text-dim, #8b8b9a) !important;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
 }
 
 /* ---------- Security pipeline tags ---------- */
@@ -301,6 +364,67 @@ code, pre, .code-text, .terminal, .xterm { font-family: var(--font-mono); }
   50% {
     box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent);
   }
+}
+
+/* Vertical & flat pipeline tags */
+.pipeline-tags.flat-vertical {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 3px 0px !important;
+  border-radius: 0px !important;
+  width: auto;
+  opacity: 0.8;
+  color: var(--color-text-dim, #8b8b9a) !important;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag.tag-passed {
+  color: var(--state-green, #10b981) !important;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag.tag-running {
+  color: var(--color-accent, #6366f1) !important;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag.tag-issues {
+  color: var(--sev-critical, #ef4444) !important;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag:hover {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag.tag-active {
+  outline: none !important;
+  font-weight: 700;
+  opacity: 1 !important;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag.tag-active .pipeline-tag-name {
+  color: var(--color-primary, #6366f1) !important;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag .pipeline-tag-num {
+  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+}
+
+.pipeline-tags.flat-vertical .pipeline-tag .pipeline-tag-count {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text, #f8f8ff) !important;
+  margin-left: 6px;
 }
 .finding-filter-clear {
   margin-left: 8px;
@@ -963,6 +1087,7 @@ code, pre, .code-text, .terminal, .xterm { font-family: var(--font-mono); }
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   min-height: 0;
+  min-width: 0;
 }
 /* Pipeline track removed from the bottom panel: terminal/logs take full width. */
 .bottom-panel.bottom-panel-solo {
@@ -1074,6 +1199,8 @@ code, pre, .code-text, .terminal, .xterm { font-family: var(--font-mono); }
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .tab-bar {
   display: flex;
@@ -1370,7 +1497,7 @@ code, pre, .code-text, .terminal, .xterm { font-family: var(--font-mono); }
   background: oklch(10% 0.02 250 / 0.7);
   display: grid;
   place-items: center;
-  z-index: 50;
+  z-index: 500;
 }
 .brain-modal {
   width: min(720px, 90vw);
