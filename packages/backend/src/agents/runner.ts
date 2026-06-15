@@ -80,14 +80,17 @@ async function runWorker(
 
   let full = '';
   try {
-    const stream = api.messages.stream({
+    const params: any = {
       model: MODEL,
-      max_tokens: 8000,
-      thinking: { type: 'adaptive' },
-      output_config: { effort: 'medium' },
+      max_tokens: 4000,
       system: workerSystemPrompt(id),
       messages: [{ role: 'user', content: userContent }],
-    } as Anthropic.MessageStreamParams);
+    };
+    if (MODEL.includes('3-7-sonnet')) {
+      params.max_tokens = 8000;
+      params.thinking = { type: 'enabled', budget_tokens: 2048 };
+    }
+    const stream = api.messages.stream(params);
 
     emit({ type: 'agent-status', agentId: id, status: 'working' });
     for await (const event of stream) {
@@ -157,14 +160,17 @@ async function runOrchestrator(
 
   let full = '';
   try {
-    const stream = api.messages.stream({
+    const params: any = {
       model: MODEL,
-      max_tokens: 8000,
-      thinking: { type: 'adaptive' },
-      output_config: { effort: 'high' },
+      max_tokens: 4000,
       system: orchestratorSystemPrompt(),
       messages: [{ role: 'user', content: userContent }],
-    } as Anthropic.MessageStreamParams);
+    };
+    if (MODEL.includes('3-7-sonnet')) {
+      params.max_tokens = 8000;
+      params.thinking = { type: 'enabled', budget_tokens: 4096 };
+    }
+    const stream = api.messages.stream(params);
 
     emit({ type: 'agent-status', agentId: 'orchestrator', status: 'working' });
     for await (const event of stream) {
