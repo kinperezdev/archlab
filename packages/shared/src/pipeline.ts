@@ -73,6 +73,11 @@ export interface Diagnostic {
    * e.g. "scaffold a backend and connect these screens".
    */
   suggestedPrompt?: string;
+  /**
+   * For findings produced by the Agent Team: which agent found it (e.g.
+   * "security"). Drives the agent badge shown next to pipeline findings.
+   */
+  agentId?: string;
 }
 
 /** The complete diagnostic report assembled in step 7. */

@@ -41,7 +41,7 @@
   border-color: var(--sev-bottleneck) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--sev-bottleneck) 35%, transparent),
     0 6px 16px rgba(245, 158, 11, 0.25);
-  background: color-mix(in srgb, var(--sev-bottleneck) 10%, #ffffff);
+  background: color-mix(in srgb, var(--sev-bottleneck) 10%, var(--bg-elevated));
 }
 .bottleneck-badge {
   position: absolute;
@@ -69,7 +69,7 @@
 .arch-node.is-isolated {
   border-style: dashed !important;
   border-color: var(--sev-bottleneck) !important;
-  background: color-mix(in srgb, var(--sev-bottleneck) 8%, #ffffff);
+  background: color-mix(in srgb, var(--sev-bottleneck) 8%, var(--bg-elevated));
 }
 .isolation-badge {
   position: absolute;
@@ -80,7 +80,7 @@
   gap: 3px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--bg-elevated);
   border: 1px solid var(--sev-bottleneck);
   color: rgb(180, 83, 9);
   font-size: 0.5rem;
@@ -100,7 +100,7 @@
   z-index: 5;
   border-width: 2px !important;
   border-color: var(--color-accent) !important;
-  background: color-mix(in srgb, var(--node-color) 18%, #ffffff);
+  background: color-mix(in srgb, var(--node-color) 18%, var(--bg-elevated));
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--color-accent) 30%, transparent),
     0 0 22px color-mix(in srgb, var(--color-accent) 45%, transparent),
@@ -172,7 +172,7 @@
   color: #fff;
 }
 .count-badge.isolated.active {
-  background: #fff;
+  background: var(--bg-elevated);
   color: rgb(180, 83, 9);
   border: 1px solid var(--sev-bottleneck);
 }
@@ -205,7 +205,7 @@
   gap: 4px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--op-color, var(--color-accent)) 14%, #ffffff);
+  background: color-mix(in srgb, var(--op-color, var(--color-accent)) 14%, var(--bg-elevated));
   border: 1px solid var(--op-color, var(--color-border));
   font-size: 0.55rem;
   font-family: var(--font-mono);
@@ -388,7 +388,7 @@
   padding: 12px 16px;
   border-radius: var(--radius-sm);
   border: 2px solid var(--node-color, var(--kind-unknown));
-  background: color-mix(in srgb, var(--node-color, var(--kind-unknown)) 12%, #ffffff);
+  background: color-mix(in srgb, var(--node-color, var(--kind-unknown)) 12%, var(--bg-elevated));
   box-shadow: 0 2px 8px rgba(9, 9, 11, 0.06);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -421,7 +421,7 @@
 /* Page — clean rectangle with white background */
 .idea-node.idea-page {
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-color: #cbd5e1;
 }
 
@@ -460,7 +460,7 @@
   border-radius: 6px;
   padding: 0;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-color: #0f766e;
   flex-direction: column;
   align-items: stretch;
@@ -570,7 +570,7 @@
   background: var(--color-surface-2);
 }
 .ideas-menu-item.danger:hover {
-  background: color-mix(in srgb, var(--sev-critical) 14%, #ffffff);
+  background: color-mix(in srgb, var(--sev-critical) 14%, var(--bg-elevated));
   color: var(--sev-critical);
 }
 .ideas-menu-divider {
@@ -615,7 +615,7 @@
   background: var(--color-surface-2);
 }
 .ideas-menu-item.danger:hover {
-  background: color-mix(in srgb, var(--sev-critical) 14%, #ffffff);
+  background: color-mix(in srgb, var(--sev-critical) 14%, var(--bg-elevated));
   color: var(--sev-critical);
 }
 .ideas-menu-divider {
@@ -704,7 +704,7 @@
 /* Schema table nodes */
 .schema-node {
   min-width: 220px;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 2px solid var(--kind-database);
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(9, 9, 11, 0.08);
@@ -715,7 +715,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: color-mix(in srgb, var(--kind-database) 14%, #ffffff);
+  background: color-mix(in srgb, var(--kind-database) 14%, var(--bg-elevated));
   border-bottom: 1px solid var(--kind-database);
   font-weight: 700;
 }
@@ -811,10 +811,10 @@
 .db-rename-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .btn-primary { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
 .schema-row.row-pk {
-  background: color-mix(in srgb, var(--kind-database) 7%, #ffffff);
+  background: color-mix(in srgb, var(--kind-database) 7%, var(--bg-elevated));
 }
 .schema-row.row-fk {
-  background: color-mix(in srgb, var(--kind-route) 7%, #ffffff);
+  background: color-mix(in srgb, var(--kind-route) 7%, var(--bg-elevated));
 }
 .schema-keys {
   display: flex;
@@ -890,7 +890,7 @@
   color: #991b1b;
 }
 .warning-item.amber {
-  background: #fffbeb;
+  background: var(--warning-glow);
   border-color: #fde68a;
   color: #92400e;
 }
@@ -902,7 +902,7 @@
   z-index: 10;
 }
 .schema-table-name-input {
-  background: #ffffff;
+  background: var(--bg-elevated);
   color: #0f172a;
   border: 1px solid var(--kind-database);
   border-radius: var(--radius-sm);
@@ -987,7 +987,7 @@
   border-radius: 4px;
   font-size: var(--text-xs);
   outline: none;
-  background: #ffffff;
+  background: var(--bg-elevated);
 }
 .schema-editor-field input:focus,
 .schema-editor-field select:focus {
@@ -1016,13 +1016,13 @@
 .schema-node-footer .schema-add-col {
   border: 1px dashed #cbd5e1;
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--bg-elevated);
   padding: var(--space-2);
 }
 
 .inferred-badge {
   font-size: 0.55rem;
-  background: #fffbeb;
+  background: var(--warning-glow);
   border: 1px solid #fcd34d;
   color: #b45309;
   padding: 1px 4px;
@@ -1068,7 +1068,7 @@
   gap: 6px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--bg-elevated);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 .db-group-confirmed .db-group-label {
@@ -1091,7 +1091,7 @@
   border-radius: 999px;
   white-space: nowrap;
   cursor: help;
-  background: #ffffff;
+  background: var(--bg-elevated);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 .rel-edge-label.confirmed {

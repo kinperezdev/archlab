@@ -1,7 +1,7 @@
 /** Brain panel: a modal overlay showing global brain contents and insights. */
 
 import { useEffect, useState } from 'react';
-import { PORTS, type BrainAccessStatus } from '@archlab/shared';
+import { PORTS, type BrainAccessStatus, type PersistentIssue } from '@archlab/shared';
 import type { BrainSummary } from '../state/useArchLab.js';
 import { CopyPromptButton } from './CopyPromptButton.js';
 import { promptForInsight } from '../lib/prompts.js';
@@ -10,10 +10,20 @@ import { BrainSecurity } from './BrainSecurity.js';
 
 interface BrainPanelProps {
   brain: BrainSummary;
+  persistentIssues?: PersistentIssue[];
   onClose: () => void;
 }
 
-export function BrainPanel({ brain, onClose }: BrainPanelProps) {
+const AGENT_LABEL: Record<string, string> = {
+  security: 'Security Agent',
+  performance: 'Performance Agent',
+  architecture: 'Architecture Agent',
+  database: 'Database Agent',
+  quality: 'Code Quality Agent',
+  orchestrator: 'Orchestrator',
+};
+
+export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanelProps) {
   const patterns = [...brain.patterns].sort((a, b) => b.count - a.count);
   const [copied, setCopied] = useState(false);
   const [pasteConfig, setPasteConfig] = useState('');
@@ -115,6 +125,34 @@ export function BrainPanel({ brain, onClose }: BrainPanelProps) {
             </ul>
           )}
         </section>
+
+        {persistentIssues.length > 0 && (
+          <section className="brain-section">
+            <h3>Persistent Issues</h3>
+            <p className="intel-summary" style={{ marginBottom: 'var(--space-2)' }}>
+              Findings the Agent Team has surfaced across multiple runs without resolution.
+            </p>
+            <ul className="persistent-list">
+              {persistentIssues.map((it) => (
+                <li key={`${it.agentId}:${it.title}`} className="persistent-issue">
+                  <div className="persistent-issue-head">
+                    <span className={`persistent-badge ${it.count >= 5 ? 'critical' : ''}`}>
+                      {it.count >= 5 ? `CRITICAL UNRESOLVED · ${it.count} runs` : `${it.count} runs`}
+                    </span>
+                    <CopyPromptButton
+                      compact
+                      prompt={`Resolve this recurring issue found by the ${AGENT_LABEL[it.agentId] ?? it.agentId} across ${it.count} ArchLab agent runs: ${it.title}`}
+                    />
+                  </div>
+                  <div className="persistent-issue-title">{it.title}</div>
+                  <div className="persistent-issue-meta">
+                    {AGENT_LABEL[it.agentId] ?? it.agentId} · first seen {new Date(it.firstSeen).toLocaleDateString()}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="brain-section">
           <h3>Cross-project patterns</h3>

@@ -91,6 +91,15 @@ export function App() {
   const [brainOpen, setBrainOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [agentTeamOpen, setAgentTeamOpen] = useState(false);
+  // Transient "report saved to project root" toast, mirrored from agent state.
+  const [reportToast, setReportToast] = useState<string | null>(null);
+  const reportSavedPath = state.agentTeam.reportSavedPath;
+  useEffect(() => {
+    if (!reportSavedPath) return;
+    setReportToast(reportSavedPath);
+    const id = setTimeout(() => setReportToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [reportSavedPath]);
   const [bottomHeight, setBottomHeight] = useState(200);
   const [tab, setTab] = useState<ArchTab>('all');
   // Architecture canvas tabs map straight to a canvas filter; others fall to all.
@@ -209,7 +218,7 @@ export function App() {
   return (
     <div
       className="app-shell"
-      style={{ gridTemplateRows: `52px 1fr ${bottomCollapsed ? 0 : bottomHeight}px` }}
+      style={{ gridTemplateRows: `44px 1fr ${bottomCollapsed ? 0 : bottomHeight}px` }}
     >
       <TopBar
         connected={state.connected}
@@ -296,6 +305,13 @@ export function App() {
               activeStep={securityStep}
               onSelect={setSecurityStep}
             />
+            {state.projectId && !agentTeamOpen && (
+              <button className="agent-team-promo" onClick={() => setAgentTeamOpen(true)}>
+                <span className="agent-team-promo-glyph">⬡</span>
+                Agent Team available — run AI-powered deep analysis
+                <span className="agent-team-promo-cta">Open →</span>
+              </button>
+            )}
             </div>
           )}
 
@@ -382,7 +398,20 @@ export function App() {
         hidden={bottomCollapsed}
       />
 
-      {brainOpen && <BrainPanel brain={state.brain} onClose={() => setBrainOpen(false)} />}
+      {brainOpen && (
+        <BrainPanel
+          brain={state.brain}
+          persistentIssues={state.agentTeam.persistentIssues}
+          onClose={() => setBrainOpen(false)}
+        />
+      )}
+
+      {reportToast && (
+        <div className="report-toast" role="status">
+          ✓ Report saved to project root
+          <span className="report-toast-path">{reportToast.split('/').pop()}</span>
+        </div>
+      )}
       {shortcutsOpen && <ShortcutsPanel onClose={() => setShortcutsOpen(false)} />}
     </div>
   );

@@ -49,6 +49,19 @@ interface RightSidebarProps {
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
 
+/** Short label for the agent that produced a finding (Agent Team bridge). */
+function agentLabel(agentId: string): string {
+  const map: Record<string, string> = {
+    security: 'Security Agent',
+    performance: 'Performance Agent',
+    architecture: 'Architecture Agent',
+    database: 'Database Agent',
+    quality: 'Code Quality Agent',
+    orchestrator: 'Orchestrator',
+  };
+  return map[agentId] ?? agentId;
+}
+
 /** First related node file path for a diagnostic, for prompt context. */
 function filePathForDiagnostic(d: Diagnostic, graph: CanvasGraph): string | null {
   for (const id of d.relatedNodeIds) {
@@ -170,6 +183,7 @@ export function RightSidebar({
               <span className={`sev-badge sev-${d.severity}`}>
                 {d.severity === 'bottleneck' ? (d.bottleneckType ?? 'bottleneck') : d.severity}
               </span>
+              {d.agentId && <span className="agent-origin-badge">{agentLabel(d.agentId)}</span>}
               <span className="finding-title">{d.title}</span>
               <CopyPromptButton
                 compact

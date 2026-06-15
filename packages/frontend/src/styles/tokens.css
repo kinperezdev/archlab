@@ -1,53 +1,92 @@
-/* Design tokens — a light-mode, collaborative FigJam-inspired canvas theme. */
+/* Design tokens — dark, premium developer-tool theme.
+   Combines Skiper (motion), Watermelon (component quality), Lukacho (polish).
+   Legacy --color-* names are remapped onto the new dark palette so every
+   token-driven component adopts the new theme at once. */
 
 :root {
-  /* Surfaces */
-  --color-bg: #f9f9fb;          /* Clean off-white FigJam canvas */
-  --color-surface: #ffffff;     /* Solid white panels and sidebars */
-  --color-surface-2: #f4f4f5;   /* Light gray for headers, rows, inputs */
-  --color-surface-hover: #e4e4e7;
-  --color-border: #e4e4e7;      /* Clean zinc border */
-  --color-border-hover: #71717a;
-  --color-text: #09090b;        /* High-contrast dark text */
-  --color-text-dim: #71717a;    /* Muted label gray */
+  /* New token system */
+  --bg-base: #080808;
+  --bg-surface: #0f0f12;
+  --bg-elevated: #141418;
+  --bg-overlay: #1a1a20;
+  --bg-interactive: #1f1f26;
 
-  /* Brand accent */
-  --color-accent: #0d99ff;      /* FigJam Signature Blue */
-  --color-accent-soft: rgba(13, 153, 255, 0.08);
+  --border-faint: rgba(255, 255, 255, 0.04);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-accent: rgba(99, 102, 241, 0.4);
 
-  /* Node-kind colors (Bright, saturated sticky-note palette) */
-  --kind-component: #2dd4bf;    /* Teal */
-  --kind-route: #c084fc;        /* Purple */
-  --kind-endpoint: #34d399;     /* Mint */
-  --kind-middleware: #fbbf24;   /* Amber */
-  --kind-auth: #f87171;         /* Coral */
-  --kind-database: #60a5fa;     /* Sky */
-  --kind-external-service: #fb7185; /* Pink */
-  --kind-config: #a1a1aa;       /* Muted gray */
-  --kind-mcp: #ec4899;          /* Pink / Magenta for MCP */
-  --kind-unknown: #d4d4d8;
+  --text-primary: #f8f8ff;
+  --text-secondary: #8b8b9a;
+  --text-tertiary: #4a4a5a;
+  --text-accent: #818cf8;
+
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-glow: rgba(99, 102, 241, 0.15);
+
+  --success: #10b981;
+  --success-glow: rgba(16, 185, 129, 0.12);
+  --warning: #f59e0b;
+  --warning-glow: rgba(245, 158, 11, 0.12);
+  --error: #ef4444;
+  --error-glow: rgba(239, 68, 68, 0.12);
+  --info: #3b82f6;
+  --info-glow: rgba(59, 130, 246, 0.12);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, 'SF Mono', monospace;
+
+  /* ---- Legacy aliases (remapped to the dark palette) ---- */
+  --color-bg: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-surface-2: var(--bg-elevated);
+  --color-surface-hover: var(--bg-interactive);
+  --color-border: var(--border-subtle);
+  --color-border-hover: var(--border-strong);
+  --color-text: var(--text-primary);
+  --color-text-dim: var(--text-secondary);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-glow);
+
+  /* Node-kind colors — kept saturated but tuned for a dark canvas */
+  --kind-component: #2dd4bf;
+  --kind-route: #c084fc;
+  --kind-endpoint: #34d399;
+  --kind-middleware: #fbbf24;
+  --kind-auth: #f87171;
+  --kind-database: #60a5fa;
+  --kind-external-service: #fb7185;
+  --kind-config: #a1a1aa;
+  --kind-mcp: #ec4899;
+  --kind-unknown: #52525b;
 
   /* Severity */
-  --sev-critical: #f87171;
+  --sev-critical: var(--error);
   --sev-high: #fb923c;
-  --sev-bottleneck: #f59e0b; /* amber — scale bottlenecks, distinct from red */
+  --sev-bottleneck: var(--warning);
   --sev-medium: #facc15;
-  --sev-low: #60a5fa;
-  --sev-info: #a1a1aa;
+  --sev-low: var(--info);
+  --sev-info: #8b8b9a;
 
-  /* State colors for animation ramp */
-  --state-green: #34d399;
-  --state-yellow: #fbbf24;
-  --state-red: #f87171;
+  /* Animation ramp */
+  --state-green: var(--success);
+  --state-yellow: var(--warning);
+  --state-red: var(--error);
 
-  /* Typography */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  /* Typography scale */
   --text-xs: 0.72rem;
-  --text-sm: 0.82rem;
-  --text-base: 0.92rem;
-  --text-lg: 1.1rem;
-  --text-xl: 1.4rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
 
   /* Spacing + motion */
   --space-1: 4px;
@@ -55,10 +94,8 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
-  --radius: 12px;                /* Softer FigJam rounded corners */
-  --radius-sm: 8px;
+  --radius: var(--radius-lg);
   --duration-fast: 150ms;
   --duration-normal: 300ms;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
-

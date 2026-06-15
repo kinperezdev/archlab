@@ -734,7 +734,7 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
           onPaneClick={() => setLockedNodeId(null)}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={24} color="#cbd5e1" />
+          <Background variant={BackgroundVariant.Dots} gap={24} color="rgba(255,255,255,0.05)" />
           <MiniMap pannable zoomable className="arch-minimap" />
           <Controls showInteractive={false} />
         </ReactFlow>

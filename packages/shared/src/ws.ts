@@ -22,6 +22,7 @@ import type {
   AgentMode,
   AgentRunSummary,
   AgentStatus,
+  PersistentIssue,
   TeamReport,
 } from './agents.js';
 
@@ -74,6 +75,8 @@ export type ServerMessage =
   | { type: 'agent-output'; agentId: AgentId; chunk: string }
   | { type: 'agent-findings'; agentId: AgentId; findings: AgentFinding[] }
   | { type: 'agent-report'; report: TeamReport }
+  | { type: 'agent-report-saved'; path: string }
   | { type: 'agent-run-saved'; summary: AgentRunSummary }
+  | { type: 'agent-persistent-issues'; issues: PersistentIssue[] }
   | { type: 'agent-runs'; runs: AgentRunSummary[] }
   | { type: 'agent-error'; agentId: AgentId; message: string };

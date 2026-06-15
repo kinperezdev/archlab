@@ -259,7 +259,7 @@ function IdeasCanvasInner() {
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#cbd5e1" />
+          <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="rgba(255,255,255,0.05)" />
           <MiniMap pannable zoomable className="arch-minimap" />
           <Controls showInteractive={false} />
         </ReactFlow>

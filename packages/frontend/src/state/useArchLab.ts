@@ -25,6 +25,7 @@ import {
   type AgentMode,
   type AgentRunSummary,
   type TeamReport,
+  type PersistentIssue,
 } from '@archlab/shared';
 
 /** Per-agent live state in the Agent Team panel. */
@@ -43,11 +44,42 @@ function emptyAgents(): Record<AgentId, AgentState> {
   return out;
 }
 
+/** Map an agent id to the pipeline step its findings belong under. */
+const AGENT_STEP: Record<AgentId, PipelineStep['id']> = {
+  security: 'security-checks',
+  performance: 'performance-checks',
+  architecture: 'architecture-mapping',
+  database: 'data-flow-tracing',
+  quality: 'final-report',
+  orchestrator: 'final-report',
+};
+
+/** Convert an agent finding into a Diagnostic so it shows on the canvas + panel. */
+function agentFindingToDiagnostic(f: AgentFinding, canvas: CanvasGraph): Diagnostic {
+  const related = f.file ? canvas.nodes.filter((n) => n.filePath === f.file).map((n) => n.id) : [];
+  return {
+    id: f.id,
+    step: AGENT_STEP[f.agentId],
+    severity: f.severity,
+    title: f.title,
+    what: f.description,
+    why: f.description,
+    howToFix: f.suggestedFix,
+    optimization: '',
+    relatedNodeIds: related,
+    agentId: f.agentId,
+  };
+}
+
 export interface AgentTeamState {
   running: boolean;
   agents: Record<AgentId, AgentState>;
   report: TeamReport | null;
   runs: AgentRunSummary[];
+  /** Persistent unresolved issues (3+ runs), surfaced in the Brain panel. */
+  persistentIssues: PersistentIssue[];
+  /** Path the report was auto-written to (drives the success toast). */
+  reportSavedPath: string | null;
 }
 
 export interface LogLine {
@@ -112,7 +144,14 @@ export function useArchLab() {
     terminal: { cwd: '~' },
     inferredSql: null,
     infra: null,
-    agentTeam: { running: false, agents: emptyAgents(), report: null, runs: [] },
+    agentTeam: {
+      running: false,
+      agents: emptyAgents(),
+      report: null,
+      runs: [],
+      persistentIssues: [],
+      reportSavedPath: null,
+    },
   });
 
   // Subscribers for raw PTY output, keyed by terminal-session id. Terminal data
@@ -232,8 +271,17 @@ export function useArchLab() {
 
       case 'agent-findings': {
         const a = prev.agentTeam.agents[msg.agentId];
+        // Bridge agent findings into the main diagnostics so they highlight
+        // nodes on the canvas and appear in the findings panel. Replace any
+        // prior diagnostics from this same agent (re-runs overwrite cleanly).
+        const bridged = msg.findings.map((f) => agentFindingToDiagnostic(f, prev.canvas));
+        const diagnostics = [
+          ...prev.diagnostics.filter((d) => d.agentId !== msg.agentId),
+          ...bridged,
+        ];
         return {
           ...prev,
+          diagnostics,
           agentTeam: {
             ...prev.agentTeam,
             agents: { ...prev.agentTeam.agents, [msg.agentId]: { ...a, findings: msg.findings } },
@@ -258,6 +306,12 @@ export function useArchLab() {
 
       case 'agent-report':
         return { ...prev, agentTeam: { ...prev.agentTeam, report: msg.report } };
+
+      case 'agent-report-saved':
+        return { ...prev, agentTeam: { ...prev.agentTeam, reportSavedPath: msg.path } };
+
+      case 'agent-persistent-issues':
+        return { ...prev, agentTeam: { ...prev.agentTeam, persistentIssues: msg.issues } };
 
       case 'agent-run-saved':
         return {
@@ -343,7 +397,7 @@ export function useArchLab() {
       // Reset the live panel for the agents about to run.
       setState((p) => ({
         ...p,
-        agentTeam: { ...p.agentTeam, running: true, report: null, agents: emptyAgents() },
+        agentTeam: { ...p.agentTeam, running: true, report: null, reportSavedPath: null, agents: emptyAgents() },
       }));
       send({ type: 'run-agent-team', projectId: state.projectId, mode, agentId });
     },

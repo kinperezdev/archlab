@@ -186,7 +186,7 @@ function TeamReportView({ report, projectName }: { report: TeamReport; projectNa
     <div className="team-report">
       <div className="team-report-head">
         <h4>Team Report</h4>
-        <button className="btn" onClick={exportMd}>Export .md</button>
+        <button className="btn" onClick={exportMd} title="Save a copy to your Downloads folder">Download</button>
       </div>
       <p className="team-report-summary">{report.summary}</p>
       <ReportSection title="Priority Actions" items={report.priorityActions} />

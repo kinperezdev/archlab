@@ -33,6 +33,10 @@ Everything runs on localhost. Nothing ever leaves your machine.
 - **Local MCP server.** Exposes the global brain to any MCP-aware AI tool over stdio. Read-only, never opens a network connection.
 - **100% local.** WebSockets over localhost, local JSON + Markdown storage. Nothing leaves your machine.
 
+## Design
+
+ArchLab uses a dark, premium developer-tool aesthetic built on a single token system (`packages/frontend/src/styles/tokens.css`): layered surfaces from `#080808` up, hairline white borders, an indigo accent (`#6366F1`) with colored glow variants, Inter for UI and JetBrains Mono for code/terminal, and 3px custom scrollbars throughout. Interaction polish is powered by Framer Motion: the top bar's active tab rides a shared `layoutId` indicator that slides between tabs, project files reveal with a staggered slide-in, and buttons use spring hover/tap. Canvas nodes are flat dark cards with a type-colored status dot, a hover glow in the node's color, and ENTRY / highlight / dimmed / isolated / critical states. All motion respects `prefers-reduced-motion`.
+
 ## Architecture
 
 A npm-workspaces monorepo:

@@ -142,7 +142,7 @@ function DetectedMode({ infra }: { infra: SystemDesignMap }) {
           nodesDraggable={false}
           nodesConnectable={false}
         >
-          <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#e2e8f0" />
+          <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="rgba(255,255,255,0.05)" />
           <MiniMap pannable zoomable className="arch-minimap" />
           <Controls showInteractive={false} />
         </ReactFlow>
@@ -389,7 +389,7 @@ function DesignModeInner() {
           deleteKeyCode={['Backspace', 'Delete']}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#cbd5e1" />
+          <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="rgba(255,255,255,0.05)" />
           <MiniMap pannable zoomable className="arch-minimap" />
           <Controls showInteractive={false} />
         </ReactFlow>

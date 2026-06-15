@@ -1,5 +1,6 @@
-/** Top bar: logo, project path input, filter tabs, findings + brain status. */
+/** Top bar: gradient logo, project context, animated tab bar, status badges. */
 
+import { motion } from 'framer-motion';
 import type { ArchTab } from '../App.js';
 import { TabIcon } from './TabIcon.js';
 
@@ -31,6 +32,8 @@ const TABS: { id: ArchTab; label: string }[] = [
   { id: 'scratch', label: 'Scratch' },
 ];
 
+const SPRING = { type: 'spring', stiffness: 400, damping: 30 } as const;
+
 /** Compact local time stamp, e.g. "14:05:32". */
 function formatTime(epochMs: number): string {
   return new Date(epochMs).toLocaleTimeString([], {
@@ -57,65 +60,97 @@ export function TopBar({
   onTabChange,
 }: TopBarProps) {
   return (
-    <header className="top-bar">
-      <div className="top-bar-brand">
-        <span className="brand-mark">▟▙</span>
-        <span className="brand-name">ArchLab</span>
-        {projectName && <span className="brand-project">/ {projectName}</span>}
-        {projectName && analyzedAt && (
-          <span className="brand-timestamp" title="Time of the last analysis">
-            analyzed {formatTime(analyzedAt)}
-          </span>
+    <header className="tb">
+      {/* Left: logo + project context */}
+      <div className="tb-left">
+        <span className="tb-logo-mark" aria-hidden="true" />
+        <span className="tb-logo-text">ArchLab</span>
+        {projectName && (
+          <>
+            <span className="tb-slash">/</span>
+            <span className="tb-project">{projectName}</span>
+            {analyzedAt && (
+              <>
+                <span className="tb-dot" />
+                <span className="tb-timestamp" title="Time of the last analysis">
+                  {formatTime(analyzedAt)}
+                </span>
+              </>
+            )}
+          </>
         )}
       </div>
 
-      <div className="canvas-filter-tabs-topbar">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`canvas-filter-btn ${tab === t.id ? 'active' : ''}`}
-            onClick={() => onTabChange(t.id)}
-          >
-            <TabIcon tab={t.id} />
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Center: animated tab bar */}
+      <nav className="tb-tabs">
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <motion.button
+              key={t.id}
+              className={`tb-tab ${active ? 'active' : ''}`}
+              onClick={() => onTabChange(t.id)}
+              whileTap={{ scale: 0.97 }}
+            >
+              {active && (
+                <motion.span className="tb-tab-bg" layoutId="tb-tab-indicator" transition={SPRING} />
+              )}
+              <span className="tb-tab-content">
+                <TabIcon tab={t.id} />
+                <span>{t.label}</span>
+              </span>
+            </motion.button>
+          );
+        })}
+      </nav>
 
-      <div className="top-bar-status">
+      {/* Right: badges + actions */}
+      <div className="tb-right">
         {hasProject && (
-          <div className="count-badges">
-            <span className="count-badge findings" title="Total findings">
+          <>
+            <span className="tb-badge badge-error" title="Total findings">
               {findingsCount} findings
             </span>
-            <span
-              className={`count-badge bottlenecks ${bottleneckCount > 0 ? 'active' : ''}`}
-              title="Bottlenecks detected"
-            >
-              ⚠ {bottleneckCount} bottlenecks
-            </span>
-            <span
-              className={`count-badge isolated ${isolatedCount > 0 ? 'active' : ''}`}
-              title="Nodes with no connections to the rest of the project"
-            >
-              ⚠ {isolatedCount} isolated {isolatedCount === 1 ? 'node' : 'nodes'}
-            </span>
-          </div>
+            {bottleneckCount > 0 && (
+              <span className="tb-badge badge-warning" title="Bottlenecks detected">
+                {bottleneckCount} bottlenecks
+              </span>
+            )}
+            {isolatedCount > 0 && (
+              <span className="tb-badge badge-info" title="Nodes with no connections">
+                {isolatedCount} isolated
+              </span>
+            )}
+          </>
         )}
-        <button
-          className={`shortcuts-btn ${agentTeamActive ? 'active' : ''}`}
+        <motion.button
+          className={`tb-btn tb-btn-accent ${agentTeamActive ? 'active' : ''}`}
           onClick={onOpenAgentTeam}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
           title="Open the Agent Team panel"
         >
           ⬡ Agent Team
-        </button>
-        <button className="shortcuts-btn" onClick={onOpenShortcuts} title="Keyboard Shortcuts Guide">
+        </motion.button>
+        <motion.button
+          className="tb-btn"
+          onClick={onOpenBrain}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          title="Open global brain"
+        >
+          <span className={`tb-dot-status ${connected ? 'on' : 'off'}`} />
+          Brain · {brainProjectCount}
+        </motion.button>
+        <motion.button
+          className="tb-btn"
+          onClick={onOpenShortcuts}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          title="Keyboard Shortcuts Guide"
+        >
           ⌨ Shortcuts
-        </button>
-        <button className="brain-status" onClick={onOpenBrain} title="Open global brain">
-          <span className={`dot ${connected ? 'dot-on' : 'dot-off'}`} />
-          Brain · {brainProjectCount} projects
-        </button>
+        </motion.button>
       </div>
     </header>
   );

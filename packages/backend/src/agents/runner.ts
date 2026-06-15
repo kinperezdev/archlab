@@ -26,7 +26,7 @@ import {
   orchestratorSystemPrompt,
   workerSystemPrompt,
 } from './agentDefs.js';
-import { saveAgentRun } from './store.js';
+import { saveAgentRun, writeReportToProjectRoot, persistentIssues } from './store.js';
 
 type Emit = (m: ServerMessage) => void;
 
@@ -237,6 +237,17 @@ export async function runAgentTeam(
     report = await runOrchestrator(api, contextBlock, allFindings, bus, emit);
   }
 
+  // Auto-write the report to the project root when the orchestrator produced one.
+  if (report) {
+    try {
+      const reportPath = writeReportToProjectRoot(analysis, report);
+      emit({ type: 'agent-report-saved', path: reportPath });
+    } catch {
+      /* non-fatal: the user can still download it from the panel */
+    }
+  }
+
   const summary = saveAgentRun(analysis, mode, allFindings, report ?? undefined);
   emit({ type: 'agent-run-saved', summary });
+  emit({ type: 'agent-persistent-issues', issues: persistentIssues(analysis.projectId) });
 }

@@ -1,0 +1,282 @@
+/* Component rebuilds: Top Bar, Canvas Node, Left Sidebar.
+   Loaded last so it wins over the base stylesheets. */
+
+/* ===================== TOP BAR ===================== */
+.tb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px;
+  background: #0d0d12;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--font-sans);
+  gap: 12px;
+}
+
+.tb-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tb-logo-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  flex-shrink: 0;
+}
+.tb-logo-text { color: #fff; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+.tb-slash { color: rgba(255, 255, 255, 0.2); }
+.tb-project { color: rgba(255, 255, 255, 0.5); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
+.tb-timestamp { color: rgba(255, 255, 255, 0.3); font-size: 12px; font-family: var(--font-mono); white-space: nowrap; }
+
+/* Center tabs, absolutely centered regardless of side widths */
+.tb-tabs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 2px;
+}
+.tb-tab {
+  position: relative;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+.tb-tab:hover { background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.7); }
+.tb-tab.active { color: #818cf8; font-weight: 600; }
+.tb-tab-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(99, 102, 241, 0.15);
+  border-radius: 6px;
+  border-bottom: 2px solid #6366f1;
+  z-index: 0;
+}
+.tb-tab-content { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; }
+
+.tb-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.tb-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tb-badge.badge-error { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.tb-badge.badge-warning { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.tb-badge.badge-info { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.6);
+}
+.tb-btn:hover { color: rgba(255, 255, 255, 0.9); border-color: rgba(255, 255, 255, 0.2); }
+.tb-btn-accent {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+}
+.tb-btn-accent:hover { color: #fff; box-shadow: 0 0 18px rgba(99, 102, 241, 0.45); }
+.tb-btn-accent.active { box-shadow: 0 0 18px rgba(99, 102, 241, 0.55); }
+.tb-dot-status { width: 6px; height: 6px; border-radius: 50%; }
+.tb-dot-status.on { background: #10b981; }
+.tb-dot-status.off { background: #6b7280; }
+
+/* The app shell row was 52px; the new bar is 44px. */
+.app-shell { grid-template-rows: 44px 1fr var(--bottom-row, 200px); }
+
+/* ===================== CANVAS NODE ===================== */
+.arch-node {
+  background: #16161e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 120px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  color: var(--text-primary);
+  transition: border-color 150ms ease, box-shadow 150ms ease, filter 150ms ease, opacity 150ms ease;
+}
+.arch-node:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--node-color, #6366f1) 20%, transparent);
+}
+
+.node-header { display: flex; align-items: center; gap: 8px; }
+.node-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--node-color, var(--kind-unknown));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--node-color, #6366f1) 60%, transparent);
+}
+.node-name {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.node-type {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Entry point */
+.arch-node.is-entry {
+  border-color: rgba(99, 102, 241, 0.6);
+  background: rgba(99, 102, 241, 0.08);
+}
+.arch-node.is-entry .entry-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: #6366f1;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: none;
+  padding: 0;
+}
+
+/* Highlight / dim */
+.arch-node.node-highlight {
+  border-color: var(--node-color, #6366f1);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, var(--node-color, #6366f1) 45%, transparent);
+}
+.arch-node.node-dimmed { filter: brightness(0.3); opacity: 0.6; }
+
+/* Isolated / error */
+.arch-node.is-isolated { background: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.3); }
+.arch-node.is-bottleneck { background: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.3); }
+
+/* ===================== LEFT SIDEBAR ===================== */
+.ls {
+  position: relative;
+  width: 196px;
+  flex-shrink: 0;
+  background: #0d0d12;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ls-scroll { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
+.ls-section { margin-bottom: 16px; }
+.ls-grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ls-label {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 12px;
+  margin-bottom: 6px;
+}
+.ls-count { color: rgba(255, 255, 255, 0.25); }
+
+.ls-legend { list-style: none; margin: 0; padding: 0; }
+.ls-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  cursor: default;
+}
+.ls-legend-item:hover { background: rgba(255, 255, 255, 0.04); }
+.ls-legend-name { color: rgba(255, 255, 255, 0.45); font-size: 12px; }
+.ls-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--node-color, var(--kind-unknown));
+  box-shadow: 0 0 5px color-mix(in srgb, var(--node-color, #6366f1) 55%, transparent);
+}
+
+.ls-files { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.ls-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+.ls-file:hover { background: rgba(255, 255, 255, 0.04); }
+.ls-file:hover .ls-file-path { color: rgba(255, 255, 255, 0.7); }
+.ls-file-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; background: var(--node-color, var(--kind-unknown)); }
+.ls-file-path {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ls-empty { color: rgba(255, 255, 255, 0.25); font-size: 11px; padding: 4px 12px; }
+
+.ls-collapse {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12px;
+}
+.ls-chevron { color: rgba(255, 255, 255, 0.3); font-size: 10px; }
+
+/* Map each node kind to a --node-color so dots/glows resolve. */
+.kind-component { --node-color: var(--kind-component); }
+.kind-route { --node-color: var(--kind-route); }
+.kind-endpoint { --node-color: var(--kind-endpoint); }
+.kind-middleware { --node-color: var(--kind-middleware); }
+.kind-auth { --node-color: var(--kind-auth); }
+.kind-database { --node-color: var(--kind-database); }
+.kind-external-service { --node-color: var(--kind-external-service); }
+.kind-config { --node-color: var(--kind-config); }
+.kind-mcp { --node-color: var(--kind-mcp); }
+.kind-unknown { --node-color: var(--kind-unknown); }
+
+/* Re-flatten per-kind node backgrounds (canvas.css tints them per kind). */
+.arch-node[class*="kind-"] { background: #16161e; }
+.arch-node.is-entry[class*="kind-"] { background: rgba(99, 102, 241, 0.08); }
+.arch-node.is-isolated[class*="kind-"] { background: rgba(245, 158, 11, 0.06); }
+.arch-node.is-bottleneck[class*="kind-"] { background: rgba(239, 68, 68, 0.06); }

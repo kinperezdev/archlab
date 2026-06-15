@@ -57,20 +57,6 @@ interface DbTable {
   columns: DbColumn[];
 }
 
-/** Short glyph per node kind for quick visual scanning. */
-const KIND_GLYPH: Record<NodeKind, string> = {
-  component: '◆',
-  route: '⛬',
-  endpoint: '⇄',
-  middleware: '≣',
-  auth: '⛨',
-  database: '⛁',
-  'external-service': '☁',
-  config: '⚙',
-  mcp: '🤖',
-  unknown: '?',
-};
-
 export function ArchNode({ data }: NodeProps<ArchNodeData>) {
   const highlightClass = data.isHighlighted ? 'node-highlight' : '';
   const dimClass = data.isDimmed ? 'node-dimmed' : '';
@@ -183,9 +169,11 @@ export function ArchNode({ data }: NodeProps<ArchNodeData>) {
         </div>
       )}
 
-      <span className="arch-node-glyph">{KIND_GLYPH[data.kind]}</span>
-      <span className="arch-node-label">{data.label}</span>
-      <span className="arch-node-kind">{data.kind}</span>
+      <div className="node-header">
+        <span className="node-dot" />
+        <span className="node-name">{data.label}</span>
+        <span className="node-type">{data.kind}</span>
+      </div>
 
       {ports && ports.outgoing.length > 0 && (
         <div className="node-ports node-ports-out">

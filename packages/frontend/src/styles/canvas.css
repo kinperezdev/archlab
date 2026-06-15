@@ -81,7 +81,7 @@
   gap: 4px;
   min-width: 160px;
   padding: var(--space-3);
-  background: color-mix(in srgb, var(--node-color) 12%, #ffffff);
+  background: color-mix(in srgb, var(--node-color) 12%, var(--bg-elevated));
   border: 2px solid var(--node-color);
   border-radius: var(--radius);
   color: var(--color-text);
@@ -100,42 +100,42 @@
    the accent on the border + glyph, so re-map per kind here. */
 .arch-node.kind-component {
   --node-color: var(--kind-component);
-  background: color-mix(in srgb, var(--kind-component) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-component) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.kind-route {
   --node-color: var(--kind-route);
-  background: color-mix(in srgb, var(--kind-route) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-route) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.kind-endpoint {
   --node-color: var(--kind-endpoint);
-  background: color-mix(in srgb, var(--kind-endpoint) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-endpoint) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.kind-middleware {
   --node-color: var(--kind-middleware);
-  background: color-mix(in srgb, var(--kind-middleware) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-middleware) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.kind-auth {
   --node-color: var(--kind-auth);
-  background: color-mix(in srgb, var(--kind-auth) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-auth) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.kind-database {
   --node-color: var(--kind-database);
-  background: color-mix(in srgb, var(--kind-database) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-database) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.db-schema-node {
   --node-color: var(--kind-database);
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 2px solid var(--node-color);
   color: var(--color-text);
 }
 .db-node-header {
-  background: color-mix(in srgb, var(--kind-database) 10%, #ffffff);
+  background: color-mix(in srgb, var(--kind-database) 10%, var(--bg-elevated));
 }
 .db-node-body {
   scrollbar-width: thin;
@@ -169,17 +169,17 @@
 }
 .arch-node.kind-external-service {
   --node-color: var(--kind-external-service);
-  background: color-mix(in srgb, var(--kind-external-service) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-external-service) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.kind-config {
   --node-color: var(--kind-config);
-  background: color-mix(in srgb, var(--kind-config) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-config) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 .arch-node.kind-mcp {
   --node-color: var(--kind-mcp);
-  background: color-mix(in srgb, var(--kind-mcp) 12%, #ffffff);
+  background: color-mix(in srgb, var(--kind-mcp) 12%, var(--bg-elevated));
   color: var(--color-text);
 }
 

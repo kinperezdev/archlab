@@ -13,6 +13,8 @@ import type {
   AgentId,
   AgentMode,
   AgentRunSummary,
+  PersistentIssue,
+  ReportItem,
   TeamReport,
 } from '@archlab/shared';
 import type { AnalysisResult } from '../analyzer/analyzer.js';
@@ -74,18 +76,12 @@ export function listAgentRuns(): AgentRunSummary[] {
  * Persistent unresolved issues: a (agent, title) pair seen in 3+ runs of the
  * same project. Urgency rises with the occurrence count.
  */
-export interface PersistentIssue {
-  agentId: AgentId;
-  title: string;
-  count: number;
-  projectId: string;
-}
-
 export function persistentIssues(projectId: string, minCount = 3): PersistentIssue[] {
   if (!fs.existsSync(RUNS_DIR)) return [];
   const tally = new Map<string, PersistentIssue>();
-  for (const file of fs.readdirSync(RUNS_DIR)) {
-    if (!file.endsWith('.json')) continue;
+  // Walk runs oldest-first so firstSeen is the earliest occurrence.
+  const files = fs.readdirSync(RUNS_DIR).filter((f) => f.endsWith('.json')).sort();
+  for (const file of files) {
     try {
       const run = JSON.parse(fs.readFileSync(path.join(RUNS_DIR, file), 'utf8')) as StoredRun;
       if (run.projectId !== projectId) continue;
@@ -93,11 +89,34 @@ export function persistentIssues(projectId: string, minCount = 3): PersistentIss
         const key = `${f.agentId}:${f.title.toLowerCase()}`;
         const prior = tally.get(key);
         if (prior) prior.count += 1;
-        else tally.set(key, { agentId: f.agentId, title: f.title, count: 1, projectId });
+        else tally.set(key, { agentId: f.agentId, title: f.title, count: 1, projectId, firstSeen: run.at });
       }
     } catch {
       /* skip */
     }
   }
   return [...tally.values()].filter((i) => i.count >= minCount).sort((a, b) => b.count - a.count);
+}
+
+/** Render a team report as Markdown. */
+export function reportToMarkdown(report: TeamReport, projectName: string): string {
+  const section = (title: string, items: ReportItem[]) =>
+    items.length
+      ? `\n## ${title}\n\n${items.map((i) => `- **${i.title}**${i.effort ? ` (${i.effort})` : ''}: ${i.detail}`).join('\n')}\n`
+      : '';
+  return (
+    `# ArchLab Agent Team Report: ${projectName}\n\n_Generated ${new Date().toISOString()}_\n\n${report.summary}\n` +
+    section('Priority Actions', report.priorityActions) +
+    section('Quick Wins', report.quickWins) +
+    section('Architecture Decisions', report.architectureDecisions) +
+    section('Technical Debt Map', report.technicalDebt)
+  );
+}
+
+/** Write the report to the analyzed project's root as a dated Markdown file. */
+export function writeReportToProjectRoot(analysis: AnalysisResult, report: TeamReport): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const file = path.join(analysis.rootPath, `ARCHLAB_REPORT_${date}.md`);
+  fs.writeFileSync(file, reportToMarkdown(report, analysis.name), 'utf8');
+  return file;
 }

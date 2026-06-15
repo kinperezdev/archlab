@@ -82,3 +82,14 @@ export interface AgentMessage {
   to: AgentId | 'all';
   text: string;
 }
+
+/** A finding seen across multiple runs of the same project (3+ = persistent). */
+export interface PersistentIssue {
+  agentId: AgentId;
+  title: string;
+  /** How many runs it has appeared in. */
+  count: number;
+  projectId: string;
+  /** ISO timestamp it was first seen. */
+  firstSeen: string;
+}
