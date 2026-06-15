@@ -35,6 +35,7 @@ export type ClientMessage =
   | { type: 'request-brain' }
   // Agent Team: run all agents (sequential/parallel) or one (single).
   | { type: 'run-agent-team'; projectId: string; mode: AgentMode; agentId?: AgentId }
+  | { type: 'stop-agent-team' }
   | { type: 'request-agent-runs' }
   // In-app terminal (real PTY). Multiple independent sessions per tab, keyed by
   // `id`: create/close a session, stream raw stdin, and resize the viewport.

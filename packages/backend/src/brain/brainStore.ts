@@ -13,6 +13,8 @@ import type {
   BrainPattern,
   BrainProjectRecord,
   BrainState,
+  AgentFinding,
+  TeamReport,
 } from '@archlab/shared';
 import { BRAIN_DIR, BRAIN_PROJECTS_DIR, BRAIN_STATE_FILE } from './paths.js';
 
@@ -173,3 +175,122 @@ function slug(input: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 }
+
+/** Fold Agent Team findings and report items into the global brain. */
+export function absorbAgentTeamFindings(
+  projectId: string,
+  projectName: string,
+  findings: AgentFinding[],
+  report?: TeamReport,
+): BrainState {
+  const state = loadBrain();
+
+  // Find the project record
+  const project = state.projects.find((p) => p.projectId === projectId);
+  
+  // Distill agent findings into patterns
+  const byId = new Map(state.patterns.map((p) => [p.id, { ...p, occurrences: [...p.occurrences] }]));
+
+  for (const f of findings) {
+    const id = `agent:${f.agentId}:${slug(f.title)}`;
+    const prior = byId.get(id);
+    if (prior) {
+      if (!prior.occurrences.includes(projectId)) {
+        prior.occurrences.push(projectId);
+        prior.count += 1;
+      }
+      if (f.suggestedFix) prior.resolution = f.suggestedFix;
+    } else {
+      byId.set(id, {
+        id,
+        category: f.agentId,
+        description: f.description,
+        resolution: f.suggestedFix,
+        occurrences: [projectId],
+        count: 1,
+      });
+    }
+  }
+
+  // Also extract actions/recommendations from Orchestrator report as patterns
+  if (report) {
+    const allReportItems = [
+      ...report.priorityActions.map(item => ({ ...item, category: 'priority' })),
+      ...report.quickWins.map(item => ({ ...item, category: 'quick-win' })),
+      ...report.architectureDecisions.map(item => ({ ...item, category: 'architecture-decision' })),
+      ...report.technicalDebt.map(item => ({ ...item, category: 'technical-debt' }))
+    ];
+
+    for (const item of allReportItems) {
+      const id = `suggested:${item.category}:${slug(item.title)}`;
+      const prior = byId.get(id);
+      if (prior) {
+        if (!prior.occurrences.includes(projectId)) {
+          prior.occurrences.push(projectId);
+          prior.count += 1;
+        }
+        if (item.effort) prior.resolution = `Effort: ${item.effort}`;
+      } else {
+        byId.set(id, {
+          id,
+          category: `orchestrator:${item.category}`,
+          description: `${item.title}: ${item.detail}`,
+          resolution: item.effort ? `Effort: ${item.effort}` : undefined,
+          occurrences: [projectId],
+          count: 1,
+        });
+      }
+    }
+  }
+
+  const patterns = [...byId.values()];
+  const insights = buildInsights(patterns);
+
+  const next: BrainState = { ...state, patterns, insights };
+  saveBrain(next);
+
+  // Update living markdown document to include the Agent Team findings
+  if (project) {
+    try {
+      const file = path.join(BRAIN_PROJECTS_DIR, `${slug(projectName)}.md`);
+      if (fs.existsSync(file)) {
+        let content = fs.readFileSync(file, 'utf8');
+        
+        // Append or replace the Agent Team findings section
+        const sectionHeader = '\n\n## Agent Team Review';
+        const startIndex = content.indexOf(sectionHeader);
+        let baseContent = startIndex === -1 ? content : content.substring(0, startIndex);
+        
+        const lines: string[] = [baseContent];
+        lines.push(sectionHeader);
+        lines.push(`_Last reviewed by Agent Team: ${new Date().toISOString()}_`);
+        lines.push('');
+        if (findings.length === 0) {
+          lines.push('No critical agent findings detected.');
+        } else {
+          for (const f of findings) {
+            lines.push(`- **[${f.severity.toUpperCase()}] [${f.agentId}] ${f.title}** — ${f.description}`);
+            if (f.suggestedFix) {
+              lines.push(`  * Fix: ${f.suggestedFix}`);
+            }
+          }
+        }
+        
+        if (report) {
+          lines.push('');
+          lines.push('### Priority Recommendations');
+          for (const action of report.priorityActions) {
+            lines.push(`- **${action.title}** (${action.effort ?? 'medium effort'}) — ${action.detail}`);
+          }
+        }
+        
+        fs.writeFileSync(file, lines.join('\n'), 'utf8');
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  return next;
+}
+

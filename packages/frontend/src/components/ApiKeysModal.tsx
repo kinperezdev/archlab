@@ -67,7 +67,12 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
         ) : (
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              <label htmlFor="anthropic-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Anthropic API Key (Claude)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label htmlFor="anthropic-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Anthropic API Key (Claude)</label>
+                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: keys.anthropic ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: keys.anthropic ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                  {keys.anthropic ? 'Active' : 'Not Configured'}
+                </span>
+              </div>
               <input
                 id="anthropic-key"
                 type="password"
@@ -80,7 +85,12 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              <label htmlFor="openai-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>OpenAI API Key (ChatGPT)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label htmlFor="openai-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>OpenAI API Key (ChatGPT)</label>
+                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: keys.openai ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: keys.openai ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                  {keys.openai ? 'Active' : 'Not Configured'}
+                </span>
+              </div>
               <input
                 id="openai-key"
                 type="password"
@@ -93,7 +103,12 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              <label htmlFor="gemini-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Gemini API Key (Google AI)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label htmlFor="gemini-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Gemini API Key (Google AI)</label>
+                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: keys.gemini ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: keys.gemini ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                  {keys.gemini ? 'Active' : 'Not Configured'}
+                </span>
+              </div>
               <input
                 id="gemini-key"
                 type="password"

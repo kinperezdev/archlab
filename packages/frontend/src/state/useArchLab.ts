@@ -404,6 +404,31 @@ export function useArchLab() {
     [send, state.projectId],
   );
 
+  const stopAgentTeam = useCallback(() => {
+    send({ type: 'stop-agent-team' });
+    setState((p) => {
+      const updatedAgents = { ...p.agentTeam.agents };
+      for (const id of AGENT_IDS) {
+        const a = updatedAgents[id];
+        if (a.status === 'thinking' || a.status === 'working') {
+          updatedAgents[id] = {
+            ...a,
+            status: 'error',
+            output: `${a.output}\n[error] Stopped by user.`,
+          };
+        }
+      }
+      return {
+        ...p,
+        agentTeam: {
+          ...p.agentTeam,
+          running: false,
+          agents: updatedAgents,
+        },
+      };
+    });
+  }, [send]);
+
   const requestAgentRuns = useCallback(() => send({ type: 'request-agent-runs' }), [send]);
 
   // ---- Real-terminal (PTY) API, per session id ----------------------------
@@ -445,6 +470,7 @@ export function useArchLab() {
       runChecks,
       refreshBrain,
       runAgentTeam,
+      stopAgentTeam,
       requestAgentRuns,
       onTerminalData,
       createTerminal,
@@ -459,6 +485,7 @@ export function useArchLab() {
       runChecks,
       refreshBrain,
       runAgentTeam,
+      stopAgentTeam,
       requestAgentRuns,
       onTerminalData,
       createTerminal,

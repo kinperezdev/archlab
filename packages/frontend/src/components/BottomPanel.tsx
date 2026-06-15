@@ -177,11 +177,14 @@ export function BottomPanel({
     e.preventDefault();
     const startY = e.clientY;
     const startHeight = height;
+    document.body.classList.add('is-resizing');
     const onMove = (ev: MouseEvent) => {
-      const next = Math.max(100, Math.min(600, startHeight - (ev.clientY - startY)));
+      const maxHeight = Math.max(300, window.innerHeight * 0.65);
+      const next = Math.max(160, Math.min(maxHeight, startHeight - (ev.clientY - startY)));
       onResize(next);
     };
     const onUp = () => {
+      document.body.classList.remove('is-resizing');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };

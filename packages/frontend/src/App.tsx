@@ -71,6 +71,7 @@ export function App() {
     reanalyzeProject,
     runChecks,
     runAgentTeam,
+    stopAgentTeam,
     requestAgentRuns,
     onTerminalData,
     createTerminal,
@@ -225,9 +226,6 @@ export function App() {
         projectName={state.projectName}
         hasProject={Boolean(state.projectId)}
         brainProjectCount={state.brain.projectCount}
-        findingsCount={state.diagnostics.length}
-        bottleneckCount={state.diagnostics.filter((d) => d.severity === 'bottleneck').length}
-        isolatedCount={isolatedCount}
         analyzedAt={state.analyzedAt}
         onOpenBrain={() => setBrainOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
@@ -270,58 +268,81 @@ export function App() {
              </button>
            )}
 
-          {/* Security tab owns the pipeline controls (top-left) plus the step
-              tags that filter the findings panel. */}
-          {tab === 'security' && (
-            <div className="security-overlay">
-            <div className="pipeline-controls">
-              <span className="pipeline-controls-label">Pipeline Controls</span>
-              <div className="pipeline-controls-row">
-                <button
-                  className="btn"
-                  disabled={!state.projectId || !state.connected || state.reanalyzing}
-                  onClick={reanalyzeProject}
-                  title="Force a fresh full scan of the current project"
-                >
-                  {state.reanalyzing ? (
-                    <>
-                      <span className="btn-spinner" aria-hidden="true" /> Re-analyzing…
-                    </>
-                  ) : (
-                    'Re-analyze'
-                  )}
-                </button>
-                <button
-                  className="btn"
-                  disabled={!state.projectId || !state.connected}
-                  onClick={runChecks}
-                >
-                  Run Checks
-                </button>
-              </div>
-            </div>
-            <PipelineTags
-              steps={state.steps}
-              diagnostics={state.diagnostics}
-              activeStep={securityStep}
-              onSelect={setSecurityStep}
-            />
-            {state.projectId && !agentTeamOpen && (
-              <button className="agent-team-promo" onClick={() => setAgentTeamOpen(true)}>
-                <span className="agent-team-promo-glyph">⬡</span>
-                Agent Team available — run AI-powered deep analysis
-                <span className="agent-team-promo-cta">Open →</span>
-              </button>
-            )}
-            </div>
-          )}
-
           {tab === 'systemdesign' ? (
             <SystemDesign infra={state.infra} hasProject={Boolean(state.projectId)} />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : (
             <ReactFlowProvider>
+              <div className="canvas-left-overlay">
+                {tab === 'security' && (
+                  <>
+                    <div className="flat-section">
+                      <span className="flat-section-title">Pipeline</span>
+                      <div className="flat-button-group-vertical">
+                        <button
+                          className="flat-action-btn"
+                          disabled={!state.projectId || !state.connected || state.reanalyzing}
+                          onClick={reanalyzeProject}
+                          title="Force a fresh full scan of the current project"
+                        >
+                          {state.reanalyzing ? (
+                            <>
+                              <span className="btn-spinner" aria-hidden="true" /> Re-analyzing…
+                            </>
+                          ) : (
+                            '▶ Re-analyze'
+                          )}
+                        </button>
+                        <button
+                          className="flat-action-btn"
+                          disabled={!state.projectId || !state.connected}
+                          onClick={runChecks}
+                        >
+                          ✔ Run Checks
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flat-section">
+                      <span className="flat-section-title">Pipeline Steps</span>
+                      <PipelineTags
+                        steps={state.steps}
+                        diagnostics={state.diagnostics}
+                        activeStep={securityStep}
+                        onSelect={setSecurityStep}
+                        isVertical={true}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Status: Findings & Isolated */}
+                <div className="flat-section">
+                  <span className="flat-section-title">Canvas Status</span>
+                  <div className="flat-status-list">
+                    <div className="flat-status-item" title="Diagnostics / architectural issues">
+                      <span className="flat-status-icon">⚠️</span>
+                      <span className="flat-status-label">Findings</span>
+                      <span className="flat-status-count">{state.diagnostics.length}</span>
+                    </div>
+                    <div className="flat-status-item" title="Nodes with no connections">
+                      <span className="flat-status-icon">📦</span>
+                      <span className="flat-status-label">Isolated</span>
+                      <span className="flat-status-count">{isolatedCount}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {state.projectId && tab === 'security' && !agentTeamOpen && (
+                <button className="agent-team-promo" onClick={() => setAgentTeamOpen(true)}>
+                  <span className="agent-team-promo-glyph">⬡</span>
+                  Agent Team available — run AI-powered deep analysis
+                  <span className="agent-team-promo-cta">Open →</span>
+                </button>
+              )}
+
               <Canvas
                 graph={state.canvas}
                 diagnostics={state.diagnostics}
@@ -339,6 +360,7 @@ export function App() {
             projectName={state.projectName}
             hasProject={Boolean(state.projectId)}
             onRun={runAgentTeam}
+            onStop={stopAgentTeam}
             onRequestRuns={requestAgentRuns}
             onClose={() => setAgentTeamOpen(false)}
           />
