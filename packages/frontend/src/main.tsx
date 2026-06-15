@@ -7,6 +7,7 @@ import './styles/canvas.css';
 import './styles/features.css';
 import './styles/codeintel.css';
 import './styles/systemdesign.css';
+import './styles/agents.css';
 import 'reactflow/dist/style.css';
 
 const root = document.getElementById('root');

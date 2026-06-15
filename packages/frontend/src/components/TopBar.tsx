@@ -14,6 +14,8 @@ interface TopBarProps {
   analyzedAt: number | null;
   onOpenBrain: () => void;
   onOpenShortcuts: () => void;
+  onOpenAgentTeam: () => void;
+  agentTeamActive: boolean;
   tab: ArchTab;
   onTabChange: (tab: ArchTab) => void;
 }
@@ -49,6 +51,8 @@ export function TopBar({
   analyzedAt,
   onOpenBrain,
   onOpenShortcuts,
+  onOpenAgentTeam,
+  agentTeamActive,
   tab,
   onTabChange,
 }: TopBarProps) {
@@ -98,6 +102,13 @@ export function TopBar({
             </span>
           </div>
         )}
+        <button
+          className={`shortcuts-btn ${agentTeamActive ? 'active' : ''}`}
+          onClick={onOpenAgentTeam}
+          title="Open the Agent Team panel"
+        >
+          ⬡ Agent Team
+        </button>
         <button className="shortcuts-btn" onClick={onOpenShortcuts} title="Keyboard Shortcuts Guide">
           ⌨ Shortcuts
         </button>

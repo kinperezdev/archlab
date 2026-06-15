@@ -16,6 +16,14 @@ import type {
 import type { ProjectIntelligence } from './intelligence.js';
 import type { BrainInsight, BrainPattern } from './brain.js';
 import type { SystemDesignMap } from './systemdesign.js';
+import type {
+  AgentFinding,
+  AgentId,
+  AgentMode,
+  AgentRunSummary,
+  AgentStatus,
+  TeamReport,
+} from './agents.js';
 
 /** Messages the client sends to the server. */
 export type ClientMessage =
@@ -24,6 +32,9 @@ export type ClientMessage =
   | { type: 'run-checks'; projectId: string }
   | { type: 'run-bottlenecks'; projectId: string }
   | { type: 'request-brain' }
+  // Agent Team: run all agents (sequential/parallel) or one (single).
+  | { type: 'run-agent-team'; projectId: string; mode: AgentMode; agentId?: AgentId }
+  | { type: 'request-agent-runs' }
   // In-app terminal (real PTY). Multiple independent sessions per tab, keyed by
   // `id`: create/close a session, stream raw stdin, and resize the viewport.
   | { type: 'term-create'; id: string; cwd?: string }
@@ -57,4 +68,12 @@ export type ServerMessage =
   // In-app terminal: raw PTY output (ANSI) and the live working directory, per
   // session `id`.
   | { type: 'term-data'; id: string; data: string }
-  | { type: 'term-cwd'; id: string; cwd: string };
+  | { type: 'term-cwd'; id: string; cwd: string }
+  // Agent Team live stream.
+  | { type: 'agent-status'; agentId: AgentId; status: AgentStatus; summary?: string }
+  | { type: 'agent-output'; agentId: AgentId; chunk: string }
+  | { type: 'agent-findings'; agentId: AgentId; findings: AgentFinding[] }
+  | { type: 'agent-report'; report: TeamReport }
+  | { type: 'agent-run-saved'; summary: AgentRunSummary }
+  | { type: 'agent-runs'; runs: AgentRunSummary[] }
+  | { type: 'agent-error'; agentId: AgentId; message: string };

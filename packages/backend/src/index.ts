@@ -22,6 +22,8 @@ import { runPipeline } from './pipeline/pipeline.js';
 import { detectBottlenecks } from './pipeline/bottleneck.js';
 import { learnFromProject, loadBrain } from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
+import { runAgentTeam } from './agents/runner.js';
+import { listAgentRuns } from './agents/store.js';
 import { BRAIN_DIR } from './brain/paths.js';
 import {
   accessStatus,
@@ -606,6 +608,11 @@ async function handleClientMessage(
       return handleRunBottlenecks(msg.projectId, emit);
     case 'request-brain':
       return sendBrain(emit);
+    case 'run-agent-team':
+      return handleRunAgentTeam(msg.projectId, msg.mode, msg.agentId, emit);
+    case 'request-agent-runs':
+      emit({ type: 'agent-runs', runs: listAgentRuns() });
+      return;
     case 'term-init':
       return;
     case 'term-create':
@@ -788,6 +795,36 @@ async function handleRunBottlenecks(projectId: string, emit: (m: ServerMessage) 
   const bottlenecks = detectBottlenecks(analysis);
   for (const d of bottlenecks) emit({ type: 'diagnostic', diagnostic: d });
   log(emit, 'info', `Bottleneck analysis complete: ${bottlenecks.length} found.`);
+}
+
+/** Resolve an analyzed project, recovering it from the persisted index if needed. */
+async function resolveAnalysis(
+  projectId: string,
+  emit: (m: ServerMessage) => void,
+): Promise<AnalysisResult | null> {
+  let analysis = projects.get(projectId);
+  if (!analysis) {
+    const remembered = recallProject(projectId);
+    if (remembered) analysis = (await handleAnalyze(remembered.rootPath, emit)) ?? undefined;
+  }
+  return analysis ?? null;
+}
+
+/** Run the Agent Team (all agents or one) against a project and stream results. */
+async function handleRunAgentTeam(
+  projectId: string,
+  mode: import('@archlab/shared').AgentMode,
+  agentId: import('@archlab/shared').AgentId | undefined,
+  emit: (m: ServerMessage) => void,
+) {
+  const analysis = await resolveAnalysis(projectId, emit);
+  if (!analysis) {
+    log(emit, 'error', `Could not locate project ${projectId} for the Agent Team.`);
+    return;
+  }
+  log(emit, 'info', `Running Agent Team (${mode} mode) on ${analysis.name} ...`);
+  await runAgentTeam(analysis, mode, agentId, emit);
+  log(emit, 'info', 'Agent Team run complete.');
 }
 
 /** Run the animated 7-step pipeline, then fold results into the brain. */

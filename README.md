@@ -28,6 +28,7 @@ Everything runs on localhost. Nothing ever leaves your machine.
 - **In-app terminal.** A real pseudo-terminal (xterm.js wired to a backend `node-pty` PTY), so it behaves exactly like Terminal.app or iTerm: full ANSI color, interactive commands that prompt for input (`claude`, `npm` scripts, `git` rebase, ...), arrow-key history, tab completion, Ctrl+C sending SIGINT to the running process, and Ctrl+L clearing the screen. Each tab gets its own PTY stored in a process-wide registry keyed by tab id, so a PTY survives a WebSocket reconnect (the running process keeps going and replays output produced while disconnected); closing a tab kills its PTY cleanly. `cd` into any folder and ArchLab immediately maps that directory onto the canvas. Drag-and-drop a file or folder anywhere on the terminal pane (the pane highlights blue) to upload it to a working directory on the backend and auto-insert its path at the prompt; images show an inline thumbnail preview card. Tabs can be created, duplicated, renamed, and closed freely.
 - **Animated 7-step check pipeline.** Each step lights up live on the canvas as it runs and raises teaching diagnostics: what was found, why it matters, how to fix it, and how to optimize further.
 - **Full intelligence report.** A structured diagnostic summary of the project's architecture, data flow, security posture, performance, and scale readiness.
+- **Agent Team (multi-agent orchestration).** An **Agent Team** button in the top bar opens a right-side panel where six specialized AI agents review the project, each pre-loaded with full context from the brain (intelligence report, architecture map, database schema, infrastructure map, cross-project patterns) so none starts from zero. The agents are Security, Performance, Architecture, Database, Code Quality, and an Orchestrator that synthesizes the rest. Run them in **Sequential** mode (each sees messages the previous agents posted to a shared bus), **Parallel** mode (all at once), or **Single** mode (one targeted agent). Each agent streams its output live with a colored status indicator (idle, thinking, working, error, complete) and reports findings as cards with severity, file path, suggested fix, and a Copy Prompt. The Orchestrator produces a final report in four sections (Priority Actions, Quick Wins, Architecture Decisions, Technical Debt Map), each item with a Copy Prompt and an Export to Markdown button. Every run is saved to `brain/agent-runs/<timestamp>.json` and listed in a History view; an issue seen across three or more runs is tracked as a persistent unresolved issue. Agents call the Anthropic API (set `ANTHROPIC_API_KEY`; the model is overridable via `ARCHLAB_AGENT_MODEL`).
 - **Global brain.** Patterns and findings are stored locally and accumulate across every project you analyze, so the analysis gets sharper the more you use it. Open **Brain** in the top bar to browse cross-project learning.
 - **Local MCP server.** Exposes the global brain to any MCP-aware AI tool over stdio. Read-only, never opens a network connection.
 - **100% local.** WebSockets over localhost, local JSON + Markdown storage. Nothing leaves your machine.
@@ -53,6 +54,15 @@ All real-time communication is over WebSockets using the typed protocol in
 npm install
 npm run build:shared   # build the shared contract once (or use npm run dev which does it)
 npm run dev            # starts backend (4317), frontend (5317), and the MCP server
+```
+
+The **Agent Team** feature calls the Anthropic API, so export a key before
+starting the backend if you want to use it (everything else runs fully offline):
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...   # required only for the Agent Team
+# optional: override the model the agents use (defaults to claude-opus-4-7)
+export ARCHLAB_AGENT_MODEL=claude-opus-4-7
 ```
 
 Then open http://127.0.0.1:5317. You can load a project two ways:

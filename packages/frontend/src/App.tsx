@@ -49,6 +49,7 @@ import { Canvas } from './canvas/Canvas.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { SystemDesign } from './systemdesign/SystemDesign.js';
+import { AgentTeam } from './agents/AgentTeam.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 
@@ -70,6 +71,8 @@ export function App() {
     state,
     reanalyzeProject,
     runChecks,
+    runAgentTeam,
+    requestAgentRuns,
     onTerminalData,
     createTerminal,
     closeTerminal,
@@ -87,6 +90,7 @@ export function App() {
   }, []);
   const [brainOpen, setBrainOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [agentTeamOpen, setAgentTeamOpen] = useState(false);
   const [bottomHeight, setBottomHeight] = useState(200);
   const [tab, setTab] = useState<ArchTab>('all');
   // Architecture canvas tabs map straight to a canvas filter; others fall to all.
@@ -218,6 +222,8 @@ export function App() {
         analyzedAt={state.analyzedAt}
         onOpenBrain={() => setBrainOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
+        onOpenAgentTeam={() => setAgentTeamOpen((o) => !o)}
+        agentTeamActive={agentTeamOpen}
         tab={tab}
         onTabChange={setTab}
       />
@@ -312,7 +318,18 @@ export function App() {
           )}
         </main>
 
-        {isArchitecture && showRightSidebar && (
+        {agentTeamOpen && (
+          <AgentTeam
+            team={state.agentTeam}
+            projectName={state.projectName}
+            hasProject={Boolean(state.projectId)}
+            onRun={runAgentTeam}
+            onRequestRuns={requestAgentRuns}
+            onClose={() => setAgentTeamOpen(false)}
+          />
+        )}
+
+        {!agentTeamOpen && isArchitecture && showRightSidebar && (
           <RightSidebar
             projectId={state.projectId}
             projectName={state.projectName}

@@ -19,7 +19,36 @@ import {
   type BrainInsight,
   type BrainPattern,
   type SystemDesignMap,
+  type AgentId,
+  type AgentStatus,
+  type AgentFinding,
+  type AgentMode,
+  type AgentRunSummary,
+  type TeamReport,
 } from '@archlab/shared';
+
+/** Per-agent live state in the Agent Team panel. */
+export interface AgentState {
+  status: AgentStatus;
+  output: string;
+  findings: AgentFinding[];
+  summary?: string;
+}
+
+const AGENT_IDS: AgentId[] = ['security', 'performance', 'architecture', 'database', 'quality', 'orchestrator'];
+
+function emptyAgents(): Record<AgentId, AgentState> {
+  const out = {} as Record<AgentId, AgentState>;
+  for (const id of AGENT_IDS) out[id] = { status: 'idle', output: '', findings: [] };
+  return out;
+}
+
+export interface AgentTeamState {
+  running: boolean;
+  agents: Record<AgentId, AgentState>;
+  report: TeamReport | null;
+  runs: AgentRunSummary[];
+}
 
 export interface LogLine {
   level: 'info' | 'warn' | 'error';
@@ -58,6 +87,8 @@ export interface ArchLabState {
   inferredSql: string | null;
   /** Detected infrastructure map for the System Design tab (Detected Mode). */
   infra: SystemDesignMap | null;
+  /** Agent Team live state. */
+  agentTeam: AgentTeamState;
 }
 
 const EMPTY_CANVAS: CanvasGraph = { nodes: [], edges: [] };
@@ -81,6 +112,7 @@ export function useArchLab() {
     terminal: { cwd: '~' },
     inferredSql: null,
     infra: null,
+    agentTeam: { running: false, agents: emptyAgents(), report: null, runs: [] },
   });
 
   // Subscribers for raw PTY output, keyed by terminal-session id. Terminal data
@@ -168,6 +200,74 @@ export function useArchLab() {
       case 'term-cwd':
         return { ...prev, terminal: { ...prev.terminal, cwd: msg.cwd } };
 
+      case 'agent-status': {
+        const a = prev.agentTeam.agents[msg.agentId];
+        const running = msg.status === 'thinking' || msg.status === 'working' ? true : prev.agentTeam.running;
+        return {
+          ...prev,
+          agentTeam: {
+            ...prev.agentTeam,
+            running,
+            agents: {
+              ...prev.agentTeam.agents,
+              [msg.agentId]: { ...a, status: msg.status, summary: msg.summary ?? a.summary },
+            },
+          },
+        };
+      }
+
+      case 'agent-output': {
+        const a = prev.agentTeam.agents[msg.agentId];
+        return {
+          ...prev,
+          agentTeam: {
+            ...prev.agentTeam,
+            agents: {
+              ...prev.agentTeam.agents,
+              [msg.agentId]: { ...a, output: (a.output + msg.chunk).slice(-20000) },
+            },
+          },
+        };
+      }
+
+      case 'agent-findings': {
+        const a = prev.agentTeam.agents[msg.agentId];
+        return {
+          ...prev,
+          agentTeam: {
+            ...prev.agentTeam,
+            agents: { ...prev.agentTeam.agents, [msg.agentId]: { ...a, findings: msg.findings } },
+          },
+        };
+      }
+
+      case 'agent-error': {
+        const a = prev.agentTeam.agents[msg.agentId];
+        return {
+          ...prev,
+          agentTeam: {
+            ...prev.agentTeam,
+            running: false,
+            agents: {
+              ...prev.agentTeam.agents,
+              [msg.agentId]: { ...a, status: 'error', output: `${a.output}\n[error] ${msg.message}` },
+            },
+          },
+        };
+      }
+
+      case 'agent-report':
+        return { ...prev, agentTeam: { ...prev.agentTeam, report: msg.report } };
+
+      case 'agent-run-saved':
+        return {
+          ...prev,
+          agentTeam: { ...prev.agentTeam, running: false, runs: [msg.summary, ...prev.agentTeam.runs] },
+        };
+
+      case 'agent-runs':
+        return { ...prev, agentTeam: { ...prev.agentTeam, runs: msg.runs } };
+
       default:
         return prev;
     }
@@ -236,6 +336,22 @@ export function useArchLab() {
 
   const refreshBrain = useCallback(() => send({ type: 'request-brain' }), [send]);
 
+  // ---- Agent Team -----------------------------------------------------------
+  const runAgentTeam = useCallback(
+    (mode: AgentMode, agentId?: AgentId) => {
+      if (!state.projectId) return;
+      // Reset the live panel for the agents about to run.
+      setState((p) => ({
+        ...p,
+        agentTeam: { ...p.agentTeam, running: true, report: null, agents: emptyAgents() },
+      }));
+      send({ type: 'run-agent-team', projectId: state.projectId, mode, agentId });
+    },
+    [send, state.projectId],
+  );
+
+  const requestAgentRuns = useCallback(() => send({ type: 'request-agent-runs' }), [send]);
+
   // ---- Real-terminal (PTY) API, per session id ----------------------------
   // Subscribe to one session's raw PTY output. Returns an unsubscribe function.
   const onTerminalData = useCallback((id: string, cb: (data: string) => void) => {
@@ -274,6 +390,8 @@ export function useArchLab() {
       reanalyzeProject,
       runChecks,
       refreshBrain,
+      runAgentTeam,
+      requestAgentRuns,
       onTerminalData,
       createTerminal,
       closeTerminal,
@@ -286,6 +404,8 @@ export function useArchLab() {
       reanalyzeProject,
       runChecks,
       refreshBrain,
+      runAgentTeam,
+      requestAgentRuns,
       onTerminalData,
       createTerminal,
       closeTerminal,
