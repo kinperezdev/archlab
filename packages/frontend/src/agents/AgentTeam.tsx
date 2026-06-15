@@ -110,7 +110,7 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onRequestRuns,
                 </button>
                 <p className="agent-card-role">{a.role}</p>
 
-                {(st.status === 'thinking' || st.status === 'working' || expanded.has(a.id)) && st.output && (
+                {(st.status === 'thinking' || st.status === 'working' || st.status === 'error' || expanded.has(a.id)) && st.output && (
                   <pre className="agent-output">{st.output.slice(-4000)}</pre>
                 )}
 
