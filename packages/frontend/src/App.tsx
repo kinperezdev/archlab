@@ -47,11 +47,11 @@ import type { BrainAccessStatus } from '@archlab/shared';
 import { BrainPanel } from './components/BrainPanel.js';
 import { Canvas } from './canvas/Canvas.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
-import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { SystemDesign } from './systemdesign/SystemDesign.js';
 import { AgentTeam } from './agents/AgentTeam.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
+import { ApiKeysModal } from './components/ApiKeysModal.js';
 
 export type ArchTab =
   | 'all'
@@ -60,8 +60,7 @@ export type ArchTab =
   | 'database'
   | 'api'
   | 'security'
-  | 'systemdesign'
-  | 'scratch';
+  | 'systemdesign';
 
 /** Tabs that render the architecture canvas (vs. the Database/Scratch surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
@@ -90,6 +89,7 @@ export function App() {
   }, []);
   const [brainOpen, setBrainOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [apiKeysOpen, setApiKeysOpen] = useState(false);
   const [agentTeamOpen, setAgentTeamOpen] = useState(false);
   // Transient "report saved to project root" toast, mirrored from agent state.
   const [reportToast, setReportToast] = useState<string | null>(null);
@@ -152,7 +152,7 @@ export function App() {
         toggleBottom();
       } else if (e.key >= '1' && e.key <= '8') {
         const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'scratch'];
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign'];
         if (targetTabs[index]) {
           e.preventDefault();
           setTab(targetTabs[index]);
@@ -172,12 +172,12 @@ export function App() {
   const terminalApi = useMemo(
     () => ({
       onData: onTerminalData,
-      createTerminal,
+      createTerminal: (id: string) => createTerminal(id, state.projectPath || undefined),
       closeTerminal,
       sendInput: sendTerminalInput,
       resize: resizeTerminal,
     }),
-    [onTerminalData, createTerminal, closeTerminal, sendTerminalInput, resizeTerminal],
+    [onTerminalData, createTerminal, state.projectPath, closeTerminal, sendTerminalInput, resizeTerminal],
   );
 
   const isArchitecture =
@@ -208,7 +208,7 @@ export function App() {
 
   // True whenever a full-screen overlay is showing. The bottom-panel toggle is
   // hidden while this is true so it never floats on top of a modal.
-  const isAnyModalOpen = brainOpen || shortcutsOpen;
+  const isAnyModalOpen = brainOpen || shortcutsOpen || apiKeysOpen;
 
   // Layer 1: a locked brain blocks the entire app at launch until unlocked.
   if (access?.locked) {
@@ -231,6 +231,7 @@ export function App() {
         analyzedAt={state.analyzedAt}
         onOpenBrain={() => setBrainOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
+        onOpenKeys={() => setApiKeysOpen(true)}
         onOpenAgentTeam={() => setAgentTeamOpen((o) => !o)}
         agentTeamActive={agentTeamOpen}
         tab={tab}
@@ -317,8 +318,6 @@ export function App() {
 
           {tab === 'systemdesign' ? (
             <SystemDesign infra={state.infra} hasProject={Boolean(state.projectId)} />
-          ) : tab === 'scratch' ? (
-            <IdeasCanvas />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : (
@@ -413,6 +412,7 @@ export function App() {
         </div>
       )}
       {shortcutsOpen && <ShortcutsPanel onClose={() => setShortcutsOpen(false)} />}
+      {apiKeysOpen && <ApiKeysModal onClose={() => setApiKeysOpen(false)} />}
     </div>
   );
 }

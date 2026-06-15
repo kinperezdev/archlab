@@ -12,10 +12,18 @@
   ],
   "scripts": {
     "build:shared": "npm run build --workspace @archlab/shared",
+    "build:backend": "npm run build --workspace @archlab/backend",
+    "build:frontend": "npm run build --workspace @archlab/frontend",
+    "build:mcp": "npm run build --workspace @archlab/mcp-server",
+    "build": "npm run build:shared && npm run build:backend && npm run build:frontend && npm run build:mcp",
     "dev": "npm run build:shared && concurrently -n backend,frontend,mcp -c green,cyan,magenta \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:mcp\"",
     "dev:backend": "npm run dev --workspace @archlab/backend",
     "dev:frontend": "npm run dev --workspace @archlab/frontend",
     "dev:mcp": "npm run dev --workspace @archlab/mcp-server",
+    "start": "concurrently -n backend,frontend,mcp -c green,cyan,magenta \"npm:start:backend\" \"npm:start:frontend\" \"npm:start:mcp\"",
+    "start:backend": "npm run start --workspace @archlab/backend",
+    "start:frontend": "npm run dev --workspace @archlab/frontend",
+    "start:mcp": "npm run start --workspace @archlab/mcp-server",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

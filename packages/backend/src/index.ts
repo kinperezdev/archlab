@@ -13,13 +13,36 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import os from 'node:os';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { PORTS, type ClientMessage, type ServerMessage, type DiagnosticReport } from '@archlab/shared';
 import { analyzeProject, type AnalysisResult } from './analyzer/analyzer.js';
-import { rememberProject, recallProject } from './analyzer/projectIndex.js';
+import { rememberProject, recallProject, getLastAnalyzedProject } from './analyzer/projectIndex.js';
 import { runPipeline } from './pipeline/pipeline.js';
 import { detectBottlenecks } from './pipeline/bottleneck.js';
+
+// Load .env from workspace root if it exists
+try {
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=');
+        if (key && valueParts.length > 0) {
+          const val = valueParts.join('=').trim().replace(/^['"]|['"]$/g, '');
+          if (!process.env[key.trim()]) {
+            process.env[key.trim()] = val;
+          }
+        }
+      }
+    }
+  }
+} catch {
+  // Ignore env loading errors
+}
 import { learnFromProject, loadBrain } from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
 import { runAgentTeam } from './agents/runner.js';
@@ -97,6 +120,55 @@ app.use((req, res, next) => {
 
 // Health check.
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'archlab-backend' }));
+
+// ---- API Keys configuration --------------------------------------------
+const KEYS_FILE = path.join(BRAIN_DIR, 'api_keys.json');
+
+function loadApiKeys(): void {
+  try {
+    if (fs.existsSync(KEYS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+      if (data.anthropic) process.env.ANTHROPIC_API_KEY = data.anthropic;
+      if (data.openai) process.env.OPENAI_API_KEY = data.openai;
+      if (data.gemini) process.env.GEMINI_API_KEY = data.gemini;
+    }
+  } catch {
+    // ignore
+  }
+}
+loadApiKeys();
+
+app.get('/api/keys', (_req, res) => {
+  try {
+    let keys = { anthropic: '', openai: '', gemini: '' };
+    if (fs.existsSync(KEYS_FILE)) {
+      keys = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+    }
+    return res.json({ ok: true, keys });
+  } catch {
+    return res.json({ ok: true, keys: { anthropic: '', openai: '', gemini: '' } });
+  }
+});
+
+app.post('/api/keys', (req, res) => {
+  const keys = req.body?.keys;
+  if (!keys || typeof keys !== 'object') {
+    return res.status(400).json({ ok: false, error: 'keys object is required' });
+  }
+  try {
+    fs.mkdirSync(path.dirname(KEYS_FILE), { recursive: true });
+    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), 'utf8');
+    
+    // Load them into environment immediately
+    if (keys.anthropic) process.env.ANTHROPIC_API_KEY = keys.anthropic;
+    if (keys.openai) process.env.OPENAI_API_KEY = keys.openai;
+    if (keys.gemini) process.env.GEMINI_API_KEY = keys.gemini;
+    
+    return res.json({ ok: true, message: 'API keys saved successfully.' });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 // ---- Terminal file uploads --------------------------------------------
 // Files dropped onto the terminal are copied into a temp folder inside the
@@ -502,6 +574,9 @@ const clients = new Set<WebSocket>();
 // tab re-attaches to the same running shell instead of getting a fresh one.
 const terminals = new Map<string, ShellSession>();
 
+// Track the last active directory to initialize new terminals in.
+let lastActiveCwd = getLastAnalyzedProject()?.rootPath || os.homedir();
+
 /** Send a message to every connected browser. */
 function broadcast(msg: ServerMessage): void {
   const data = JSON.stringify(msg);
@@ -556,10 +631,11 @@ wss.on('connection', (socket) => {
   // tab id, so the PTY survives a WebSocket reconnect. This socket only tracks
   // which ids it has attached, so it can detach (not kill) them on close.
   const attachedIds = new Set<string>();
-  const ensureSession = (id: string): ShellSession => {
+  const ensureSession = (id: string, initialCwd?: string): ShellSession => {
     const handlers = {
       onData: (data: string) => emit({ type: 'term-data', id, data }),
       onCwdChange: (cwd: string) => {
+        lastActiveCwd = cwd;
         emit({ type: 'term-cwd', id, cwd });
         void handleAnalyze(cwd, emit, undefined, id);
       },
@@ -570,7 +646,7 @@ wss.on('connection', (socket) => {
       existing.attach(handlers); // reconnect: re-point output, replay buffered output
       return existing;
     }
-    const session = createSession(handlers);
+    const session = createSession(handlers, initialCwd || lastActiveCwd);
     terminals.set(id, session);
     return session;
   };
@@ -604,7 +680,7 @@ wss.on('connection', (socket) => {
 });
 
 interface TerminalRouter {
-  ensureSession: (id: string) => ShellSession;
+  ensureSession: (id: string, initialCwd?: string) => ShellSession;
 }
 
 /** Route a client message to the right handler. */
@@ -632,7 +708,7 @@ async function handleClientMessage(
     case 'term-init':
       return;
     case 'term-create':
-      term.ensureSession(msg.id);
+      term.ensureSession(msg.id, msg.cwd);
       return;
     case 'term-close': {
       // Explicit tab close: kill the PTY and drop it from the global registry.
@@ -677,6 +753,7 @@ async function handleAnalyze(
   }
 
   log(emit, 'info', `Analyzing project at ${rootPath} ...`);
+  lastActiveCwd = rootPath;
   let analysis: AnalysisResult;
   try {
     analysis = analyzeProject(rootPath);

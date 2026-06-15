@@ -50,3 +50,12 @@ export function rememberProject(projectId: string, rootPath: string, name: strin
 export function recallProject(projectId: string): RememberedProject | null {
   return readIndex()[projectId] ?? null;
 }
+
+/** Get the most recently analyzed project to initialize paths after restart. */
+export function getLastAnalyzedProject(): RememberedProject | null {
+  const index = readIndex();
+  const items = Object.values(index);
+  if (items.length === 0) return null;
+  items.sort((a, b) => new Date(b.analyzedAt).getTime() - new Date(a.analyzedAt).getTime());
+  return items[0];
+}

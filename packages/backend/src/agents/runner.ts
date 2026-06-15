@@ -30,8 +30,8 @@ import { saveAgentRun, writeReportToProjectRoot, persistentIssues } from './stor
 
 type Emit = (m: ServerMessage) => void;
 
-/** Model + effort are overridable via env; default to the documented Opus. */
-const MODEL = process.env.ARCHLAB_AGENT_MODEL || 'claude-opus-4-7';
+/** Model + effort are overridable via env; default to the documented 3.7 Sonnet. */
+const MODEL = process.env.ARCHLAB_AGENT_MODEL || 'claude-3-7-sonnet-20250219';
 const VALID_SEVERITY: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
 
 function client(): Anthropic {
