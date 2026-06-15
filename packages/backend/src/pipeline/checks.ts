@@ -38,6 +38,38 @@ function nodesFor(analysis: AnalysisResult, relPath: string): string[] {
   return analysis.canvas.nodes.filter((n) => n.filePath === relPath).map((n) => n.id);
 }
 
+/** Helper to parse useEffect and verify if it has a dependency array, avoiding nested callback false positives. */
+function hasEffectWithoutDeps(content: string): boolean {
+  let idx = 0;
+  while (true) {
+    idx = content.indexOf('useEffect(', idx);
+    if (idx === -1) break;
+    
+    const postUseEffect = content.substring(idx + 10);
+    const callbackMatch = /^\s*(?:async\s*)?\(\s*\)\s*=>\s*\{/.exec(postUseEffect);
+    if (callbackMatch) {
+      const startBraceIdx = idx + 10 + callbackMatch.index + callbackMatch[0].length - 1;
+      let braceCount = 1;
+      let scanIdx = startBraceIdx + 1;
+      while (scanIdx < content.length && braceCount > 0) {
+        if (content[scanIdx] === '{') braceCount++;
+        else if (content[scanIdx] === '}') braceCount--;
+        scanIdx++;
+      }
+      
+      if (braceCount === 0) {
+        const postCallback = content.substring(scanIdx);
+        const nextCharMatch = /^\s*\)/.test(postCallback);
+        if (nextCharMatch) {
+          return true;
+        }
+      }
+    }
+    idx += 10;
+  }
+  return false;
+}
+
 /** SECURITY — step 4. */
 export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
   const out: Diagnostic[] = [];
@@ -79,7 +111,10 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
   
   // Possible SQL injection via string concatenation in queries.
   for (const f of scan.files) {
-    if (/\b(select|insert|update|delete|drop)\b[\s\S]*?(\$\{[\s\S]*?\}|['"]\s*\+)/i.test(f.content)) {
+    const isBackend = !f.relPath.includes('frontend') && !f.relPath.includes('checks.ts') && (f.relPath.includes('backend') || f.relPath.includes('server') || f.relPath.includes('database'));
+    const isSqlConcat = /'[^']*?\b(select|insert|update|delete|drop)\b[^']*?'\s*\+|"[^"]*?\b(select|insert|update|delete|drop)\b[^"]*?"\s*\+/i;
+    const isSqlTemplate = /`[^`]*?\b(select|insert|update|delete|drop)\b[^`]*?\$\{/i;
+    if (isBackend && (isSqlConcat.test(f.content) || isSqlTemplate.test(f.content))) {
       out.push(
         diag(
           'security-checks',
@@ -138,7 +173,7 @@ export function performanceChecks(analysis: AnalysisResult): Diagnostic[] {
   }
 
   // React effect without a dependency array (re-render / leak risk).
-  const effectNoDeps = scan.files.find((f) => /useEffect\(\s*(?:async\s*)?\(\s*\)\s*=>\s*\{[\s\S]*?\}\s*\)(?!\s*,)/.test(f.content));
+  const effectNoDeps = scan.files.find((f) => hasEffectWithoutDeps(f.content));
   if (effectNoDeps) {
     out.push(
       diag(

@@ -515,16 +515,32 @@ function broadcast(msg: ServerMessage): void {
 app.post('/analyze', (req, res) => {
   const rootPath = String(req.body?.rootPath ?? '').trim();
   const alsoCheck = Boolean(req.body?.runChecks);
+  console.log(`[HTTP /analyze] Received path: ${rootPath}, check: ${alsoCheck}, clients: ${clients.size}`);
   if (!rootPath) return res.status(400).json({ ok: false, error: 'rootPath is required' });
   if (clients.size === 0) {
+    console.log('[HTTP /analyze] Rejected: 409 No clients connected');
     return res
       .status(409)
       .json({ ok: false, error: 'No ArchLab browser tab is open. Open http://127.0.0.1:5317 first.' });
   }
 
   void (async () => {
-    const analysis = await handleAnalyze(rootPath, broadcast);
-    if (analysis && alsoCheck) await handleRunChecks(analysis.projectId, broadcast);
+    try {
+      console.log('[HTTP /analyze] Starting handleAnalyze...');
+      const analysis = await handleAnalyze(rootPath, broadcast);
+      if (analysis) {
+        console.log(`[HTTP /analyze] Analysis complete. Project ID: ${analysis.projectId}`);
+        if (alsoCheck) {
+          console.log('[HTTP /analyze] Running handleRunChecks...');
+          await handleRunChecks(analysis.projectId, broadcast);
+          console.log('[HTTP /analyze] Run checks complete.');
+        }
+      } else {
+        console.log('[HTTP /analyze] handleAnalyze returned null');
+      }
+    } catch (err) {
+      console.error('[HTTP /analyze] Background process error:', err);
+    }
   })();
 
   return res.json({ ok: true, rootPath, runChecks: alsoCheck, clients: clients.size });
