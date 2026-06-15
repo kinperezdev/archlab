@@ -74,13 +74,6 @@ export function TabIcon({ tab }: { tab: ArchTab }) {
           <path d="M9 17v2M15 17v2M7 21h10" />
         </svg>
       );
-    case 'scratch': // pencil
-      return (
-        <svg {...COMMON} className="tab-icon" aria-hidden="true">
-          <path d="M12 20h9" />
-          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-        </svg>
-      );
     default:
       return null;
   }

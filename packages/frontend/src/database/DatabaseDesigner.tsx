@@ -420,6 +420,7 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const [pendingRename, setPendingRename] = useState<PendingRename | null>(null);
+  const [showEditor, setShowEditor] = useState(true);
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
 
   // Use a ref to keep track of current nodes to preserve positions without causing loops
@@ -653,72 +654,93 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   };
 
   return (
-    <div className="db-designer">
+    <div className="db-designer" style={{ gridTemplateColumns: showEditor ? 'minmax(280px, 33%) 1fr' : '1fr' }}>
       {/* 1/3 Width SQL Editor Panel */}
-      <div className="db-editor-panel">
-        <div className="db-editor-head">
-          <h3>SQL Schema</h3>
-          <div className="db-editor-actions">
-            {hasInferred && (
-              <button 
-                className="btn" 
-                onClick={acceptSuggestions}
-                style={{ background: '#0f766e', color: '#ffffff' }}
-              >
-                Accept Suggestions
+      {showEditor && (
+        <div className="db-editor-panel">
+          <div className="db-editor-head">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <h3>SQL Schema</h3>
+            </div>
+            <div className="db-editor-actions">
+              {hasInferred && (
+                <button 
+                  className="btn" 
+                  onClick={acceptSuggestions}
+                  style={{ background: '#0f766e', color: '#ffffff' }}
+                >
+                  Accept Suggestions
+                </button>
+              )}
+              <CopyPromptButton
+                prompt={() =>
+                  promptForSchema(
+                    sql,
+                    'review this schema and suggest improvements (indexes, missing relations, normalization, data types)'
+                  )
+                }
+                label="Copy Prompt"
+              />
+              <button className="btn" onClick={sendToIdeas}>
+                {sentToIdeas ? 'Added ✓' : 'Add to Ideas'}
               </button>
-            )}
-            <CopyPromptButton
-              prompt={() =>
-                promptForSchema(
-                  sql,
-                  'review this schema and suggest improvements (indexes, missing relations, normalization, data types)'
-                )
-              }
-              label="Copy Prompt"
-            />
-            <button className="btn" onClick={sendToIdeas}>
-              {sentToIdeas ? 'Added ✓' : 'Add to Ideas'}
-            </button>
+            </div>
           </div>
+
+          {/* Smart warnings overlay */}
+          {(circularWarning || validationErrors.length > 0 || typeMismatches.length > 0) && (
+            <div className="db-editor-warnings">
+              {circularWarning && (
+                <div className="warning-item critical">
+                  <strong>⚠️ Cycle:</strong> {circularWarning}
+                </div>
+              )}
+              {validationErrors.map((err, i) => (
+                <div key={`val-${i}`} className={`warning-item ${err.severity}`}>
+                  <strong>{err.severity === 'amber' ? '💡 Inferred:' : '⚠️ Validation:'}</strong>{' '}
+                  {err.message}
+                </div>
+              ))}
+              {typeMismatches.map((err, i) => (
+                <div key={`mismatch-${i}`} className="warning-item critical">
+                  <strong>⚠️ Type Mismatch:</strong> {err.message}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <textarea
+            className="db-sql-editor"
+            spellCheck={false}
+            value={sql}
+            onChange={(e) => onSqlChange(e.target.value)}
+            placeholder="Paste or write CREATE TABLE statements here…"
+          />
+          <p className="db-editor-hint">
+            {tables.length} table(s) parsed. Select any table node on the right to edit columns visually.
+          </p>
+
+          <button
+            className="db-editor-collapse-btn"
+            onClick={() => setShowEditor(false)}
+            title="Hide SQL Editor"
+          >
+            ◀
+          </button>
         </div>
-
-        {/* Smart warnings overlay */}
-        {(circularWarning || validationErrors.length > 0 || typeMismatches.length > 0) && (
-          <div className="db-editor-warnings">
-            {circularWarning && (
-              <div className="warning-item critical">
-                <strong>⚠️ Cycle:</strong> {circularWarning}
-              </div>
-            )}
-            {validationErrors.map((err, i) => (
-              <div key={`val-${i}`} className={`warning-item ${err.severity}`}>
-                <strong>{err.severity === 'amber' ? '💡 Inferred:' : '⚠️ Validation:'}</strong>{' '}
-                {err.message}
-              </div>
-            ))}
-            {typeMismatches.map((err, i) => (
-              <div key={`mismatch-${i}`} className="warning-item critical">
-                <strong>⚠️ Type Mismatch:</strong> {err.message}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <textarea
-          className="db-sql-editor"
-          spellCheck={false}
-          value={sql}
-          onChange={(e) => onSqlChange(e.target.value)}
-          placeholder="Paste or write CREATE TABLE statements here…"
-        />
-        <p className="db-editor-hint">
-          {tables.length} table(s) parsed. Select any table node on the right to edit columns visually.
-        </p>
-      </div>
+      )}
 
       {/* 2/3 Width Canvas Panel */}
       <div className="db-canvas-panel">
+        {!showEditor && (
+          <button
+            className="db-editor-reveal-tab"
+            onClick={() => setShowEditor(true)}
+            title="Show SQL Editor"
+          >
+            ▶
+          </button>
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}

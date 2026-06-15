@@ -15,6 +15,7 @@ interface TopBarProps {
   analyzedAt: number | null;
   onOpenBrain: () => void;
   onOpenShortcuts: () => void;
+  onOpenKeys: () => void;
   onOpenAgentTeam: () => void;
   agentTeamActive: boolean;
   tab: ArchTab;
@@ -29,7 +30,6 @@ const TABS: { id: ArchTab; label: string }[] = [
   { id: 'api', label: 'API' },
   { id: 'security', label: 'Security' },
   { id: 'systemdesign', label: 'System Design' },
-  { id: 'scratch', label: 'Scratch' },
 ];
 
 const SPRING = { type: 'spring', stiffness: 400, damping: 30 } as const;
@@ -54,6 +54,7 @@ export function TopBar({
   analyzedAt,
   onOpenBrain,
   onOpenShortcuts,
+  onOpenKeys,
   onOpenAgentTeam,
   agentTeamActive,
   tab,
@@ -150,6 +151,15 @@ export function TopBar({
           title="Keyboard Shortcuts Guide"
         >
           ⌨ Shortcuts
+        </motion.button>
+        <motion.button
+          className="tb-btn"
+          onClick={onOpenKeys}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          title="Configure AI API Keys"
+        >
+          🔑 API Keys
         </motion.button>
       </div>
     </header>

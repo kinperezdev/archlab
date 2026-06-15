@@ -422,7 +422,7 @@ export function useArchLab() {
   }, []);
 
   // Spawn / tear down a backend PTY session for a terminal tab.
-  const createTerminal = useCallback((id: string) => send({ type: 'term-create', id }), [send]);
+  const createTerminal = useCallback((id: string, cwd?: string) => send({ type: 'term-create', id, cwd }), [send]);
   const closeTerminal = useCallback((id: string) => send({ type: 'term-close', id }), [send]);
 
   // Stream raw keystrokes to a session's stdin.
