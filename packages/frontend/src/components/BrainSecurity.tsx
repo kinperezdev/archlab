@@ -14,6 +14,7 @@ import type { BrainAccessStatus, BrainState } from '@archlab/shared';
 import {
   fetchBrain,
   lockBrain,
+  removeBrainPassword,
   setBrainPassword,
   unlockBrain,
   updateBrainPermissions,
@@ -106,11 +107,22 @@ function SecuritySettings({
     }
   };
 
-  const togglePermission = async (key: 'patterns' | 'insights' | 'projectFindings') => {
+  const togglePermission = async (key: 'patterns' | 'insights' | 'projectFindings' | 'mcpEnabled') => {
     try {
       onChange(await updateBrainPermissions({ [key]: !access.permissions[key] }));
     } catch {
       /* keep prior state */
+    }
+  };
+
+  const removePassword = async () => {
+    const entered = window.prompt('Enter your current password to remove it:');
+    if (entered === null) return;
+    try {
+      onChange(await removeBrainPassword(entered));
+      setPwStatus('Password removed. The launch lock is now off.');
+    } catch (err) {
+      setPwStatus(err instanceof Error ? err.message : 'Could not remove password.');
     }
   };
 
@@ -151,12 +163,27 @@ function SecuritySettings({
           {access.hasPassword ? 'Change' : 'Set password'}
         </button>
         {access.hasPassword && (
-          <button className="btn" onClick={async () => onChange(await lockBrain())}>
-            Lock now
-          </button>
+          <>
+            <button className="btn" onClick={async () => onChange(await lockBrain())}>
+              Lock now
+            </button>
+            <button className="btn" onClick={removePassword}>
+              Remove
+            </button>
+          </>
         )}
       </div>
       {pwStatus && <p className="intel-summary brain-sec-note">{pwStatus}</p>}
+
+      {/* Global MCP kill switch */}
+      <h4 className="brain-sec-sub">MCP access</h4>
+      <ul className="brain-perm-list">
+        <PermissionToggle
+          label="Allow AI tools to read the brain over MCP"
+          on={access.permissions.mcpEnabled}
+          onToggle={() => togglePermission('mcpEnabled')}
+        />
+      </ul>
 
       {/* Layer 2 */}
       <h4 className="brain-sec-sub">MCP permissions (Layer 2)</h4>

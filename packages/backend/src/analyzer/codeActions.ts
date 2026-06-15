@@ -88,6 +88,55 @@ const SNIPPETS: Record<string, string[]> = {
     '// });',
   ],
   'replace-library': ['// TODO: swap this dependency for the chosen alternative and update usages.'],
+  // --- Structural-context actions ---
+  'wrap-function-error-handling': [
+    '// Wrap this function body in error handling.',
+    'try {',
+    '  // ... existing logic',
+    '} catch (err) {',
+    '  console.error(err);',
+    '  throw err;',
+    '}',
+  ],
+  'move-db-out-of-loop': [
+    '// N+1 query: hoist this lookup out of the loop and batch it.',
+    '// e.g. const rows = await db.query("SELECT * FROM t WHERE id = ANY($1)", [ids]);',
+    '// then read from a Map inside the loop instead of querying per iteration.',
+  ],
+  'add-effect-deps': [
+    '// Add the values this effect reads to the dependency array so it re-runs',
+    '// when they change (avoids stale closures).',
+  ],
+  'add-memo': [
+    '// Memoize derived values / callbacks to avoid unnecessary re-renders.',
+    'const memoized = useMemo(() => compute(state), [state]);',
+  ],
+  'improve-error-handling': [
+    '// Replace the bare log with a real error response / propagation.',
+    'return res.status(500).json({ error: "Internal error" });',
+  ],
+  'add-transaction': [
+    '// Run these writes inside a transaction so they commit or roll back together.',
+    'await db.transaction(async (tx) => {',
+    '  // ... move the queries here, using tx',
+    '});',
+  ],
+  'add-connection-error-handling': [
+    '// Handle connection failures explicitly.',
+    'try {',
+    '  await db.connect();',
+    '} catch (err) {',
+    '  console.error("DB connection failed", err);',
+    '  throw err;',
+    '}',
+  ],
+  'add-query-timeout': [
+    '// Bound how long this query can run so a slow query cannot hang the request.',
+    'const result = await Promise.race([',
+    '  query,',
+    '  new Promise((_, reject) => setTimeout(() => reject(new Error("query timeout")), 5000)),',
+    ']);',
+  ],
 };
 
 /** JSDoc block inserted above a function declaration. */

@@ -4,6 +4,7 @@ export * from './pipeline.js';
 export * from './intelligence.js';
 export * from './codeintel.js';
 export * from './brain.js';
+export * from './systemdesign.js';
 export * from './ws.js';
 
 /** Default localhost ports used across the system. */

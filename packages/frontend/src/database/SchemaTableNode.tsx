@@ -27,6 +27,9 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
   const { table, allTables, onUpdateTable } = data;
   const [editingTableName, setEditingTableName] = useState(false);
   const [tableNameDraft, setTableNameDraft] = useState(table.name);
+  // Which row's inline foreign-key picker is open (always-available, not just in
+  // the expanded editor).
+  const [fkPickerRow, setFkPickerRow] = useState<number | null>(null);
 
   // Sync state if table name changes externally
   useEffect(() => {
@@ -65,9 +68,10 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
     });
   };
 
-  // Get all columns from other tables to reference
+  // Reference options from other tables. Primary keys are listed first since
+  // they are the natural foreign-key targets.
   const getReferenceOptions = () => {
-    const options: { value: string; label: string; table: string; col: string }[] = [];
+    const options: { value: string; label: string; table: string; col: string; isPk: boolean }[] = [];
     for (const t of allTables) {
       if (t.name === table.name) continue; // Don't self-reference in simple designer
       for (const col of t.columns) {
@@ -76,13 +80,27 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
           label: `${t.name}.${col.name} ${col.isPk ? '(PK)' : ''}`,
           table: t.name,
           col: col.name,
+          isPk: Boolean(col.isPk),
         });
       }
     }
-    return options;
+    return options.sort((a, b) => Number(b.isPk) - Number(a.isPk));
   };
 
   const refOptions = getReferenceOptions();
+
+  /** Apply a reference selection (or clear) to a column by index. */
+  const setReference = (index: number, value: string) => {
+    if (value === 'NONE') {
+      updateColumn(index, { isFk: false, fkRelation: undefined });
+    } else {
+      const opt = refOptions.find((o) => o.value === value);
+      if (opt) {
+        updateColumn(index, { isFk: true, fkRelation: { parentTable: opt.table, parentColumn: opt.col } });
+      }
+    }
+    setFkPickerRow(null);
+  };
 
   // Collapsed view stays readable: show up to 5 columns, else first 4 + "+N more".
   // When the node is selected we expand to all columns for editing.
@@ -186,7 +204,39 @@ Please review this and suggest optimizations for performance, indexing strategy,
                   )}
                 </span>
                 <span className="schema-col-type">{col.type}</span>
+                <button
+                  className={`schema-fk-btn ${col.isFk ? 'active' : ''}`}
+                  title={col.isFk ? 'Change / clear foreign key reference' : 'Set foreign key reference'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFkPickerRow(fkPickerRow === i ? null : i);
+                  }}
+                >
+                  🔗▾
+                </button>
               </div>
+
+              {/* Inline foreign-key picker (available without expanding the node) */}
+              {fkPickerRow === i && (
+                <div className="schema-fk-picker" onClick={(e) => e.stopPropagation()}>
+                  <label>References</label>
+                  <select
+                    autoFocus
+                    value={col.isFk && col.fkRelation ? `${col.fkRelation.parentTable}.${col.fkRelation.parentColumn}` : 'NONE'}
+                    onChange={(e) => setReference(i, e.target.value)}
+                  >
+                    <option value="NONE">No reference</option>
+                    {refOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {refOptions.length === 0 && (
+                    <span className="schema-fk-empty">Add another table to link to.</span>
+                  )}
+                </div>
+              )}
 
               {/* Expanded Edit Controls */}
               {selected && (

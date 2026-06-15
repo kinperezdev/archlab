@@ -38,6 +38,7 @@ const DEFAULT_PERMISSIONS: BrainPermissions = {
   insights: true,
   projectFindings: true,
   lockedProjects: [],
+  mcpEnabled: true,
 };
 
 interface AccessConfig {
@@ -62,6 +63,16 @@ export function isLocked(): boolean {
   return Boolean(loadAccess().passwordHash) && !fs.existsSync(UNLOCK_FILE);
 }
 
+/** Global MCP kill switch: when disabled, every tool returns nothing. */
+export function isMcpDisabled(): boolean {
+  return loadAccess().permissions.mcpEnabled === false;
+}
+
+/** True when the gate is closed for any reason (locked or MCP disabled). */
+export function isGated(): boolean {
+  return isLocked() || isMcpDisabled();
+}
+
 export function getPermissions(): BrainPermissions {
   return loadAccess().permissions;
 }
@@ -69,3 +80,7 @@ export function getPermissions(): BrainPermissions {
 /** Standard message returned by every tool while the brain is locked. */
 export const LOCKED_MESSAGE =
   'The ArchLab brain is locked. Unlock it in ArchLab (enter the local password) before any brain data can be read.';
+
+/** Message returned when the global MCP switch is off. */
+export const MCP_DISABLED_MESSAGE =
+  'ArchLab MCP access is disabled. Enable it in ArchLab (Brain Security) to allow AI tools to read brain data.';

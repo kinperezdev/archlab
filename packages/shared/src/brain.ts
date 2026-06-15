@@ -57,6 +57,11 @@ export interface BrainPermissions {
   projectFindings: boolean;
   /** Project ids fully blocked from any AI tool via MCP, even when unlocked. */
   lockedProjects: string[];
+  /**
+   * Global MCP kill switch. When false the MCP server returns nothing for every
+   * tool without the server process being stopped. Defaults to true.
+   */
+  mcpEnabled: boolean;
 }
 
 /** Status of the brain access gate (Layer 1 lock + Layer 2 permissions). */

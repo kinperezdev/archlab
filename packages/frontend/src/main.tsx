@@ -6,6 +6,7 @@ import './styles/global.css';
 import './styles/canvas.css';
 import './styles/features.css';
 import './styles/codeintel.css';
+import './styles/systemdesign.css';
 import 'reactflow/dist/style.css';
 
 const root = document.getElementById('root');

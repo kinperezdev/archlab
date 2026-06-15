@@ -17,10 +17,23 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { readBrain } from './brainReader.js';
-import { getPermissions, isLocked, LOCKED_MESSAGE } from './access.js';
+import {
+  getPermissions,
+  isLocked,
+  isMcpDisabled,
+  LOCKED_MESSAGE,
+  MCP_DISABLED_MESSAGE,
+} from './access.js';
 
-/** Shorthand for the locked-brain response every tool returns when gated. */
-const locked = () => ({ content: [{ type: 'text' as const, text: LOCKED_MESSAGE }] });
+/**
+ * The gate every tool runs first. Returns a response (and short-circuits the
+ * tool) when the brain is locked or the global MCP switch is off; otherwise null.
+ */
+function gate(): { content: { type: 'text'; text: string }[] } | null {
+  if (isLocked()) return { content: [{ type: 'text', text: LOCKED_MESSAGE }] };
+  if (isMcpDisabled()) return { content: [{ type: 'text', text: MCP_DISABLED_MESSAGE }] };
+  return null;
+}
 
 const server = new McpServer({
   name: 'archlab-brain',
@@ -33,7 +46,7 @@ server.tool(
   'Global ArchLab brain overview: project count, cross-project patterns, and proactive insights learned across every analyzed project.',
   {},
   async () => {
-    if (isLocked()) return locked();
+    { const g = gate(); if (g) return g; }
     const brain = readBrain();
     const perms = getPermissions();
     const visibleProjects = brain.projects.filter(
@@ -65,7 +78,7 @@ server.tool(
   'List every project ArchLab has analyzed, with a one-line summary each.',
   {},
   async () => {
-    if (isLocked()) return locked();
+    { const g = gate(); if (g) return g; }
     const brain = readBrain();
     const perms = getPermissions();
     const text =
@@ -82,7 +95,7 @@ server.tool(
   'Get the full intelligence report and diagnostics for one analyzed project by id or name.',
   { idOrName: z.string().describe('Project id or name') },
   async ({ idOrName }) => {
-    if (isLocked()) return locked();
+    { const g = gate(); if (g) return g; }
     const brain = readBrain();
     const perms = getPermissions();
     const q = idOrName.toLowerCase();
@@ -106,7 +119,7 @@ server.tool(
   'Search learned cross-project patterns by keyword (e.g. "auth", "sql", "scaling").',
   { keyword: z.string().describe('Keyword to search pattern descriptions') },
   async ({ keyword }) => {
-    if (isLocked()) return locked();
+    { const g = gate(); if (g) return g; }
     if (!getPermissions().patterns) {
       return { content: [{ type: 'text', text: 'Patterns access is blocked by brain permissions.' }] };
     }

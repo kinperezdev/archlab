@@ -17,6 +17,7 @@ import type {
   LineInfo,
   CodeReference,
   ImpactAnalysis,
+  AffectedFile,
 } from '@archlab/shared';
 import { tokenizeLine } from '../lib/codeHighlight.js';
 import {
@@ -429,6 +430,11 @@ const CodeLine = memo(function CodeLine({
 
       {menuOpen && (
         <div className="code-line-menu">
+          {line.context && (
+            <div className="menu-breadcrumb" title="Where this line sits in the code">
+              {line.context.breadcrumb}
+            </div>
+          )}
           <div className="menu-section">
             <div className="menu-section-title">What this does</div>
             <p className="menu-explanation">{line.explanation}</p>
@@ -439,10 +445,10 @@ const CodeLine = memo(function CodeLine({
               {actions.map((a) => (
                 <li key={a.id + a.label}>
                   <button
-                    className={`menu-action ${a.fromFinding ? 'from-finding' : ''}`}
+                    className={`menu-action ${a.fromFinding || a.critical ? 'from-finding' : ''}`}
                     onClick={() => onAction(line, a)}
                   >
-                    {a.fromFinding && <span className="finding-spark">⚠</span>}
+                    {(a.fromFinding || a.critical) && <span className="finding-spark">⚠</span>}
                     {a.label}
                   </button>
                 </li>
@@ -479,7 +485,38 @@ function promoteFindingActions(line: LineInfo, findings: Diagnostic[]): LineActi
   return [...promoted, ...base];
 }
 
-/** The Impact Analysis split view: summary + affected files + before/after. */
+/** Render a file's hunks as a stacked before(red)/after(green) diff. */
+function FileDiff({ file }: { file: AffectedFile }) {
+  return (
+    <div className="impact-diff">
+      {file.hunks.map((h, hi) => (
+        <div key={hi} className="diff-hunk">
+          <div className="diff-hunk-loc">@ line {h.startLine}</div>
+          {h.before.map((l, li) => (
+            <div key={`b${li}`} className="diff-line removed">
+              <span className="diff-sign">-</span>
+              <code>{l || ' '}</code>
+            </div>
+          ))}
+          {h.after.map((l, li) => (
+            <div key={`a${li}`} className="diff-line added">
+              <span className="diff-sign">+</span>
+              <code>{l || ' '}</code>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The Impact Analysis split panel: a full-screen overlay over the canvas.
+ * Top bar shows the file count + a severity indicator. Left pane shows the
+ * primary edited file's diff; right pane lists every other affected file,
+ * expandable to its line-level before/after diff. Apply writes everything to
+ * disk (with a timestamped backup in brain/backups); Cancel discards.
+ */
 function ImpactView({
   projectId,
   impact,
@@ -491,9 +528,17 @@ function ImpactView({
   onClose: () => void;
   onApplied: () => void;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(impact.affected.map((f) => f.path)));
+  const primary =
+    impact.affected.find((f) => f.path === impact.request.path) ?? impact.affected[0] ?? null;
+  const others = impact.affected.filter((f) => f !== primary);
+
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(others.map((f) => f.path)));
   const [applying, setApplying] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+
+  // Severity scales with blast radius: 1 file = low, 2-3 = medium, 4+ = high.
+  const count = impact.affected.length;
+  const severity = count <= 1 ? 'low' : count <= 3 ? 'medium' : 'high';
 
   const toggle = (p: string) =>
     setExpanded((prev) => {
@@ -507,7 +552,7 @@ function ImpactView({
     const res = await applyImpact(projectId, impact);
     setApplying(false);
     if (res?.ok) {
-      setDone(`Applied to ${res.written.length} file${res.written.length === 1 ? '' : 's'}. Backup saved.`);
+      setDone(`Applied to ${res.written.length} file${res.written.length === 1 ? '' : 's'}. Backup saved to brain/backups.`);
       setTimeout(onApplied, 1400);
     } else {
       setDone(res?.error ? `Failed: ${res.error}` : 'Failed to apply changes.');
@@ -518,15 +563,38 @@ function ImpactView({
     <div className="impact-overlay">
       <div className="impact-panel">
         <header className="impact-head">
-          <div>
+          <div className="impact-head-text">
             <h3>Impact Analysis</h3>
-            <p className="impact-summary">{impact.summary}</p>
+            <p className="impact-summary">
+              This change affects {count} file{count === 1 ? '' : 's'}.
+            </p>
           </div>
+          <span className={`impact-severity sev-${severity}`}>{severity} impact</span>
           <button className="code-icon-btn" onClick={onClose} title="Cancel">✕</button>
         </header>
 
-        <div className="impact-files">
-          {impact.affected.map((file) => (
+        <div className="impact-split">
+          <section className="impact-pane impact-pane-left">
+            <div className="impact-pane-title">
+              <span className="impact-pane-label">Editing</span>
+              <span className="impact-file-path">{primary?.path ?? impact.request.path}</span>
+            </div>
+            {primary ? (
+              <FileDiff file={primary} />
+            ) : (
+              <div className="impact-empty">No direct change to preview.</div>
+            )}
+          </section>
+          <section className="impact-pane impact-pane-right">
+            <div className="impact-pane-title">
+              <span className="impact-pane-label">
+                {others.length} other file{others.length === 1 ? '' : 's'} affected
+              </span>
+            </div>
+            {others.length === 0 && (
+              <div className="impact-empty">No other files are affected by this change.</div>
+            )}
+          {others.map((file) => (
             <div key={file.path} className="impact-file">
               <button className="impact-file-head" onClick={() => toggle(file.path)}>
                 <span className="impact-file-caret">{expanded.has(file.path) ? '▾' : '▸'}</span>
@@ -556,6 +624,7 @@ function ImpactView({
               )}
             </div>
           ))}
+          </section>
         </div>
 
         <footer className="impact-foot">

@@ -39,6 +39,38 @@ export interface LineAction {
   kind: 'edit' | 'reference';
   /** When true this action was promoted to the top by a pipeline finding. */
   fromFinding?: boolean;
+  /**
+   * When true this action addresses a critical structural problem detected from
+   * the code context (e.g. an N+1 query inside a loop). Rendered in red and
+   * sorted to the top, like a finding.
+   */
+  critical?: boolean;
+}
+
+/** The innermost structural scope a line sits inside. */
+export type ScopeKind =
+  | 'top-level'
+  | 'function'
+  | 'method'
+  | 'if'
+  | 'else'
+  | 'try'
+  | 'catch'
+  | 'finally'
+  | 'loop'
+  | 'route'
+  | 'component'
+  | 'hook';
+
+/**
+ * Structural context for a line: what it sits inside of, derived by a
+ * lightweight scope tracker. Drives the breadcrumb and context-aware actions.
+ */
+export interface LineContext {
+  /** Innermost scope kind. */
+  scope: ScopeKind;
+  /** Breadcrumb like "File: App.tsx → Function: handleSubmit → Inside: try block". */
+  breadcrumb: string;
 }
 
 /** Everything the panel needs to render one line. */
@@ -59,6 +91,8 @@ export interface LineInfo {
   refCount: number;
   /** The symbol name this line declares/imports, used to resolve references. */
   symbol?: string;
+  /** Structural context (what this line sits inside of) for the breadcrumb. */
+  context?: LineContext;
 }
 
 /** A navigable symbol (function / class / route / method) for the navigator. */

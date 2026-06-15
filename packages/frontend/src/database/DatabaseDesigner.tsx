@@ -278,6 +278,20 @@ function checkFkTypeMismatches(tables: DbTable[]): TypeMismatchError[] {
   return mismatches;
 }
 
+/** One foreign-key reference that a rename would auto-update. */
+interface CascadedRef {
+  table: string;
+  column: string;
+  from: string;
+  to: string;
+}
+
+/** A staged rename awaiting user confirmation. */
+interface PendingRename {
+  nextTables: DbTable[];
+  cascaded: CascadedRef[];
+}
+
 const EDGE_BLUE = '#2563eb';
 const EDGE_AMBER = '#f59e0b';
 
@@ -405,6 +419,7 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const [sentToIdeas, setSentToIdeas] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
+  const [pendingRename, setPendingRename] = useState<PendingRename | null>(null);
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
 
   // Use a ref to keep track of current nodes to preserve positions without causing loops
@@ -546,16 +561,22 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
       if (!oldTable) return;
 
       let nextTables = tables.map((t) => (t.name === tableName ? updated : t));
+      // Track every FK reference that a rename would auto-update, so we can ask
+      // the user to confirm before silently changing other tables.
+      const cascaded: CascadedRef[] = [];
 
       // 1. Cascade rename: If table name changed, update all FKs referencing it
       if (oldTable.name !== updated.name) {
         nextTables = nextTables.map((t) => {
           const columns = t.columns.map((col) => {
             if (col.isFk && col.fkRelation && col.fkRelation.parentTable === oldTable.name) {
-              return {
-                ...col,
-                fkRelation: { ...col.fkRelation, parentTable: updated.name },
-              };
+              cascaded.push({
+                table: t.name,
+                column: col.name,
+                from: `${oldTable.name}.${col.fkRelation.parentColumn}`,
+                to: `${updated.name}.${col.fkRelation.parentColumn}`,
+              });
+              return { ...col, fkRelation: { ...col.fkRelation, parentTable: updated.name } };
             }
             return col;
           });
@@ -575,10 +596,13 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
                 col.fkRelation.parentTable === updated.name &&
                 col.fkRelation.parentColumn === oldCol.name
               ) {
-                return {
-                  ...col,
-                  fkRelation: { ...col.fkRelation, parentColumn: newCol.name },
-                };
+                cascaded.push({
+                  table: t.name,
+                  column: col.name,
+                  from: `${updated.name}.${oldCol.name}`,
+                  to: `${updated.name}.${newCol.name}`,
+                });
+                return { ...col, fkRelation: { ...col.fkRelation, parentColumn: newCol.name } };
               }
               return col;
             });
@@ -587,7 +611,13 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
         }
       });
 
-      applyTables(nextTables);
+      // When a rename ripples into other tables, confirm before applying so the
+      // user sees exactly which references will be auto-updated.
+      if (cascaded.length > 0) {
+        setPendingRename({ nextTables, cascaded });
+      } else {
+        applyTables(nextTables);
+      }
     },
     [tables, applyTables]
   );
@@ -714,6 +744,42 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
           </div>
         )}
       </div>
+
+      {/* Rename confirmation: list every FK reference that will auto-update. */}
+      {pendingRename && (
+        <div className="db-rename-overlay" onClick={() => setPendingRename(null)}>
+          <div className="db-rename-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>Update foreign key references?</h3>
+            <p className="db-rename-sub">
+              This rename affects {pendingRename.cascaded.length} reference
+              {pendingRename.cascaded.length === 1 ? '' : 's'} in other tables. They will be kept in
+              sync automatically:
+            </p>
+            <ul className="db-rename-list">
+              {pendingRename.cascaded.map((c, i) => (
+                <li key={i}>
+                  <code>{c.table}.{c.column}</code>: <span className="db-rename-from">{c.from}</span>{' '}
+                  → <span className="db-rename-to">{c.to}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="db-rename-actions">
+              <button className="btn" onClick={() => setPendingRename(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  applyTables(pendingRename.nextTables);
+                  setPendingRename(null);
+                }}
+              >
+                Update all references
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,12 +15,15 @@ import path from 'node:path';
 import type {
   FileIntel,
   LineAction,
+  LineContext,
   LineInfo,
   LineKind,
+  ScopeKind,
   SymbolInfo,
   CodeReference,
 } from '@archlab/shared';
 import type { AnalysisResult } from './analyzer.js';
+import { trackScopes, framesAtLine, type Frame } from './scopeTracker.js';
 
 /**
  * Read a file's raw text from disk. The node only carries a path relative to
@@ -209,6 +212,156 @@ export function baseActions(kind: LineKind, fileKind: string): LineAction[] {
   }
 }
 
+// ---- Structural context (breadcrumb + context-aware actions) --------------
+
+/** Human label for one frame, used in the breadcrumb. */
+function frameLabel(f: Frame): string {
+  switch (f.kind) {
+    case 'class':
+      return `Class: ${f.meta.className ?? f.label}`;
+    case 'component':
+      return `Component: ${f.meta.componentName ?? f.label}`;
+    case 'function':
+      return `Function: ${f.meta.name ?? f.label}`;
+    case 'method':
+      return `Method: ${f.meta.methodName ?? f.label}`;
+    case 'route':
+      return `Route: ${f.label}`;
+    case 'hook':
+      return `Hook: ${f.meta.hookType ?? f.label}`;
+    case 'if':
+      return `Inside: if (${f.meta.condition ?? ''})`;
+    case 'else':
+      return `Inside: ${f.label}`;
+    case 'try':
+      return 'Inside: try block';
+    case 'catch':
+      return 'Inside: catch block';
+    case 'finally':
+      return 'Inside: finally block';
+    case 'loop':
+      return `Inside: loop (${f.meta.iterates ?? f.label})`;
+    default:
+      return f.label;
+  }
+}
+
+/** The innermost scope kind for a line, or 'top-level'. */
+function scopeOf(frames: Frame[]): ScopeKind {
+  if (frames.length === 0) return 'top-level';
+  return frames[frames.length - 1].kind as ScopeKind;
+}
+
+/** Build the breadcrumb string for a line, e.g. "File: x → Function: y → Inside: try block". */
+function buildContext(fileName: string, frames: Frame[]): LineContext {
+  const parts = ['File: ' + fileName, ...frames.map(frameLabel)];
+  return { scope: scopeOf(frames), breadcrumb: parts.join(' → ') };
+}
+
+const CA = (id: string, label: string, kind: LineAction['kind'] = 'edit', flags: { critical?: boolean } = {}): LineAction => ({
+  id,
+  label,
+  kind,
+  ...flags,
+});
+
+/**
+ * Generate actions that depend on the line's structural context — what it sits
+ * inside of — layered on top of the base, line-kind actions. Critical structural
+ * problems (e.g. an N+1 query in a loop) are flagged and sorted to the top.
+ */
+function contextActions(kind: LineKind, frames: Frame[], rawLine: string, allFrames: Frame[]): LineAction[] {
+  const out: LineAction[] = [];
+  const enclosingFn = [...frames].reverse().find((f) => f.kind === 'function' || f.kind === 'method' || f.kind === 'component');
+  const route = frames.find((f) => f.kind === 'route');
+  const loop = [...frames].reverse().find((f) => f.kind === 'loop');
+  const hook = [...frames].reverse().find((f) => f.kind === 'hook');
+  const component = frames.find((f) => f.kind === 'component');
+  const inTry = frames.some((f) => f.kind === 'try');
+
+  // N+1: a DB query inside a loop is a critical performance problem.
+  if (loop && (kind === 'db-query' || loop.facts.containsDbQuery)) {
+    out.push(CA('move-db-out-of-loop', 'Move database query outside loop: N+1 query problem', 'edit', { critical: true }));
+  }
+
+  // Route handler with no auth middleware in its body.
+  if (route && !route.facts.hasAuthInBody) {
+    out.push(CA('add-auth-check', 'Add authentication check before this route'));
+  }
+
+  // useEffect with an empty dependency array.
+  if (hook && hook.meta.hookType === 'useEffect' && (hook.meta.depArray ?? '').replace(/\s/g, '') === '[]') {
+    out.push(CA('add-effect-deps', 'Add missing dependencies to dependency array'));
+  }
+
+  // Method/function that uses await but is not async.
+  if (enclosingFn && enclosingFn.facts.containsAwait && !enclosingFn.meta.isAsync) {
+    const noun = enclosingFn.kind === 'method' ? 'method' : 'function';
+    out.push(CA('convert-async', `Convert ${noun} to async`));
+  }
+
+  // try block whose paired catch only logs.
+  if (inTry) {
+    const tryFrame = [...frames].reverse().find((f) => f.kind === 'try');
+    const sibCatch = tryFrame
+      ? allFrames.find(
+          (f) => f.kind === 'catch' && f.startLine >= tryFrame.endLine && f.startLine <= tryFrame.endLine + 2,
+        )
+      : undefined;
+    if (sibCatch?.facts.catchOnlyLogs) {
+      out.push(CA('improve-error-handling', 'Improve error handling: add a proper error response'));
+    }
+  }
+
+  // React component reading large global state on this line.
+  if (component && component.facts.readsGlobalState && /useSelector|useStore|useContext|store\.getState/.test(rawLine)) {
+    out.push(CA('add-memo', 'Add useMemo / useCallback to prevent unnecessary re-renders'));
+  }
+
+  // Enclosing function with no try/catch — offer to wrap it.
+  if (enclosingFn && !enclosingFn.facts.containsTry && (kind === 'empty' || kind === 'brace' || kind === 'return' || kind === 'call')) {
+    out.push(CA('wrap-function-error-handling', `Add error handling wrapper around this ${enclosingFn.kind === 'method' ? 'method' : 'function'}`));
+  }
+
+  // Empty line inside a function body: offer additions tuned to the function type.
+  if (kind === 'empty' || kind === 'brace') {
+    if (route) {
+      out.push(
+        CA('add-input-validation', 'Add input validation'),
+        CA('add-rate-limiting', 'Add rate limiting'),
+        CA('add-logging', 'Add logging'),
+        CA('add-caching', 'Add caching'),
+      );
+    } else if (enclosingFn && enclosingFn.facts.containsDbQuery) {
+      out.push(
+        CA('add-transaction', 'Add transaction wrapper'),
+        CA('add-connection-error-handling', 'Add connection error handling'),
+        CA('add-query-timeout', 'Add query timeout'),
+      );
+    }
+  }
+
+  return out;
+}
+
+/** Merge context actions ahead of base actions, de-duplicating by id. */
+function mergeActions(context: LineAction[], base: LineAction[]): LineAction[] {
+  const seen = new Set<string>();
+  const merged: LineAction[] = [];
+  // Critical first, then other context actions, then base.
+  for (const a of [...context].sort((x, y) => Number(Boolean(y.critical)) - Number(Boolean(x.critical)))) {
+    if (seen.has(a.id)) continue;
+    seen.add(a.id);
+    merged.push(a);
+  }
+  for (const a of base) {
+    if (seen.has(a.id)) continue;
+    seen.add(a.id);
+    merged.push(a);
+  }
+  return merged;
+}
+
 // ---- Symbol detection -----------------------------------------------------
 
 /** Extract navigable symbols (functions, classes, methods, routes, types). */
@@ -336,21 +489,29 @@ export function buildFileIntel(analysis: AnalysisResult, relPath: string): FileI
 
   const fileKind = fileKindFor(analysis, relPath);
   const rawLines = content.split('\n');
+  const fileName = relPath.split('/').pop() ?? relPath;
+  const frames = trackScopes(rawLines);
+
   const lines: LineInfo[] = rawLines.map((text, i) => {
+    const n = i + 1;
     const kind = classifyLine(text);
     const symbol = symbolOnLine(text);
     const refCount =
       symbol && (kind === 'function' || kind === 'class' || kind === 'type' || kind === 'export')
         ? countReferencingFiles(analysis, symbol, relPath)
         : 0;
+    const lineFrames = framesAtLine(frames, n);
+    const context = buildContext(fileName, lineFrames);
+    const actions = mergeActions(contextActions(kind, lineFrames, text, frames), baseActions(kind, fileKind));
     return {
-      n: i + 1,
+      n,
       text,
       kind,
       explanation: explainLine(text, kind),
-      actions: baseActions(kind, fileKind),
+      actions,
       refCount,
       symbol,
+      context,
     };
   });
 

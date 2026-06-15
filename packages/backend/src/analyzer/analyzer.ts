@@ -4,11 +4,12 @@
  */
 
 import crypto from 'node:crypto';
-import type { CanvasGraph, ProjectIntelligence } from '@archlab/shared';
+import type { CanvasGraph, ProjectIntelligence, SystemDesignMap } from '@archlab/shared';
 import { scanProject, type ScanResult } from './scan.js';
 import { classify } from './classify.js';
 import { detectEdges } from './edges.js';
 import { layout } from './layout.js';
+import { detectInfrastructure } from './infra.js';
 
 export interface AnalysisResult {
   projectId: string;
@@ -18,6 +19,8 @@ export interface AnalysisResult {
   canvas: CanvasGraph;
   intelligence: ProjectIntelligence;
   techStack: string[];
+  /** Detected infrastructure map for the System Design tab. */
+  infra: SystemDesignMap;
 }
 
 /** Analyze a project folder end to end. */
@@ -30,8 +33,9 @@ export function analyzeProject(rootPath: string): AnalysisResult {
   const projectId = crypto.createHash('sha1').update(scan.root).digest('hex').slice(0, 12);
   const canvas: CanvasGraph = { nodes: positioned, edges };
   const intelligence = deriveIntelligence(projectId, scan, positioned, techStack);
+  const infra = detectInfrastructure(scan, techStack);
 
-  return { projectId, name: scan.name, rootPath: scan.root, scan, canvas, intelligence, techStack };
+  return { projectId, name: scan.name, rootPath: scan.root, scan, canvas, intelligence, techStack, infra };
 }
 
 /** First-pass intelligence derived purely from structure (step 1 deepens it). */

@@ -6,7 +6,7 @@
  * canvas, the terminal — until you're past the door.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { BrainAccessStatus } from '@archlab/shared';
 import { unlockBrain } from '../lib/brainAccess.js';
 
@@ -14,24 +14,49 @@ interface LockScreenProps {
   onUnlocked: (status: BrainAccessStatus) => void;
 }
 
+/** Failed attempts before a cooldown kicks in, and how long it lasts. */
+const MAX_ATTEMPTS = 3;
+const COOLDOWN_SECONDS = 30;
+
 export function LockScreen({ onUnlocked }: LockScreenProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Tick the cooldown down to zero, then clear attempts.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+  useEffect(() => {
+    if (cooldown === 0 && attempts >= MAX_ATTEMPTS) setAttempts(0);
+  }, [cooldown, attempts]);
 
   const submit = async () => {
-    if (!password || busy) return;
+    if (!password || busy || cooldown > 0) return;
     setBusy(true);
     setError(null);
     try {
       onUnlocked(await unlockBrain(password));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Incorrect password.');
+      const nextAttempts = attempts + 1;
+      setAttempts(nextAttempts);
       setPassword('');
+      if (nextAttempts >= MAX_ATTEMPTS) {
+        setCooldown(COOLDOWN_SECONDS);
+        setError(`Too many attempts. Try again in ${COOLDOWN_SECONDS}s.`);
+      } else {
+        setError(err instanceof Error ? err.message : 'Incorrect password.');
+      }
     } finally {
       setBusy(false);
     }
   };
+
+  const locked = cooldown > 0;
 
   return (
     <div className="lock-screen">
@@ -47,13 +72,18 @@ export function LockScreen({ onUnlocked }: LockScreenProps) {
           autoFocus
           placeholder="Password"
           value={password}
+          disabled={locked}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') void submit();
           }}
         />
-        <button className="btn btn-primary lock-screen-btn" disabled={!password || busy} onClick={submit}>
-          {busy ? 'Unlocking…' : 'Unlock'}
+        <button
+          className="btn btn-primary lock-screen-btn"
+          disabled={!password || busy || locked}
+          onClick={submit}
+        >
+          {busy ? 'Unlocking…' : locked ? `Locked (${cooldown}s)` : 'Unlock'}
         </button>
         {error && <p className="lock-screen-error">{error}</p>}
       </div>

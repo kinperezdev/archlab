@@ -12,8 +12,8 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
     'Database Designer',
     'API Filter',
     'Security Controls',
+    'System Design',
     'Scratch Whiteboard',
-    'App Preview',
   ];
 
   return (

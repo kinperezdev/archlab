@@ -28,6 +28,13 @@ export async function setBrainPassword(password: string): Promise<BrainAccessSta
   return data;
 }
 
+export async function removeBrainPassword(password: string): Promise<BrainAccessStatus> {
+  const res = await postJson('/access/remove-password', { password });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error ?? 'Could not remove password.');
+  return data;
+}
+
 export async function unlockBrain(password: string): Promise<BrainAccessStatus> {
   const res = await postJson('/access/unlock', { password });
   const data = await res.json();

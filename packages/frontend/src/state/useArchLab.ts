@@ -18,6 +18,7 @@ import {
   type ClientMessage,
   type BrainInsight,
   type BrainPattern,
+  type SystemDesignMap,
 } from '@archlab/shared';
 
 export interface LogLine {
@@ -55,6 +56,8 @@ export interface ArchLabState {
   logs: LogLine[];
   terminal: TerminalState;
   inferredSql: string | null;
+  /** Detected infrastructure map for the System Design tab (Detected Mode). */
+  infra: SystemDesignMap | null;
 }
 
 const EMPTY_CANVAS: CanvasGraph = { nodes: [], edges: [] };
@@ -77,6 +80,7 @@ export function useArchLab() {
     logs: [],
     terminal: { cwd: '~' },
     inferredSql: null,
+    infra: null,
   });
 
   // Subscribers for raw PTY output, keyed by terminal-session id. Terminal data
@@ -103,6 +107,7 @@ export function useArchLab() {
           report: null,
           intelligence: null,
           inferredSql: msg.inferredSql ?? null,
+          infra: msg.infra ?? null,
         };
 
       case 'canvas-update':

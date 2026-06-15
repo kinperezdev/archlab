@@ -1,13 +1,17 @@
 /**
- * Ideas canvas: a completely free, blank canvas for sketching architecture.
+ * Ideas (Scratch) canvas: a completely free, blank canvas for sketching.
  *
- * - Drag a node type out of the LEFT palette and drop it anywhere — the node
- *   appears exactly at the drop position (onDrop/onDragOver on the wrapper +
- *   screenToFlowPosition).
- * - Double-click a node to rename it inline; drag from a node's edge handles to
- *   connect; double-click a connection to label it.
- * - Right-click for Add Node / Delete Selected / Duplicate Selected.
- * - Persists to brain/ideas.json and reloads when the tab opens.
+ * Drag-and-drop uses a reliable mousedown-ghost approach (no HTML5 drag API):
+ *  - Each palette item has an onMouseDown handler. Pressing it spawns a fixed
+ *    ghost div that follows the cursor via document mousemove listeners.
+ *  - The canvas highlights with a blue border while the ghost is over it.
+ *  - On mouseup over the canvas, the drop position is computed from the canvas
+ *    bounding rect + React Flow's screenToFlowPosition, and a real node is
+ *    created there. The ghost disappears on mouseup everywhere.
+ *  - Placed nodes are immediately draggable (React Flow built-in), double-click
+ *    to rename, drag edge handles to connect, double-click an edge to label it.
+ *  - Right-click: Add Node / Delete / Duplicate / Clear All.
+ *  - Persists to brain/ideas.json on every change.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -31,13 +35,18 @@ import { neighborSet, highlightClass, stripHighlight } from '../lib/highlight.js
 import { IdeaNode, IDEA_KINDS, type IdeaKind, type IdeaNodeData } from './IdeaNode.js';
 
 const nodeTypes = { idea: IdeaNode };
-const DRAG_MIME = 'text/plain';
 
 interface ContextMenuState {
   x: number;
   y: number;
   flowX: number;
   flowY: number;
+}
+
+interface Ghost {
+  kind: IdeaKind;
+  x: number;
+  y: number;
 }
 
 let idCounter = Date.now();
@@ -50,8 +59,10 @@ function IdeasCanvasInner() {
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [ghost, setGhost] = useState<Ghost | null>(null);
+  const [overCanvas, setOverCanvas] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const { screenToFlowPosition, setCenter } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
 
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
 
@@ -103,15 +114,52 @@ function IdeasCanvasInner() {
   const addNode = useCallback(
     (kind: IdeaKind, flowX: number, flowY: number) => {
       const meta = IDEA_KINDS.find((k) => k.kind === kind);
+      const id = nextId();
       const node: Node<IdeaNodeData> = {
-        id: nextId(),
+        id,
         type: 'idea',
         position: { x: flowX, y: flowY },
         data: { label: meta?.label ?? 'Node', ideaKind: kind },
+        selected: true,
       };
-      setNodes((ns) => [...ns, node]);
+      // New node is placed selected; everything else deselects.
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node]);
     },
     [setNodes],
+  );
+
+  // --- Reliable mousedown-ghost drag (replaces the HTML5 drag API) ---
+  const startDrag = useCallback(
+    (kind: IdeaKind, e: React.MouseEvent) => {
+      e.preventDefault();
+      setMenu(null);
+      setGhost({ kind, x: e.clientX, y: e.clientY });
+
+      const isInside = (cx: number, cy: number) => {
+        const rect = wrapRef.current?.getBoundingClientRect();
+        return (
+          !!rect && cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom
+        );
+      };
+
+      const onMove = (ev: MouseEvent) => {
+        setGhost({ kind, x: ev.clientX, y: ev.clientY });
+        setOverCanvas(isInside(ev.clientX, ev.clientY));
+      };
+      const onUp = (ev: MouseEvent) => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (isInside(ev.clientX, ev.clientY)) {
+          const pos = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+          addNode(kind, pos.x, pos.y);
+        }
+        setGhost(null);
+        setOverCanvas(false);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [addNode, screenToFlowPosition],
   );
 
   const onConnect = useCallback(
@@ -121,40 +169,6 @@ function IdeasCanvasInner() {
       ),
     [setEdges],
   );
-
-  // --- Drag and drop from the palette ---
-  const onPaletteDragStart = (e: React.DragEvent, kind: IdeaKind) => {
-    e.dataTransfer.setData(DRAG_MIME, kind);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const kind = e.dataTransfer.getData(DRAG_MIME) as IdeaKind;
-    console.log('IdeasCanvas onDrop fired:', kind);
-    if (!kind || !IDEA_KINDS.some(ik => ik.kind === kind)) return;
-
-    // Exact drop position in flow coordinates using screen position directly
-    const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    console.log('IdeasCanvas: Calculated flow position:', pos, 'from screen client:', { x: e.clientX, y: e.clientY });
-
-    addNode(kind, pos.x, pos.y);
-    setCenter(pos.x, pos.y, { zoom: 1, duration: 400 });
-  };
-
-  const onPaletteClick = (kind: IdeaKind) => {
-    if (!wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
-    const clientX = rect.left + rect.width / 2;
-    const clientY = rect.top + rect.height / 2;
-    const pos = screenToFlowPosition({ x: clientX, y: clientY });
-    console.log('IdeasCanvas: Click to place at center:', pos);
-    addNode(kind, pos.x, pos.y);
-    setCenter(pos.x, pos.y, { zoom: 1, duration: 400 });
-  };
 
   // Double-click an edge to (re)label it.
   const onEdgeDoubleClick = (_e: React.MouseEvent, edge: Edge) => {
@@ -186,33 +200,35 @@ function IdeasCanvasInner() {
     setMenu(null);
   }, [setNodes]);
 
-  const openMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    setMenu({ x: e.clientX, y: e.clientY, flowX: pos.x, flowY: pos.y });
-  };
+  const clearAll = useCallback(() => {
+    if (!window.confirm('Clear the entire scratch canvas?')) return;
+    setNodes([]);
+    setEdges([]);
+    setMenu(null);
+  }, [setNodes, setEdges]);
 
   return (
     <div className="ideas-layout">
       <aside className="ideas-palette">
         <h4 className="ideas-palette-title">Node Palette</h4>
-        <p className="ideas-palette-hint">Click or drag onto canvas</p>
+        <p className="ideas-palette-hint">Press and drag onto the canvas</p>
         {IDEA_KINDS.map((k) => (
           <div
             key={k.kind}
             className={`ideas-palette-item idea-${k.kind}`}
-            draggable
-            onDragStart={(e) => onPaletteDragStart(e, k.kind)}
-            onClick={() => onPaletteClick(k.kind)}
-            title={`Click to place at center, or drag onto canvas`}
+            onMouseDown={(e) => startDrag(k.kind, e)}
+            title="Press and drag onto the canvas"
           >
             <span className="ideas-palette-glyph">{k.glyph}</span>
             {k.label}
           </div>
         ))}
       </aside>
- 
-      <div className="ideas-canvas-area" ref={wrapRef}>
+
+      <div
+        className={`ideas-canvas-area ${ghost && overCanvas ? 'ideas-drop-active' : ''}`}
+        ref={wrapRef}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -221,23 +237,23 @@ function IdeasCanvasInner() {
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           onEdgeDoubleClick={onEdgeDoubleClick}
-          onPaneContextMenu={openMenu}
-          onNodeContextMenu={openMenu}
+          onPaneContextMenu={(e: React.MouseEvent) => {
+            e.preventDefault();
+            const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+            setMenu({ x: e.clientX, y: e.clientY, flowX: pos.x, flowY: pos.y });
+          }}
+          onNodeContextMenu={(e: React.MouseEvent) => {
+            e.preventDefault();
+            const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+            setMenu({ x: e.clientX, y: e.clientY, flowX: pos.x, flowY: pos.y });
+          }}
           onNodeMouseEnter={(_e, n) => setHoveredNodeId(n.id)}
           onNodeMouseLeave={() => setHoveredNodeId(null)}
           onNodeClick={(_e, n) => setLockedNodeId(n.id)}
-          onPaneClick={(e: React.MouseEvent) => {
-            if (e.detail === 2) {
-              e.preventDefault();
-              const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-              setMenu({ x: e.clientX, y: e.clientY, flowX: pos.x, flowY: pos.y });
-            } else {
-              setLockedNodeId(null);
-              setMenu(null);
-            }
+          onPaneClick={() => {
+            setLockedNodeId(null);
+            setMenu(null);
           }}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
           defaultEdgeOptions={{ type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } }}
           deleteKeyCode={['Backspace', 'Delete']}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
@@ -270,9 +286,24 @@ function IdeasCanvasInner() {
             <button className="ideas-menu-item danger" onClick={deleteSelected}>
               ✕ Delete selected
             </button>
+            <button className="ideas-menu-item danger" onClick={clearAll}>
+              🗑 Clear all
+            </button>
           </div>
         )}
       </div>
+
+      {ghost && (
+        <div
+          className={`ideas-ghost idea-${ghost.kind}`}
+          style={{ left: ghost.x + 12, top: ghost.y + 12 }}
+        >
+          <span className="ideas-palette-glyph">
+            {IDEA_KINDS.find((k) => k.kind === ghost.kind)?.glyph}
+          </span>
+          {IDEA_KINDS.find((k) => k.kind === ghost.kind)?.label}
+        </div>
+      )}
     </div>
   );
 }

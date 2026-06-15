@@ -65,19 +65,20 @@ export function TabIcon({ tab }: { tab: ArchTab }) {
           <path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" />
         </svg>
       );
+    case 'systemdesign': // stacked server / infrastructure
+      return (
+        <svg {...COMMON} className="tab-icon" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="6" rx="1" />
+          <rect x="3" y="11" width="18" height="6" rx="1" />
+          <path d="M7 6h.01M7 14h.01M11 6h6M11 14h6" />
+          <path d="M9 17v2M15 17v2M7 21h10" />
+        </svg>
+      );
     case 'scratch': // pencil
       return (
         <svg {...COMMON} className="tab-icon" aria-hidden="true">
           <path d="M12 20h9" />
           <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-        </svg>
-      );
-    case 'preview': // globe
-      return (
-        <svg {...COMMON} className="tab-icon" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="2" y1="12" x2="22" y2="12" />
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
       );
     default:

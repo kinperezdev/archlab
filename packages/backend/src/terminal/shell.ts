@@ -36,15 +36,20 @@ export interface SessionHandlers {
   onCwdChange: (cwd: string) => void;
 }
 
-/** Per-connection terminal session: a live PTY plus its tracked cwd. */
+/** Per-tab terminal session: a live PTY plus its tracked cwd. The PTY outlives
+ *  any single WebSocket so a reconnect re-attaches to the same running process. */
 export interface ShellSession {
   cwd: string;
   /** Write raw keystrokes/data to the PTY's stdin. */
   write(data: string): void;
   /** Resize the PTY to match the front-end terminal viewport. */
   resize(cols: number, rows: number): void;
-  /** Kill the PTY (called when the socket closes). */
+  /** Kill the PTY (called when the tab is explicitly closed). */
   kill(): void;
+  /** Point output at a (new) socket and replay anything buffered while detached. */
+  attach(handlers: SessionHandlers): void;
+  /** Stop forwarding output (socket closed) but keep the PTY running. */
+  detach(): void;
 }
 
 /** Spawn a real shell in a PTY and start streaming its output. */
@@ -60,6 +65,13 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
     cwd: startCwd,
     env: { ...process.env, TERM: 'xterm-256color' },
   });
+
+  // Current output sink. Starts as the initial handlers; swapped on re-attach.
+  let current: SessionHandlers | null = handlers;
+  // Output produced while no socket is attached, replayed on the next attach so
+  // a long-running process (e.g. `npm run dev`) loses nothing across a reconnect.
+  let detachedBuffer = '';
+  const DETACHED_CAP = 200_000;
 
   const session: ShellSession = {
     cwd: startCwd,
@@ -84,15 +96,30 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
         /* Already gone. */
       }
     },
+    attach: (next) => {
+      current = next;
+      if (detachedBuffer) {
+        next.onData(detachedBuffer);
+        detachedBuffer = '';
+      }
+    },
+    detach: () => {
+      current = null;
+    },
   };
 
   term.onData((data) => {
     const cwd = parseOsc7Cwd(data);
     if (cwd && cwd !== session.cwd) {
       session.cwd = cwd;
-      handlers.onCwdChange(cwd);
+      current?.onCwdChange(cwd);
     }
-    handlers.onData(data);
+    if (current) {
+      current.onData(data);
+    } else {
+      detachedBuffer += data;
+      if (detachedBuffer.length > DETACHED_CAP) detachedBuffer = detachedBuffer.slice(-DETACHED_CAP);
+    }
   });
 
   return session;

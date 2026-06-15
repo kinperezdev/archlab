@@ -48,8 +48,8 @@ import { BrainPanel } from './components/BrainPanel.js';
 import { Canvas } from './canvas/Canvas.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
+import { SystemDesign } from './systemdesign/SystemDesign.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
-import { AppPreview } from './components/AppPreview.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 
 export type ArchTab =
@@ -59,8 +59,8 @@ export type ArchTab =
   | 'database'
   | 'api'
   | 'security'
-  | 'scratch'
-  | 'preview';
+  | 'systemdesign'
+  | 'scratch';
 
 /** Tabs that render the architecture canvas (vs. the Database/Scratch surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
@@ -139,7 +139,7 @@ export function App() {
         toggleBottom();
       } else if (e.key >= '1' && e.key <= '8') {
         const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'scratch', 'preview'];
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'scratch'];
         if (targetTabs[index]) {
           e.preventDefault();
           setTab(targetTabs[index]);
@@ -293,16 +293,12 @@ export function App() {
             </div>
           )}
 
-          {tab === 'scratch' ? (
+          {tab === 'systemdesign' ? (
+            <SystemDesign infra={state.infra} hasProject={Boolean(state.projectId)} />
+          ) : tab === 'scratch' ? (
             <IdeasCanvas />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
-          ) : tab === 'preview' ? (
-            <AppPreview
-              projectId={state.projectId}
-              projectPath={state.projectPath}
-              projectName={state.projectName}
-            />
           ) : (
             <ReactFlowProvider>
               <Canvas

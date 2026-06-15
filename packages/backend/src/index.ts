@@ -21,12 +21,14 @@ import { rememberProject, recallProject } from './analyzer/projectIndex.js';
 import { runPipeline } from './pipeline/pipeline.js';
 import { detectBottlenecks } from './pipeline/bottleneck.js';
 import { learnFromProject, loadBrain } from './brain/brainStore.js';
+import { recordInfra, infraInsights } from './brain/infraBrain.js';
 import { BRAIN_DIR } from './brain/paths.js';
 import {
   accessStatus,
   gateBrain,
   isLocked,
   lock,
+  removePassword,
   setPassword,
   setPermissions,
   unlock,
@@ -199,6 +201,31 @@ app.post('/ideas', (req, res) => {
   }
 });
 
+// ---- System Design (Design Mode) persistence (brain/system-design.json) ----
+const SYSTEM_DESIGN_FILE = path.join(BRAIN_DIR, 'system-design.json');
+
+app.get('/system-design', (_req, res) => {
+  try {
+    if (!fs.existsSync(SYSTEM_DESIGN_FILE)) return res.json({ ok: true, nodes: [], edges: [] });
+    const data = JSON.parse(fs.readFileSync(SYSTEM_DESIGN_FILE, 'utf8'));
+    return res.json({ ok: true, nodes: data.nodes ?? [], edges: data.edges ?? [] });
+  } catch {
+    return res.json({ ok: true, nodes: [], edges: [] });
+  }
+});
+
+app.post('/system-design', (req, res) => {
+  const nodes = Array.isArray(req.body?.nodes) ? req.body.nodes : [];
+  const edges = Array.isArray(req.body?.edges) ? req.body.edges : [];
+  try {
+    fs.mkdirSync(path.dirname(SYSTEM_DESIGN_FILE), { recursive: true });
+    fs.writeFileSync(SYSTEM_DESIGN_FILE, JSON.stringify({ nodes, edges }, null, 2), 'utf8');
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 app.get('/schema', (_req, res) => {
   try {
     if (!fs.existsSync(SCHEMA_FILE)) return res.json({ ok: true, sql: '' });
@@ -233,6 +260,17 @@ app.post('/access/set-password', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Password must be at least 4 characters.' });
   }
   setPassword(password);
+  return res.json({ ok: true, ...accessStatus() });
+});
+
+app.post('/access/remove-password', (req, res) => {
+  // Must prove knowledge of the current password before removing it.
+  const password = String(req.body?.password ?? '');
+  if (!verifyPassword(password)) {
+    return res.status(401).json({ ok: false, error: 'Incorrect password.' });
+  }
+  removePassword();
+  sendBrain(broadcast);
   return res.json({ ok: true, ...accessStatus() });
 });
 
@@ -457,6 +495,11 @@ const wss = new WebSocketServer({ server });
 // we broadcast the live stream to all of them at once.
 const clients = new Set<WebSocket>();
 
+// Process-wide registry of terminal PTYs, keyed by tab session id. PTYs live
+// here (not on a socket) so they survive WebSocket reconnects: a reconnecting
+// tab re-attaches to the same running shell instead of getting a fresh one.
+const terminals = new Map<string, ShellSession>();
+
 /** Send a message to every connected browser. */
 function broadcast(msg: ServerMessage): void {
   const data = JSON.stringify(msg);
@@ -491,21 +534,26 @@ wss.on('connection', (socket) => {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
   };
 
-  // Each browser tab can run multiple independent PTY sessions (terminal tabs),
-  // keyed by id. Output streams straight to the browser; a `cd` in any session
-  // triggers auto-analysis of that folder.
-  const sessions = new Map<string, ShellSession>();
+  // Terminal sessions live in a process-wide registry (see `terminals`) keyed by
+  // tab id, so the PTY survives a WebSocket reconnect. This socket only tracks
+  // which ids it has attached, so it can detach (not kill) them on close.
+  const attachedIds = new Set<string>();
   const ensureSession = (id: string): ShellSession => {
-    const existing = sessions.get(id);
-    if (existing) return existing;
-    const session = createSession({
-      onData: (data) => emit({ type: 'term-data', id, data }),
-      onCwdChange: (cwd) => {
+    const handlers = {
+      onData: (data: string) => emit({ type: 'term-data', id, data }),
+      onCwdChange: (cwd: string) => {
         emit({ type: 'term-cwd', id, cwd });
         void handleAnalyze(cwd, emit, undefined, id);
       },
-    });
-    sessions.set(id, session);
+    };
+    attachedIds.add(id);
+    const existing = terminals.get(id);
+    if (existing) {
+      existing.attach(handlers); // reconnect: re-point output, replay buffered output
+      return existing;
+    }
+    const session = createSession(handlers);
+    terminals.set(id, session);
     return session;
   };
 
@@ -514,8 +562,9 @@ wss.on('connection', (socket) => {
 
   socket.on('close', () => {
     clients.delete(socket);
-    for (const s of sessions.values()) s.kill();
-    sessions.clear();
+    // Keep PTYs running; just stop forwarding their output to this dead socket.
+    for (const id of attachedIds) terminals.get(id)?.detach();
+    attachedIds.clear();
   });
 
   socket.on('message', (raw) => {
@@ -526,7 +575,7 @@ wss.on('connection', (socket) => {
       log(emit, 'error', 'Received malformed message.');
       return;
     }
-    handleClientMessage(msg, emit, { sessions, ensureSession }).catch((err: unknown) => {
+    handleClientMessage(msg, emit, { ensureSession }).catch((err: unknown) => {
       log(emit, 'error', `Pipeline error: ${String(err)}`);
     });
   });
@@ -537,7 +586,6 @@ wss.on('connection', (socket) => {
 });
 
 interface TerminalRouter {
-  sessions: Map<string, ShellSession>;
   ensureSession: (id: string) => ShellSession;
 }
 
@@ -564,10 +612,11 @@ async function handleClientMessage(
       term.ensureSession(msg.id);
       return;
     case 'term-close': {
-      const s = term.sessions.get(msg.id);
+      // Explicit tab close: kill the PTY and drop it from the global registry.
+      const s = terminals.get(msg.id);
       if (s) {
         s.kill();
-        term.sessions.delete(msg.id);
+        terminals.delete(msg.id);
       }
       return;
     }
@@ -658,6 +707,8 @@ async function handleAnalyze(
   rememberProject(analysis.projectId, analysis.rootPath, analysis.name);
   
   const inferredSql = inferSchemaFromAppFlow(analysis.scan);
+  // Record detected infrastructure so the brain can surface cross-project insights.
+  recordInfra(analysis.projectId, analysis.name, analysis.infra);
   emit({
     type: 'project-ready',
     projectId: analysis.projectId,
@@ -665,6 +716,7 @@ async function handleAnalyze(
     rootPath: analysis.rootPath,
     canvas: analysis.canvas,
     inferredSql,
+    infra: analysis.infra,
   });
   log(
     emit,
@@ -776,11 +828,13 @@ async function handleRunChecks(projectId: string, emit: (m: ServerMessage) => vo
 /** Push the current brain summary to the client, gated by the access layer. */
 function sendBrain(emit: (m: ServerMessage) => void) {
   const brain = gateBrain(loadBrain());
+  // Fold in cross-project infrastructure recommendations (System Design tab).
+  const insights = brain.insights ? [...brain.insights, ...infraInsights()] : infraInsights();
   emit({
     type: 'brain',
     projectCount: brain.projects.length,
     patterns: brain.patterns,
-    insights: brain.insights,
+    insights,
   });
 }
 
