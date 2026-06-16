@@ -6,6 +6,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   height: 44px;
   padding: 0 12px;
   background: #0d0d12;
@@ -28,14 +29,12 @@
 .tb-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
 .tb-timestamp { color: rgba(255, 255, 255, 0.3); font-size: 12px; font-family: var(--font-mono); white-space: nowrap; }
 
-/* Center tabs, absolutely centered regardless of side widths */
+/* Center tabs, flex layout preventing overlap */
 .tb-tabs {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   gap: 2px;
+  overflow-x: auto;
+  max-width: 50%;
 }
 .tb-tab {
   position: relative;
