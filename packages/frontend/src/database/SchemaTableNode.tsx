@@ -102,12 +102,12 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
     setFkPickerRow(null);
   };
 
-  // Collapsed view stays readable: show up to 5 columns, else first 4 + "+N more".
+  // Collapsed view stays readable: show up to 6 columns, then "+N more".
   // When the node is selected we expand to all columns for editing.
-  const COLLAPSED_CAP = 5;
+  const COLLAPSED_CAP = 6;
   const overCap = !selected && table.columns.length > COLLAPSED_CAP;
-  const visibleColumns = overCap ? table.columns.slice(0, 4) : table.columns;
-  const moreCount = overCap ? table.columns.length - 4 : 0;
+  const visibleColumns = overCap ? table.columns.slice(0, COLLAPSED_CAP) : table.columns;
+  const moreCount = overCap ? table.columns.length - COLLAPSED_CAP : 0;
 
   // Generate copy prompt context
   const getCopyPromptText = () => {

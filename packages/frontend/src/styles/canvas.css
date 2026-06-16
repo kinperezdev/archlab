@@ -22,7 +22,19 @@
   background: var(--color-bg);
 }
 .arch-minimap {
-  background: var(--color-surface) !important;
+  background: var(--bg-base) !important;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.arch-minimap .react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.55);
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 2;
+}
+/* Viewport indicator: a white outlined rectangle over the scaled canvas. */
+.arch-minimap .react-flow__minimap-node {
+  stroke-width: 3;
 }
 
 /* ---------- Swim-lane background containers ---------- */

@@ -171,8 +171,10 @@ export function ArchNode({ data }: NodeProps<ArchNodeData>) {
 
       <div className="node-header">
         <span className="node-dot" />
-        <span className="node-name">{data.label}</span>
-        <span className="node-type">{data.kind}</span>
+        <span className="node-header-text">
+          <span className="node-name">{data.label}</span>
+          <span className="node-type">{data.kind}</span>
+        </span>
       </div>
 
       {ports && ports.outgoing.length > 0 && (

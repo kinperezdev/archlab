@@ -16,6 +16,26 @@ import { inferOperation, destinationLabel, OPERATION_COLORS } from '../lib/opera
 
 const nodeTypes = { arch: ArchNode, laneGroup: LaneGroup };
 
+/** Hex colors per node kind, mirroring the --kind-* tokens, for the minimap. */
+const KIND_COLORS: Record<string, string> = {
+  component: '#2dd4bf',
+  route: '#c084fc',
+  endpoint: '#34d399',
+  middleware: '#fbbf24',
+  auth: '#f87171',
+  database: '#60a5fa',
+  'external-service': '#fb7185',
+  config: '#a1a1aa',
+  mcp: '#ec4899',
+  unknown: '#52525b',
+};
+
+/** Color a node dot on the minimap by its kind; lane backdrops stay transparent. */
+function minimapNodeColor(node: { type?: string; data?: { kind?: string } }): string {
+  if (node.type === 'laneGroup') return 'transparent';
+  return KIND_COLORS[node.data?.kind ?? 'unknown'] ?? KIND_COLORS.unknown;
+}
+
 /** Build operation-labeled incoming/outgoing connector ports for a backend node. */
 function portsFor(
   nodeId: string,
@@ -132,6 +152,8 @@ interface CanvasProps {
   graph: CanvasGraph;
   diagnostics: Diagnostic[];
   onSelectNode: (nodeId: string | null) => void;
+  /** Double-click a node: open the Code Intelligence Panel for it. */
+  onOpenCode: (nodeId: string) => void;
   selectedNodeId: string | null;
   filter: 'all' | 'frontend' | 'backend' | 'api' | 'security';
 }
@@ -142,7 +164,7 @@ interface EdgeRef {
   target: string;
 }
 
-export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filter }: CanvasProps) {
+export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedNodeId, filter }: CanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<ArchNodeData | LaneGroupData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
@@ -515,9 +537,11 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
           target: e.target,
           label: e.label,
           // Clean right-angled routing instead of diagonal lines crossing over
-          // everything.
+          // everything. Higher curvature so edges arc around nodes, and a low
+          // zIndex so edges always paint behind the nodes (never on top).
           type: 'smoothstep',
-          pathOptions: { borderRadius: 12 },
+          pathOptions: { borderRadius: 28 },
+          zIndex: 0,
           animated: e.animated || isActive,
           className: (e.animated || isActive) ? 'edge-flowing' : undefined,
           markerEnd: {
@@ -588,6 +612,13 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
               // Lock this node's highlight (switching the lock off any prior one).
               setLockedNodeId(node.id);
             }}
+            onNodeDoubleClick={(_e, node) => {
+              if (node.type === 'laneGroup') return;
+              // Double-click opens the Code Intelligence Panel for this node.
+              onSelectNode(node.id);
+              setLockedNodeId(node.id);
+              onOpenCode(node.id);
+            }}
             onNodeMouseEnter={(_e, node) => {
               // Lane backgrounds are not interactive targets.
               if (node.type === 'laneGroup') return;
@@ -622,9 +653,17 @@ export function Canvas({ graph, diagnostics, onSelectNode, selectedNodeId, filte
             }}
             proOptions={{ hideAttribution: true }}
           >
-            {/* Swim-lane backdrop and helpers. Grid lines just like FigJam paper. */}
-            <Background variant={BackgroundVariant.Lines} gap={36} color="#e4e4e7" />
-            <MiniMap pannable zoomable className="arch-minimap" />
+            {/* Subtle dot grid on the dark canvas (24px, very low opacity). */}
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(255,255,255,0.03)" />
+            <MiniMap
+              pannable
+              zoomable
+              className="arch-minimap"
+              maskColor="rgba(0,0,0,0.55)"
+              nodeColor={minimapNodeColor}
+              nodeStrokeColor={minimapNodeColor}
+              nodeStrokeWidth={3}
+            />
             <Controls showInteractive={false} />
           </ReactFlow>
           <div className="canvas-floating-controls">

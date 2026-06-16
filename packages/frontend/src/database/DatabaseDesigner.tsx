@@ -682,7 +682,7 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
                 label="Copy Prompt"
               />
               <button className="btn" onClick={sendToIdeas}>
-                {sentToIdeas ? 'Added ✓' : 'Add to Ideas'}
+                {sentToIdeas ? 'Added ✓' : 'Add to Blueprint'}
               </button>
             </div>
           </div>

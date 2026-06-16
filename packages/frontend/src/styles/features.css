@@ -1204,3 +1204,24 @@
   color: var(--color-text);
 }
 
+/* Fix 6 — Database node typography & readability */
+.schema-node { min-width: 200px; }
+.schema-node-header .schema-table-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text, #f8f8ff);
+  cursor: text;
+}
+.schema-node-body .schema-row {
+  font-size: 12px;
+}
+.schema-node-body .schema-col-name {
+  color: var(--color-text, #f8f8ff);
+  font-weight: 500;
+}
+.schema-node-body .schema-col-type {
+  color: rgba(255, 255, 255, 0.4);
+}
+.schema-node-body .col-icon.pk { color: #f5c518; }
+.schema-node-body .col-icon.fk { color: #60a5fa; }
+

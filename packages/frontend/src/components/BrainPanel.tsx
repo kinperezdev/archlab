@@ -123,9 +123,10 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
     <div className="brain-overlay" onClick={onClose}>
       <div className="brain-modal" onClick={(e) => e.stopPropagation()}>
         <header className="brain-modal-head">
+          <span className="brain-logo-mark" aria-hidden="true" />
           <h2>Global Brain</h2>
-          <span className="brain-count">{brain.projectCount} projects learned</span>
-          <button className="btn" onClick={onClose}>
+          <span className="brain-count-badge">{brain.projectCount} projects</span>
+          <button className="btn" onClick={onClose} style={{ marginLeft: 'auto' }}>
             Close
           </button>
         </header>
@@ -141,12 +142,22 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
             <p className="file-empty">No cross-project insights yet. Analyze more projects.</p>
           ) : (
             <ul className="insight-list">
-              {brain.insights.map((i) => (
-                <li key={i.id} className="insight">
-                  <span>{i.message}</span>
-                  <CopyPromptButton compact prompt={() => promptForInsight(i.message)} />
-                </li>
-              ))}
+              {brain.insights.map((i) => {
+                const pat = i.patternId ? brain.patterns.find((p) => p.id === i.patternId) : undefined;
+                const projects = pat?.occurrences.length ?? 0;
+                return (
+                  <li key={i.id} className="insight insight-card">
+                    <span className="insight-bulb" aria-hidden="true">💡</span>
+                    <span className="insight-text">{i.message}</span>
+                    {projects > 0 && (
+                      <span className="insight-projects" title="Projects that triggered this insight">
+                        {projects} project{projects === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    <CopyPromptButton compact prompt={() => promptForInsight(i.message)} />
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -186,8 +197,10 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
           ) : (
             <ul className="pattern-list">
               {patterns.map((p) => (
-                <li key={p.id} className="pattern">
-                  <span className="pattern-cat">{p.category}</span>
+                <li key={p.id} className="pattern pattern-card">
+                  <span className={`pattern-cat cat-${p.category.toLowerCase().split(/[-\s]/)[0]}`}>
+                    {p.category}
+                  </span>
                   <span className="pattern-desc">{p.description}</span>
                   <span className="pattern-count">×{p.count}</span>
                 </li>

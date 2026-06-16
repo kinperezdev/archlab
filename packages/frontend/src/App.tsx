@@ -50,6 +50,7 @@ import { CodeIntelPanel } from './components/CodeIntelPanel.js';
 import { SystemDesign } from './systemdesign/SystemDesign.js';
 import { AgentTeam } from './agents/AgentTeam.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
+import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 import { ApiKeysModal } from './components/ApiKeysModal.js';
 
@@ -60,9 +61,10 @@ export type ArchTab =
   | 'database'
   | 'api'
   | 'security'
-  | 'systemdesign';
+  | 'systemdesign'
+  | 'blueprint';
 
-/** Tabs that render the architecture canvas (vs. the Database/Scratch surfaces). */
+/** Tabs that render the architecture canvas (vs. the Database/Blueprint surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
 
 export function App() {
@@ -153,7 +155,7 @@ export function App() {
         toggleBottom();
       } else if (e.key >= '1' && e.key <= '8') {
         const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign'];
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint'];
         if (targetTabs[index]) {
           e.preventDefault();
           setTab(targetTabs[index]);
@@ -199,12 +201,19 @@ export function App() {
     () => state.canvas.nodes.find((n) => n.id === codeNodeId) ?? null,
     [state.canvas.nodes, codeNodeId],
   );
-  const showCodePanel = isArchitecture && Boolean(codeNode?.filePath);
+  const showCodePanel = isArchitecture && Boolean(codeNode);
 
+  // Single click only updates the right-hand node details panel + locks the
+  // highlight. It no longer opens the Code Intelligence Panel.
   const handleSelectNode = (id: string | null) => {
     setSelectedNodeId(id);
-    const node = id ? state.canvas.nodes.find((n) => n.id === id) ?? null : null;
-    setCodeNodeId(node?.filePath ? id : null);
+  };
+
+  // Double click on a node opens the Code Intelligence Panel for its source file.
+  // Always open it (even without a file) so the panel can explain why it cannot
+  // load the source, including the full path it attempted.
+  const handleOpenCode = (id: string) => {
+    setCodeNodeId(id);
   };
 
   // True whenever a full-screen overlay is showing. The bottom-panel toggle is
@@ -270,51 +279,47 @@ export function App() {
 
           {tab === 'systemdesign' ? (
             <SystemDesign infra={state.infra} hasProject={Boolean(state.projectId)} />
+          ) : tab === 'blueprint' ? (
+            <IdeasCanvas />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : (
             <ReactFlowProvider>
               <div className="canvas-left-overlay">
                 {tab === 'security' && (
-                  <>
-                    <div className="flat-section">
-                      <span className="flat-section-title">Pipeline</span>
-                      <div className="flat-button-group-vertical">
-                        <button
-                          className="flat-action-btn"
-                          disabled={!state.projectId || !state.connected || state.reanalyzing}
-                          onClick={reanalyzeProject}
-                          title="Force a fresh full scan of the current project"
-                        >
-                          {state.reanalyzing ? (
-                            <>
-                              <span className="btn-spinner" aria-hidden="true" /> Re-analyzing…
-                            </>
-                          ) : (
-                            '▶ Re-analyze'
-                          )}
-                        </button>
-                        <button
-                          className="flat-action-btn"
-                          disabled={!state.projectId || !state.connected}
-                          onClick={runChecks}
-                        >
-                          ✔ Run Checks
-                        </button>
-                      </div>
+                  <div className="security-pipeline-overlay">
+                    {/* Actions: left-aligned, above the step chips. */}
+                    <div className="security-pipeline-actions">
+                      <button
+                        className="btn btn-sm"
+                        disabled={!state.projectId || !state.connected || state.reanalyzing}
+                        onClick={reanalyzeProject}
+                        title="Force a fresh full scan of the current project"
+                      >
+                        {state.reanalyzing ? (
+                          <>
+                            <span className="btn-spinner" aria-hidden="true" /> Re-analyzing…
+                          </>
+                        ) : (
+                          '▶ Re-analyze'
+                        )}
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        disabled={!state.projectId || !state.connected}
+                        onClick={runChecks}
+                      >
+                        ✔ Run Checks
+                      </button>
                     </div>
 
-                    <div className="flat-section">
-                      <span className="flat-section-title">Pipeline Steps</span>
-                      <PipelineTags
-                        steps={state.steps}
-                        diagnostics={state.diagnostics}
-                        activeStep={securityStep}
-                        onSelect={setSecurityStep}
-                        isVertical={true}
-                      />
-                    </div>
-                  </>
+                    <PipelineTags
+                      steps={state.steps}
+                      diagnostics={state.diagnostics}
+                      activeStep={securityStep}
+                      onSelect={setSecurityStep}
+                    />
+                  </div>
                 )}
 
                 {/* Status: Findings & Isolated */}
@@ -347,6 +352,7 @@ export function App() {
                 graph={state.canvas}
                 diagnostics={state.diagnostics}
                 onSelectNode={handleSelectNode}
+                onOpenCode={handleOpenCode}
                 selectedNodeId={selectedNodeId}
                 filter={filter}
               />
