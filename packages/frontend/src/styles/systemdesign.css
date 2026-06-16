@@ -18,6 +18,8 @@
   flex-direction: column;
   background: var(--color-bg);
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 
 /* Mode toggle — sits in normal flow as a header strip so it never overlaps the
@@ -98,6 +100,7 @@
   min-height: 0;
   height: 100%;
   width: 100%;
+  max-width: 100%;
   overflow: hidden;
 }
 .sd-toolbar {
