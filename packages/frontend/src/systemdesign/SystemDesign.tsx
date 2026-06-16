@@ -25,6 +25,7 @@ import ReactFlow, {
   type Node,
 } from 'reactflow';
 import type {
+  Diagnostic,
   EncryptionState,
   InfraNodeType,
   InfraSuggestion,
@@ -32,18 +33,23 @@ import type {
 } from '@archlab/shared';
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
 import { loadSystemDesign, saveSystemDesign } from '../lib/systemDesignStore.js';
+import { EnterpriseAudit } from './EnterpriseAudit.js';
 import { InfraNode, type InfraNodeData } from './InfraNode.js';
 import { INFRA_TYPES, LAYERS, LAYER_LABEL, infraMeta, infraDescription } from './infraCatalog.js';
 import type { InfraNode as InfraNodeT, InfraEdge } from '@archlab/shared';
 
 const nodeTypes = { infra: InfraNode };
 
-type TabMode = 'visual' | 'guide';
+export type TabMode = 'visual' | 'guide' | 'enterprise';
 type Mode = 'detected' | 'design';
 
 interface SystemDesignProps {
   infra: SystemDesignMap | null;
   hasProject: boolean;
+  /** Pipeline diagnostics used by Enterprise Audit to light up capability cards. */
+  findings?: Diagnostic[];
+  /** Notifies the parent which sub-mode (visual / guide / enterprise) is active. */
+  onSubModeChange?: (mode: TabMode) => void;
 }
 
 function encColor(enc: EncryptionState): string {
@@ -774,8 +780,21 @@ function GuideMode({ infra }: { infra: SystemDesignMap }) {
 // ---------------------------------------------------------------------------
 // Detected Mode with Visual Mode Improvements (Legend & Timeline)
 // ---------------------------------------------------------------------------
-function DetectedMode({ infra }: { infra: SystemDesignMap }) {
+function DetectedMode({
+  infra,
+  findings,
+  onSubModeChange,
+}: {
+  infra: SystemDesignMap;
+  findings: Diagnostic[];
+  onSubModeChange?: (mode: TabMode) => void;
+}) {
   const [tabMode, setTabMode] = useState<TabMode>('visual');
+
+  // Lift the active sub-mode up so App can decide whether to show the sidebars.
+  useEffect(() => {
+    onSubModeChange?.(tabMode);
+  }, [tabMode, onSubModeChange]);
   const [showSecurity, setShowSecurity] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -847,10 +866,18 @@ function DetectedMode({ infra }: { infra: SystemDesignMap }) {
           >
             📖 Guide Mode
           </button>
+          <button
+            className={`sd-view-btn ${tabMode === 'enterprise' ? 'active' : ''}`}
+            onClick={() => setTabMode('enterprise')}
+          >
+            🏛 Enterprise Audit
+          </button>
         </div>
       </div>
 
-      {tabMode === 'guide' ? (
+      {tabMode === 'enterprise' ? (
+        <EnterpriseAudit infra={infra} findings={findings} />
+      ) : tabMode === 'guide' ? (
         <GuideMode infra={infra} />
       ) : (
         <div className="sd-detected">
@@ -1140,7 +1167,7 @@ function DesignModeInner() {
 // ---------------------------------------------------------------------------
 // Main System Design Component Wrapper
 // ---------------------------------------------------------------------------
-export function SystemDesign({ infra, hasProject }: SystemDesignProps) {
+export function SystemDesign({ infra, hasProject, findings = [], onSubModeChange }: SystemDesignProps) {
   return (
     <div className="sd-root">
       {!hasProject || !infra ? (
@@ -1149,7 +1176,7 @@ export function SystemDesign({ infra, hasProject }: SystemDesignProps) {
         </div>
       ) : (
         <ReactFlowProvider>
-          <DetectedMode infra={infra} />
+          <DetectedMode infra={infra} findings={findings} onSubModeChange={onSubModeChange} />
         </ReactFlowProvider>
       )}
     </div>

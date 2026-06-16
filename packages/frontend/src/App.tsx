@@ -47,7 +47,7 @@ import type { BrainAccessStatus } from '@archlab/shared';
 import { BrainPanel } from './components/BrainPanel.js';
 import { Canvas } from './canvas/Canvas.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
-import { SystemDesign } from './systemdesign/SystemDesign.js';
+import { SystemDesign, type TabMode } from './systemdesign/SystemDesign.js';
 import { AgentTeam } from './agents/AgentTeam.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
@@ -84,6 +84,9 @@ export function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   // Security tab: which pipeline step the findings panel is filtered to (if any).
   const [securityStep, setSecurityStep] = useState<PipelineStepId | null>(null);
+  // Which System Design sub-mode is active, lifted up from SystemDesign so the
+  // sidebars can be hidden only for the full-width Visual sub-mode.
+  const [systemDesignMode, setSystemDesignMode] = useState<TabMode>('visual');
   // Launch lock (Layer 1). `null` until we know the status, then gates the app.
   const [access, setAccess] = useState<BrainAccessStatus | null>(null);
 
@@ -186,6 +189,13 @@ export function App() {
   const isArchitecture =
     tab === 'all' || tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security' || tab === 'systemdesign';
 
+  // System Design's Visual sub-mode renders its own full-width surface, so the
+  // architecture sidebars (which mirror canvas nodes) must be hidden for it —
+  // otherwise the left sidebar steals width and the page looks narrower than the
+  // other tabs. The Guide and Enterprise sub-modes render normally with sidebars.
+  const isFullWidthSystemDesign = tab === 'systemdesign' && systemDesignMode === 'visual';
+  const isCanvasTab = isArchitecture && !isFullWidthSystemDesign;
+
   // Count nodes with no edges at all — the project's disconnected parts.
   const isolatedCount = useMemo(() => {
     const degree = new Set<string>();
@@ -246,7 +256,7 @@ export function App() {
       />
 
       <div className="app-body">
-        {isArchitecture && showLeftSidebar && (
+        {isCanvasTab && showLeftSidebar && (
           <LeftSidebar
             graph={state.canvas}
             onSelectNode={handleSelectNode}
@@ -258,7 +268,7 @@ export function App() {
           {/* When a sidebar is collapsed, a slim reveal tab sits on the screen
               edge so the user can bring it back. These belong to the edges, not
               the canvas surface. */}
-          {isArchitecture && !showLeftSidebar && (
+          {isCanvasTab && !showLeftSidebar && (
             <button
               className="panel-reveal-tab on-left"
               onClick={toggleLeftSidebar}
@@ -267,7 +277,7 @@ export function App() {
               ▶
             </button>
           )}
-          {isArchitecture && !showRightSidebar && (
+          {isCanvasTab && !showRightSidebar && (
             <button
                className="panel-reveal-tab on-right"
                onClick={() => setShowRightSidebar((p) => !p)}
@@ -278,7 +288,12 @@ export function App() {
            )}
 
           {tab === 'systemdesign' ? (
-            <SystemDesign infra={state.infra} hasProject={Boolean(state.projectId)} />
+            <SystemDesign
+              infra={state.infra}
+              hasProject={Boolean(state.projectId)}
+              findings={state.diagnostics}
+              onSubModeChange={setSystemDesignMode}
+            />
           ) : tab === 'blueprint' ? (
             <IdeasCanvas />
           ) : tab === 'database' ? (
@@ -384,7 +399,7 @@ export function App() {
           />
         )}
 
-        {!agentTeamOpen && isArchitecture && tab !== 'systemdesign' && showRightSidebar && (
+        {!agentTeamOpen && isCanvasTab && showRightSidebar && (
           <RightSidebar
             projectId={state.projectId}
             projectName={state.projectName}
