@@ -149,3 +149,57 @@ export interface SystemDesignDoc {
   nodes: unknown[];
   edges: unknown[];
 }
+
+// ---------------------------------------------------------------------------
+// Enterprise Audit
+// ---------------------------------------------------------------------------
+
+/**
+ * Live detection state for a single Enterprise Audit card.
+ *  - detected:    clear evidence found in the project.
+ *  - partial:     related-but-incomplete evidence found.
+ *  - missing:     nothing detected (dim card).
+ *  - critical-gap: absent and that absence is a security/reliability risk.
+ */
+export type EnterpriseCardState = 'detected' | 'partial' | 'missing' | 'critical-gap';
+
+/** One evaluated capability card in the Enterprise Audit grid. */
+export interface EnterpriseCard {
+  id: string;
+  label: string;
+  /** Resolved detection state, computed from infra + findings. */
+  state: EnterpriseCardState;
+  /** Plain-English: what this capability is. */
+  what: string;
+  /** Why it matters for an enterprise-grade system. */
+  why: string;
+  /** What ArchLab detected (or did not detect) for this card. */
+  detail: string;
+  /** A one-line, paste-ready prompt to close the gap. */
+  fixPrompt: string;
+}
+
+/** A colored Enterprise Audit category section with its evaluated cards. */
+export interface EnterpriseSection {
+  id: string;
+  title: string;
+  /** Glow / accent color, hex. */
+  color: string;
+  cards: EnterpriseCard[];
+  /** Section score 0-100 (detected=1, partial=0.5, missing=0, critical-gap=-0.5). */
+  score: number;
+}
+
+/** The full Enterprise Audit result for a project. */
+export interface EnterpriseAuditResult {
+  sections: EnterpriseSection[];
+  /** Overall score 0-100. */
+  score: number;
+  /** One-line verdict derived from the score. */
+  verdict: string;
+  totalCards: number;
+  detectedCount: number;
+  partialCount: number;
+  missingCount: number;
+  criticalGapCount: number;
+}
