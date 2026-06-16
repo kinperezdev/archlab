@@ -15,7 +15,7 @@
   gap: 12px;
 }
 
-.tb-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tb-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-shrink: 0; }
 .tb-logo-mark {
   width: 20px;
   height: 20px;
@@ -60,7 +60,7 @@
 }
 .tb-tab-content { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; }
 
-.tb-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.tb-right { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
 .tb-badge {
   display: inline-flex;
   align-items: center;
