@@ -426,6 +426,26 @@ body.is-resizing .app-shell {
   color: var(--color-text, #f8f8ff) !important;
   margin-left: 6px;
 }
+/* Large-project hint banner (Full Flow with 50+ nodes) */
+.large-project-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+}
+.large-project-text { font-size: var(--text-xs); color: var(--text-secondary); }
+.large-project-actions { display: flex; gap: var(--space-2); }
+
 /* Security tab: horizontal pipeline chips overlay (Fix 4) */
 .security-pipeline-overlay {
   display: flex;
