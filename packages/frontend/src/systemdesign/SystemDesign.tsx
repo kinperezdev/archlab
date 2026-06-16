@@ -36,7 +36,8 @@ import type {
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
 import { loadSystemDesign, saveSystemDesign } from '../lib/systemDesignStore.js';
 import { InfraNode, type InfraNodeData } from './InfraNode.js';
-import { INFRA_TYPES, LAYERS, LAYER_LABEL, infraMeta } from './infraCatalog.js';
+import { INFRA_TYPES, LAYERS, LAYER_LABEL, infraMeta, infraDescription } from './infraCatalog.js';
+import type { InfraNode as InfraNodeT, InfraEdge } from '@archlab/shared';
 
 const nodeTypes = { infra: InfraNode };
 
@@ -151,21 +152,7 @@ function DetectedMode({ infra }: { infra: SystemDesignMap }) {
       {/* Detail / suggestions side panel */}
       <aside className="sd-panel">
         {selectedNode ? (
-          <div>
-            <h4 className="sd-panel-title">
-              {infraMeta(selectedNode.type).glyph} {selectedNode.label}
-            </h4>
-            <p className="sd-panel-sub">{LAYER_LABEL[selectedNode.layer]} · detected from code</p>
-            <h5 className="sd-panel-heading">Detection source</h5>
-            {selectedNode.evidence.length === 0 && <p className="sd-empty">No evidence captured.</p>}
-            {selectedNode.evidence.map((ev, i) => (
-              <div key={i} className="sd-evidence">
-                <div className="sd-evidence-file">{ev.file}</div>
-                <div className="sd-evidence-pattern">{ev.pattern}</div>
-                {ev.snippet && <code className="sd-evidence-snippet">{ev.snippet}</code>}
-              </div>
-            ))}
-          </div>
+          <NodeDetail node={selectedNode} infra={infra} />
         ) : selectedSuggestion ? (
           <SuggestionDetail suggestion={selectedSuggestion} />
         ) : (
@@ -202,6 +189,197 @@ function DetectedMode({ infra }: { infra: SystemDesignMap }) {
           </div>
         )}
       </aside>
+    </div>
+  );
+}
+
+type Health = 'healthy' | 'warning' | 'critical';
+
+/** Derive a node's health from its detected metadata and the connections it sits on. */
+function nodeHealth(node: InfraNodeT, edges: InfraEdge[]): { level: Health; reasons: string[] } {
+  const reasons: string[] = [];
+  let level: Health = 'healthy';
+  const m = node.meta;
+  if (m?.bucketVisibility === 'public') {
+    level = 'critical';
+    reasons.push('This storage bucket is publicly readable over the internet.');
+  }
+  if (m?.potentiallyExposed) {
+    level = 'critical';
+    reasons.push('A public path on this node looks like it exposes sensitive data.');
+  }
+  if (m?.encryptionAtRest === 'unencrypted') {
+    if (level !== 'critical') level = 'warning';
+    reasons.push('Data at rest is not encrypted.');
+  }
+  const touchingUnencrypted = edges.filter(
+    (e) => (e.source === node.id || e.target === node.id) && e.encryption === 'unencrypted',
+  );
+  if (touchingUnencrypted.length > 0) {
+    if (level !== 'critical') level = 'warning';
+    reasons.push(`${touchingUnencrypted.length} connection(s) to this node are unencrypted in transit.`);
+  }
+  if (reasons.length === 0) reasons.push('No issues detected for this component.');
+  return { level, reasons };
+}
+
+const HEALTH_LABEL: Record<Health, string> = {
+  healthy: 'Healthy',
+  warning: 'Warning',
+  critical: 'Critical',
+};
+
+/** Full audit detail for a detected infrastructure node (Fix 3). */
+function NodeDetail({ node, infra }: { node: InfraNodeT; infra: SystemDesignMap }) {
+  const meta = infraMeta(node.type);
+  const m = node.meta;
+  const byId = new Map(infra.nodes.map((n) => [n.id, n.label] as const));
+  const labelFor = (id: string) => byId.get(id) ?? id;
+
+  const outgoing = infra.edges.filter((e) => e.source === node.id);
+  const incoming = infra.edges.filter((e) => e.target === node.id);
+  const health = nodeHealth(node, infra.edges);
+
+  const isPublicBucket = node.type === 'public-bucket';
+  const isKms = node.type === 'kms';
+  const isPubSub = node.type === 'pubsub-topic' || node.type === 'message-queue';
+
+  // Nodes in the data layer that have no KMS key access yet (for KMS detail).
+  const dataNodesWithoutKey = isKms
+    ? infra.nodes.filter(
+        (n) => n.layer === 'data' && n.type !== 'kms' && !(m?.keyAccess ?? []).includes(n.id),
+      )
+    : [];
+
+  const exposedPaths = node.evidence
+    .map((ev) => ev.snippet || ev.pattern)
+    .filter(Boolean) as string[];
+
+  const fixPrompt = isPublicBucket
+    ? `Lock down the public storage bucket "${node.label}". Steps:\n1. Make the bucket private by default and remove public-read ACLs/policies.\n2. Serve files through time-limited signed URLs instead of public paths.\n3. Audit existing objects (${exposedPaths.join(', ') || 'all paths'}) for sensitive data and rotate/remove anything leaked.\n4. Add a CI check that fails if the bucket policy becomes public again.`
+    : `Review the "${node.label}" (${meta.label}) infrastructure component and address: ${health.reasons.join(' ')}`;
+
+  return (
+    <div className="sd-detail">
+      <div className="sd-detail-head">
+        <h4 className="sd-panel-title">
+          {meta.glyph} {node.label}
+        </h4>
+        <span className={`sd-health sd-health-${health.level}`}>{HEALTH_LABEL[health.level]}</span>
+      </div>
+      <p className="sd-panel-sub">{LAYER_LABEL[node.layer]} · {meta.label} · detected from code</p>
+
+      <h5 className="sd-panel-heading">What this is</h5>
+      <p className="sd-panel-text">{infraDescription(node.type)}</p>
+
+      {/* Public bucket: exposure audit + step-by-step fix */}
+      {isPublicBucket && (
+        <div className="sd-detail-block sd-detail-danger">
+          <div className="sd-detail-badges">
+            <span className="infra-badge bad">PUBLIC</span>
+            {m?.potentiallyExposed && <span className="infra-badge danger">⚠ POTENTIALLY EXPOSED DATA</span>}
+          </div>
+          {exposedPaths.length > 0 && (
+            <>
+              <h5 className="sd-panel-heading">Exposed paths / files</h5>
+              <ul className="sd-detail-list">
+                {exposedPaths.map((p, i) => (
+                  <li key={i}><code>{p}</code></li>
+                ))}
+              </ul>
+            </>
+          )}
+          <h5 className="sd-panel-heading">Why this is a risk</h5>
+          <p className="sd-panel-text">
+            Anything in a public bucket is readable by anyone on the internet with the URL, with no
+            authentication. If user uploads, backups, or internal assets land here, they are
+            effectively leaked and can be indexed by crawlers.
+          </p>
+          <h5 className="sd-panel-heading">How to fix it</h5>
+          <ol className="sd-detail-steps">
+            <li>Set the bucket to private and remove public-read ACLs/policies.</li>
+            <li>Serve files via short-lived signed URLs instead of public links.</li>
+            <li>Audit existing objects for sensitive data; rotate or delete anything leaked.</li>
+            <li>Add a CI guardrail that fails if the bucket becomes public again.</li>
+          </ol>
+        </div>
+      )}
+
+      {/* KMS: who has key access, who is missing it */}
+      {isKms && (
+        <div className="sd-detail-block">
+          <h5 className="sd-panel-heading">Services with key access ({(m?.keyAccess ?? []).length})</h5>
+          {(m?.keyAccess ?? []).length === 0 ? (
+            <p className="sd-empty">No services are wired to this key service yet.</p>
+          ) : (
+            <ul className="sd-detail-list">
+              {(m?.keyAccess ?? []).map((id) => <li key={id}>{labelFor(id)}</li>)}
+            </ul>
+          )}
+          <h5 className="sd-panel-heading">Sensitive data nodes without key access ({dataNodesWithoutKey.length})</h5>
+          {dataNodesWithoutKey.length === 0 ? (
+            <p className="sd-empty">All data-layer nodes have key access.</p>
+          ) : (
+            <ul className="sd-detail-list">
+              {dataNodesWithoutKey.map((n) => <li key={n.id} className="sd-detail-warn">⚠ {n.label}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Pub/Sub: topics with publisher / subscriber counts */}
+      {isPubSub && m?.topics && m.topics.length > 0 && (
+        <div className="sd-detail-block">
+          <h5 className="sd-panel-heading">Topics ({m.topics.length})</h5>
+          <ul className="sd-detail-list">
+            {m.topics.map((t) => (
+              <li key={t.id}>
+                <strong>{t.name}</strong> — {t.publishers.length} publisher(s), {t.subscribers.length} subscriber(s)
+                {!t.hasDLQ && <span className="sd-detail-warn"> · no DLQ</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Health reasons */}
+      <h5 className="sd-panel-heading">Status</h5>
+      <ul className="sd-detail-list">
+        {health.reasons.map((r, i) => <li key={i}>{r}</li>)}
+      </ul>
+
+      {/* Connections */}
+      <h5 className="sd-panel-heading">Connections ({incoming.length + outgoing.length})</h5>
+      {incoming.length === 0 && outgoing.length === 0 ? (
+        <p className="sd-empty">No connections detected.</p>
+      ) : (
+        <ul className="sd-detail-list">
+          {incoming.map((e) => (
+            <li key={e.id}>← from <strong>{labelFor(e.source)}</strong>{e.label ? ` (${e.label})` : ''}</li>
+          ))}
+          {outgoing.map((e) => (
+            <li key={e.id}>→ to <strong>{labelFor(e.target)}</strong>{e.label ? ` (${e.label})` : ''}</li>
+          ))}
+        </ul>
+      )}
+
+      {/* Detection evidence */}
+      <h5 className="sd-panel-heading">Detection source</h5>
+      {node.evidence.length === 0 ? (
+        <p className="sd-empty">No evidence captured.</p>
+      ) : (
+        node.evidence.map((ev, i) => (
+          <div key={i} className="sd-evidence">
+            <div className="sd-evidence-file">{ev.file}</div>
+            <div className="sd-evidence-pattern">{ev.pattern}</div>
+            {ev.snippet && <code className="sd-evidence-snippet">{ev.snippet}</code>}
+          </div>
+        ))
+      )}
+
+      <div className="sd-detail-actions">
+        <CopyPromptButton prompt={fixPrompt} label="Copy Prompt" />
+      </div>
     </div>
   );
 }

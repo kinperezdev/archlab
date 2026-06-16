@@ -59,7 +59,7 @@ export function PipelineTags({ steps, diagnostics, activeStep, onSelect, isVerti
             title={`${STEP_TITLES[id]}${count > 0 ? ` — ${count} finding(s)` : ''}`}
             onClick={() => onSelect(isActive ? null : id)}
           >
-            <span className="pipeline-tag-num">{i + 1}</span>
+            <span className="pipeline-tag-num">{state === 'passed' ? '✓' : i + 1}</span>
             <span className="pipeline-tag-name">{STEP_TITLES[id]}</span>
             {count > 0 && <span className="pipeline-tag-count">{count}</span>}
           </button>

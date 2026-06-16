@@ -27,6 +27,7 @@ const TABS: { id: ArchTab; label: string }[] = [
   { id: 'api', label: 'API' },
   { id: 'security', label: 'Security' },
   { id: 'systemdesign', label: 'System Design' },
+  { id: 'blueprint', label: 'Blueprint' },
 ];
 
 const SPRING = { type: 'spring', stiffness: 400, damping: 30 } as const;
@@ -95,6 +96,7 @@ export function TopBar({
                 />
               )}
               <span className="tb-tab-content">
+                <TabIcon tab={t.id} />
                 <span>{t.label}</span>
               </span>
             </motion.button>

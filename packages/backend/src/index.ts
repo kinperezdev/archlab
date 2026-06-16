@@ -249,11 +249,11 @@ app.post('/terminal/upload-batch', (req, res) => {
   }
 });
 
-// ---- Ideas canvas persistence (brain/ideas.json) ----------------------
-const IDEAS_FILE = path.join(BRAIN_DIR, 'ideas.json');
+// ---- Blueprint canvas persistence (brain/blueprint.json) ----------------------
+const IDEAS_FILE = path.join(BRAIN_DIR, 'blueprint.json');
 const SCHEMA_FILE = path.join(BRAIN_DIR, 'schema.json');
 
-app.get('/ideas', (_req, res) => {
+app.get('/blueprint', (_req, res) => {
   try {
     if (!fs.existsSync(IDEAS_FILE)) return res.json({ ok: true, nodes: [], edges: [] });
     const data = JSON.parse(fs.readFileSync(IDEAS_FILE, 'utf8'));
@@ -263,7 +263,7 @@ app.get('/ideas', (_req, res) => {
   }
 });
 
-app.post('/ideas', (req, res) => {
+app.post('/blueprint', (req, res) => {
   const nodes = Array.isArray(req.body?.nodes) ? req.body.nodes : [];
   const edges = Array.isArray(req.body?.edges) ? req.body.edges : [];
   try {

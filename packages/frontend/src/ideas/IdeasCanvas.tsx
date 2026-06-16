@@ -1,5 +1,5 @@
 /**
- * Ideas (Scratch) canvas: a completely free, blank canvas for sketching.
+ * Blueprint canvas: a completely free, blank canvas for sketching.
  *
  * Drag-and-drop uses a reliable mousedown-ghost approach (no HTML5 drag API):
  *  - Each palette item has an onMouseDown handler. Pressing it spawns a fixed
@@ -11,7 +11,7 @@
  *  - Placed nodes are immediately draggable (React Flow built-in), double-click
  *    to rename, drag edge handles to connect, double-click an edge to label it.
  *  - Right-click: Add Node / Delete / Duplicate / Clear All.
- *  - Persists to brain/ideas.json on every change.
+ *  - Persists to brain/blueprint.json on every change.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -80,7 +80,7 @@ function IdeasCanvasInner() {
     };
   }, [setNodes, setEdges]);
 
-  // Persist to brain/ideas.json on change (after the initial load).
+  // Persist to brain/blueprint.json on change (after the initial load).
   useEffect(() => {
     if (!loaded) return;
     const clean = nodes.map((n) => ({ ...n, selected: false, className: stripHighlight(n.className) }));
@@ -201,7 +201,7 @@ function IdeasCanvasInner() {
   }, [setNodes]);
 
   const clearAll = useCallback(() => {
-    if (!window.confirm('Clear the entire scratch canvas?')) return;
+    if (!window.confirm('Clear the entire blueprint canvas?')) return;
     setNodes([]);
     setEdges([]);
     setMenu(null);

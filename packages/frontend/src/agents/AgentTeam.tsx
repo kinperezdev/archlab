@@ -60,7 +60,15 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequ
           <h3>Agent Team</h3>
           {projectName && <span className="agent-panel-project">{projectName}</span>}
         </div>
-        <button className="code-icon-btn" onClick={onClose} title="Close">✕</button>
+        <div className="agent-head-actions">
+          <button
+            className={`btn-ghost ${showHistory ? 'active' : ''}`}
+            onClick={() => setShowHistory((s) => !s)}
+          >
+            {showHistory ? 'Agents' : 'History'}
+          </button>
+          <button className="code-icon-btn" onClick={onClose} title="Close">✕</button>
+        </div>
       </header>
 
       <div className="agent-controls">
@@ -97,9 +105,6 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequ
               Run Agent Team
             </button>
           )}
-          <button className="btn" onClick={() => setShowHistory((s) => !s)}>
-            {showHistory ? 'Hide History' : 'History'}
-          </button>
         </div>
         {!hasProject && <p className="agent-hint">Analyze a project first to give the agents context.</p>}
       </div>
@@ -110,17 +115,24 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequ
         <div className="agent-list">
           {AGENT_CATALOG.map((a) => {
             const st = team.agents[a.id];
+            const lastRunAt = team.runs[0]?.at ?? null;
             return (
               <div key={a.id} className="agent-card" style={{ borderLeftColor: a.color }}>
                 <button className="agent-card-head" onClick={() => toggle(a.id)}>
-                  <span className={`agent-status-dot status-${st.status}`} />
                   <span className="agent-card-glyph">{a.glyph}</span>
                   <span className="agent-card-name">{a.name}</span>
                   <span className="agent-card-status">
                     {st.summary ?? STATUS_LABEL[st.status]}
                   </span>
+                  <span className={`agent-status-dot status-${st.status}`} />
                 </button>
                 <p className="agent-card-role">{a.role}</p>
+                <p className="agent-card-meta">
+                  {st.findings.length} finding{st.findings.length === 1 ? '' : 's'}
+                  {lastRunAt && (
+                    <> · last run {new Date(lastRunAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
+                  )}
+                </p>
 
                 {(st.status === 'thinking' || st.status === 'working' || st.status === 'error' || expanded.has(a.id)) && st.output && (
                   <pre className="agent-output">{st.output.slice(-4000)}</pre>

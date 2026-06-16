@@ -1,4 +1,4 @@
-/** Tiny localStorage helpers used to persist the Ideas and Database canvases. */
+/** Tiny localStorage helpers used to persist the Blueprint and Database canvases. */
 
 export function loadJSON<T>(key: string, fallback: T): T {
   try {

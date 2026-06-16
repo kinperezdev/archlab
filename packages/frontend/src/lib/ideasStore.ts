@@ -1,5 +1,5 @@
 /**
- * Ideas canvas persistence, backed by the backend file brain/ideas.json.
+ * Blueprint canvas persistence, backed by the backend file brain/blueprint.json.
  * Falls back to localStorage if the backend is unreachable so sketches are
  * never lost.
  */
@@ -15,10 +15,10 @@ export interface IdeasDoc {
   edges: unknown[];
 }
 
-/** Load the saved ideas canvas from brain/ideas.json (or local fallback). */
+/** Load the saved blueprint canvas from brain/blueprint.json (or local fallback). */
 export async function loadIdeas(): Promise<IdeasDoc> {
   try {
-    const res = await fetch(`${BASE}/ideas`);
+    const res = await fetch(`${BASE}/blueprint`);
     const data = await res.json();
     if (data?.ok) return { nodes: data.nodes ?? [], edges: data.edges ?? [] };
   } catch {
@@ -27,11 +27,11 @@ export async function loadIdeas(): Promise<IdeasDoc> {
   return loadJSON<IdeasDoc>(LOCAL_KEY, { nodes: [], edges: [] });
 }
 
-/** Persist the ideas canvas to brain/ideas.json (and local fallback). */
+/** Persist the blueprint canvas to brain/blueprint.json (and local fallback). */
 export async function saveIdeas(doc: IdeasDoc): Promise<void> {
   saveJSON(LOCAL_KEY, doc);
   try {
-    await fetch(`${BASE}/ideas`, {
+    await fetch(`${BASE}/blueprint`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(doc),
@@ -41,7 +41,7 @@ export async function saveIdeas(doc: IdeasDoc): Promise<void> {
   }
 }
 
-/** Append nodes (e.g. database tables) to the existing ideas canvas. */
+/** Append nodes (e.g. database tables) to the existing blueprint canvas. */
 export async function appendToIdeas(nodes: unknown[]): Promise<void> {
   const current = await loadIdeas();
   await saveIdeas({ nodes: [...current.nodes, ...nodes], edges: current.edges });

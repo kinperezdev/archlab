@@ -13,6 +13,7 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
     'API Filter',
     'Security Controls',
     'System Design',
+    'Blueprint',
   ];
 
   return (

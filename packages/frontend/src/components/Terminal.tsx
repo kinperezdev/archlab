@@ -47,11 +47,29 @@ interface TerminalProps {
   api: TerminalApi;
 }
 
+// Pure black background; ANSI palette mapped to the ArchLab design tokens so
+// command output color-codes consistently (error red, success green, etc.).
 const TERM_THEME = {
-  background: '#0b0e14',
-  foreground: '#d7dce5',
+  background: '#080808',
+  foreground: '#f8f8ff',
   cursor: '#5ad6b0',
   selectionBackground: 'rgba(90, 140, 255, 0.3)',
+  black: '#1a1a20',
+  red: '#ef4444',
+  green: '#10b981',
+  yellow: '#f59e0b',
+  blue: '#3b82f6',
+  magenta: '#a855f7',
+  cyan: '#2dd4bf',
+  white: '#d7dce5',
+  brightBlack: '#4a4a5a',
+  brightRed: '#f87171',
+  brightGreen: '#34d399',
+  brightYellow: '#fbbf24',
+  brightBlue: '#60a5fa',
+  brightMagenta: '#c084fc',
+  brightCyan: '#5eead4',
+  brightWhite: '#ffffff',
 };
 
 /** Short type label for a non-image card, e.g. "PDF", "JS", "FOLDER". */
