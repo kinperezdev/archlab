@@ -384,7 +384,7 @@ export function App() {
           />
         )}
 
-        {!agentTeamOpen && isArchitecture && showRightSidebar && (
+        {!agentTeamOpen && isArchitecture && tab !== 'systemdesign' && showRightSidebar && (
           <RightSidebar
             projectId={state.projectId}
             projectName={state.projectName}
