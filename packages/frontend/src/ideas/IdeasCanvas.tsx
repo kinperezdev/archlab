@@ -229,6 +229,9 @@ function IdeasCanvasInner() {
         className={`ideas-canvas-area ${ghost && overCanvas ? 'ideas-drop-active' : ''}`}
         ref={wrapRef}
       >
+        <button className="blueprint-clear-btn" onClick={clearAll} title="Reset the blueprint canvas">
+          🗑 Clear Canvas
+        </button>
         <ReactFlow
           nodes={nodes}
           edges={edges}

@@ -8,6 +8,7 @@ import ReactFlow, {
   ReactFlowProvider,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Edge,
   type Node,
 } from 'reactflow';
@@ -421,7 +422,12 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const [pendingRename, setPendingRename] = useState<PendingRename | null>(null);
   const [showEditor, setShowEditor] = useState(true);
+  // Large-schema controls (only active when >50 tables are detected).
+  const [search, setSearch] = useState('');
+  const [dbFilter, setDbFilter] = useState<'all' | 'confirmed' | 'inferred' | 'related'>('all');
+  const [showAll, setShowAll] = useState(false);
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
+  const { fitView } = useReactFlow();
 
   // Use a ref to keep track of current nodes to preserve positions without causing loops
   const nodesRef = useRef<Node<SchemaNodeData>[]>([]);
@@ -449,13 +455,58 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const validationErrors = useMemo(() => checkFkValidity(resolvedTables), [resolvedTables]);
   const typeMismatches = useMemo(() => checkFkTypeMismatches(resolvedTables), [resolvedTables]);
 
+  // Large-schema handling: above this many tables, the canvas filters/searches
+  // instead of rendering everything at once.
+  const LARGE_SCHEMA = resolvedTables.length > 50;
+  const DEFAULT_LIMIT = 20;
+
+  // Tables that participate in at least one foreign-key relationship (either
+  // side). These are always worth showing even in the capped default view.
+  const tablesWithRelationships = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of resolvedTables) {
+      for (const c of t.columns) {
+        if (c.isFk && c.fkRelation) {
+          set.add(t.name);
+          set.add(c.fkRelation.parentTable);
+        }
+      }
+    }
+    return set;
+  }, [resolvedTables]);
+
+  // The subset of tables actually rendered on the canvas, after search/filter and
+  // the default "first 20 + related" cap. Only engaged for large schemas.
+  const visibleTables = useMemo(() => {
+    if (!LARGE_SCHEMA) return resolvedTables;
+    const q = search.trim().toLowerCase();
+    let list = resolvedTables;
+    if (q) list = list.filter((t) => t.name.toLowerCase().includes(q));
+    if (dbFilter === 'confirmed') list = list.filter((t) => !isInferredTable(t));
+    else if (dbFilter === 'inferred') list = list.filter((t) => isInferredTable(t));
+    else if (dbFilter === 'related') list = list.filter((t) => tablesWithRelationships.has(t.name));
+
+    // Default capped view: first 20 plus every related table. Search or an
+    // explicit filter bypasses the cap so results are never hidden.
+    if (!q && dbFilter === 'all' && !showAll) {
+      const merged = new Map<string, DbTable>();
+      for (const t of list.slice(0, DEFAULT_LIMIT)) merged.set(t.name, t);
+      for (const t of list) if (tablesWithRelationships.has(t.name)) merged.set(t.name, t);
+      return [...merged.values()];
+    }
+    return list;
+  }, [LARGE_SCHEMA, resolvedTables, search, dbFilter, showAll, tablesWithRelationships]);
+
+  const canLoadMore =
+    LARGE_SCHEMA && !showAll && dbFilter === 'all' && !search.trim() && visibleTables.length < resolvedTables.length;
+
   // Sync React Flow nodes/edges with tables whenever they or selection changes.
   useEffect(() => {
-    const computedEdges = buildEdges(resolvedTables);
+    const computedEdges = buildEdges(visibleTables);
     const neighbors = activeNodeId ? neighborSet(activeNodeId, computedEdges) : null;
 
-    const confirmed = resolvedTables.filter((t) => !isInferredTable(t));
-    const inferred = resolvedTables.filter((t) => isInferredTable(t));
+    const confirmed = visibleTables.filter((t) => !isInferredTable(t));
+    const inferred = visibleTables.filter((t) => isInferredTable(t));
 
     // Confirmed group sits on the left; inferred to its right.
     const confCols = confirmed.length <= 3 ? 1 : 2;
@@ -527,7 +578,7 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
     setNodes([...groupNodes, ...tableNodes] as Node<SchemaNodeData>[]);
     setEdges(computedEdges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedTables, activeNodeId, setNodes, setEdges]);
+  }, [visibleTables, resolvedTables, activeNodeId, setNodes, setEdges]);
 
   // Escape releases the locked highlight.
   useEffect(() => {
@@ -741,6 +792,42 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
             ▶
           </button>
         )}
+
+        {LARGE_SCHEMA && (
+          <div className="db-canvas-toolbar">
+            <input
+              className="db-search-input"
+              type="text"
+              placeholder="Search tables…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="db-filter-group">
+              {([
+                ['all', 'All'],
+                ['confirmed', 'Confirmed'],
+                ['inferred', 'Inferred'],
+                ['related', 'With relationships'],
+              ] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  className={`db-filter-btn ${dbFilter === val ? 'active' : ''}`}
+                  onClick={() => setDbFilter(val)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              className="db-filter-btn"
+              onClick={() => fitView({ duration: 400, maxZoom: 1 })}
+              title="Zoom to fit visible tables"
+            >
+              ⤢ Zoom to fit
+            </button>
+          </div>
+        )}
+
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -763,6 +850,19 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
         {tables.length === 0 && (
           <div className="db-canvas-empty">
             <p>Write a CREATE TABLE statement on the left to generate tables here.</p>
+          </div>
+        )}
+
+        {LARGE_SCHEMA && (
+          <div className="db-canvas-count">
+            <span>
+              Showing {visibleTables.length} of {resolvedTables.length} tables — search or filter to find specific tables
+            </span>
+            {canLoadMore && (
+              <button className="db-filter-btn" onClick={() => setShowAll(true)}>
+                Load More
+              </button>
+            )}
           </div>
         )}
       </div>

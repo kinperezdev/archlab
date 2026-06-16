@@ -520,6 +520,11 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     const hasSelection = Object.keys(selectedEdges).length > 0;
     const hasActiveHighlight = activeNodeId !== null || hoveredEdgeId !== null || hasSelection;
 
+    const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+    // Count how many edges share each source so parallel edges can be fanned out
+    // with a small per-edge offset instead of stacking on top of each other.
+    const sourceSeen = new Map<string, number>();
+
     const nextEdges = graph.edges
       .filter((e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target))
       .map((e) => {
@@ -529,18 +534,36 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
         const isConnectedToActiveNode =
           activeNodeId !== null && (e.source === activeNodeId || e.target === activeNodeId);
         const isActive = isHovered || isSelected || isConnectedToActiveNode;
-        const isDimmed = hasActiveHighlight ? !isActive : false;
+
+        // Per-connection-type color, inferred from the two node kinds + label.
+        const source = byId.get(e.source);
+        const target = byId.get(e.target);
+        const operation = inferOperation({
+          otherKind: target?.kind,
+          edgeLabel: e.label,
+          sourceHint: `${source?.label ?? ''} ${source?.filePath ?? ''} ${target?.label ?? ''}`,
+          direction: 'out',
+        });
+        const opColor = OPERATION_COLORS[operation];
+
+        // Opacity: 0.5 at rest; when a node is active its edges go full 1.0 and
+        // every other edge fades to 0.15 so the connection path pops.
+        const opacity = hasActiveHighlight ? (isActive ? 1 : 0.15) : 0.5;
+
+        // Fan parallel edges out of the same source so they don't overlap.
+        const n = sourceSeen.get(e.source) ?? 0;
+        sourceSeen.set(e.source, n + 1);
+        const offset = 12 + (n % 5) * 8;
 
         return {
           id: e.id,
           source: e.source,
           target: e.target,
           label: e.label,
-          // Clean right-angled routing instead of diagonal lines crossing over
-          // everything. Higher curvature so edges arc around nodes, and a low
-          // zIndex so edges always paint behind the nodes (never on top).
+          // Clean right-angled routing with very rounded corners; low zIndex so
+          // edges always paint behind the nodes (never on top).
           type: 'smoothstep',
-          pathOptions: { borderRadius: 28 },
+          pathOptions: { borderRadius: 40, offset },
           zIndex: 0,
           animated: e.animated || isActive,
           className: (e.animated || isActive) ? 'edge-flowing' : undefined,
@@ -548,13 +571,13 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             type: MarkerType.ArrowClosed,
             width: 16,
             height: 16,
-            color: isActive ? '#0d99ff' : '#a1a1aa',
+            color: opColor,
           },
           style: {
-            strokeWidth: isActive ? 3 : 2,
-            stroke: isActive ? '#0d99ff' : '#a1a1aa',
-            opacity: isDimmed ? 0.25 : 1,
-            transition: 'stroke 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease',
+            strokeWidth: isActive ? 3 : 1.5,
+            stroke: opColor,
+            opacity,
+            transition: 'stroke-width 0.15s ease, opacity 0.15s ease',
           },
         };
       });
@@ -604,7 +627,8 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
-            minZoom={0.1}
+            fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
+            minZoom={0.4}
             onNodeClick={(_e, node) => {
               if (node.type === 'laneGroup') return;
               onSelectNode(node.id);
