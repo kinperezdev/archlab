@@ -184,7 +184,7 @@ export function App() {
   );
 
   const isArchitecture =
-    tab === 'all' || tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security';
+    tab === 'all' || tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security' || tab === 'systemdesign';
 
   // Count nodes with no edges at all — the project's disconnected parts.
   const isolatedCount = useMemo(() => {

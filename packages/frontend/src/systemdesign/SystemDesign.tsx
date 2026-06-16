@@ -891,6 +891,9 @@ function DetectedMode({ infra }: { infra: SystemDesignMap }) {
               }}
               onPaneClick={() => setSelectedId(null)}
               fitView
+              fitViewOptions={{ padding: 0.5, includeHiddenNodes: false }}
+              minZoom={0.2}
+              maxZoom={1.2}
               proOptions={{ hideAttribution: true }}
               nodesDraggable={false}
               nodesConnectable={false}
