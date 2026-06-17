@@ -119,6 +119,8 @@ export interface ArchLabState {
   inferredSql: string | null;
   /** Detected infrastructure map for the System Design tab (Detected Mode). */
   infra: SystemDesignMap | null;
+  /** package.json dependency names + CI/scan config markers, for Enterprise Audit. */
+  dependencies: string[];
   /** Agent Team live state. */
   agentTeam: AgentTeamState;
 }
@@ -144,6 +146,7 @@ export function useArchLab() {
     terminal: { cwd: '~' },
     inferredSql: null,
     infra: null,
+    dependencies: [],
     agentTeam: {
       running: false,
       agents: emptyAgents(),
@@ -179,6 +182,7 @@ export function useArchLab() {
           intelligence: null,
           inferredSql: msg.inferredSql ?? null,
           infra: msg.infra ?? null,
+          dependencies: msg.dependencies ?? [],
         };
 
       case 'canvas-update':

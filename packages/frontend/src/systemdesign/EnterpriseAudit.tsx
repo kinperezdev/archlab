@@ -31,6 +31,8 @@ import { ENTERPRISE_SECTIONS, type CardDef, type SectionDef } from './enterprise
 interface EnterpriseAuditProps {
   infra: SystemDesignMap;
   findings: Diagnostic[];
+  /** package.json dependency names + CI/scan config markers (lowercased). */
+  dependencies?: string[];
 }
 
 const STATE_POINTS: Record<EnterpriseCardState, number> = {
@@ -54,11 +56,13 @@ interface DetectCtx {
   nodeTypes: Set<InfraNodeType>;
   /** Lowercased searchable text built from the detected infra (project evidence). */
   corpus: string;
+  /** Lowercased package.json dependency names + CI/scan config markers. */
+  deps: Set<string>;
   findings: Diagnostic[];
 }
 
-/** Build the detection context once from infra + findings. */
-function buildContext(infra: SystemDesignMap, findings: Diagnostic[]): DetectCtx {
+/** Build the detection context once from infra + findings + dependencies. */
+function buildContext(infra: SystemDesignMap, findings: Diagnostic[], dependencies: string[]): DetectCtx {
   const nodeTypes = new Set<InfraNodeType>(infra.nodes.map((n) => n.type));
   const parts: string[] = [];
   for (const n of infra.nodes) {
@@ -69,7 +73,34 @@ function buildContext(infra: SystemDesignMap, findings: Diagnostic[]): DetectCtx
       parts.push(ev.file);
     }
   }
-  return { nodeTypes, corpus: parts.join(' \n ').toLowerCase(), findings };
+  const deps = new Set(dependencies.map((d) => d.toLowerCase()));
+  return { nodeTypes, corpus: parts.join(' \n ').toLowerCase(), deps, findings };
+}
+
+/** Escape a keyword so it can be embedded literally in a RegExp. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Whole-word keyword test. Word boundaries stop "scale" matching "scalability",
+ * "rest" matching "restore", or "sse" matching "classes" — the substring bugs
+ * the old `corpus.includes` caused.
+ */
+function wordHit(keyword: string, corpus: string): boolean {
+  return new RegExp('\\b' + escapeRegex(keyword) + '\\b', 'i').test(corpus);
+}
+
+/** Count how many of a card's keywords appear as whole words in the corpus. */
+function corpusKeywordHits(keywords: string[] | undefined, corpus: string): number {
+  if (!keywords) return 0;
+  return keywords.reduce((n, k) => (wordHit(k, corpus) ? n + 1 : n), 0);
+}
+
+/** Does the project depend on any package (or config marker) that proves this card? */
+function dependencyProof(def: CardDef, ctx: DetectCtx): string | null {
+  const hit = def.packages?.find((p) => ctx.deps.has(p.toLowerCase()));
+  return hit ?? null;
 }
 
 /** Does a finding mention any of the keywords in its title or body text? */
@@ -78,14 +109,40 @@ function findingMatches(f: Diagnostic, keywords: string[]): boolean {
   return keywords.some((k) => hay.includes(k));
 }
 
-/** Resolve one card's live state and the human-readable detail line. */
+/**
+ * Resolve one card's live state and the human-readable detail line.
+ *
+ * Precedence (high → low confidence):
+ *  1. Negative signal (e.g. dangerouslySetInnerHTML) → forced Critical Gap.
+ *  2. Structural infra node type → Detected.
+ *  3. Confirmed package.json dependency / config marker → Detected.
+ *  4. criticalIfMissing / requiresProof cards: corpus can NEVER promote them —
+ *     they fall to their hard default (Critical Gap / Missing) unless 2–3 proved
+ *     them, with findings able to flag a gap explicitly.
+ *  5. Normal cards: 2+ whole-word corpus hits → Detected; 1 hit or related infra
+ *     → Partial; findings → Critical Gap / Missing; otherwise Missing.
+ */
 function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardState; detail: string } {
-  // 1. Direct infrastructure detection — strongest signal.
+  // 1. Negative signal: its very presence is the risk (anti-pattern in code).
+  if (def.negativeKeywords?.some((k) => wordHit(k, ctx.corpus))) {
+    return {
+      state: 'critical-gap',
+      detail: 'A risky anti-pattern was found in the code — this must be remediated, not relied on.',
+    };
+  }
+
+  // 2. Direct infrastructure detection — strongest signal.
   if (def.nodeTypes?.some((t) => ctx.nodeTypes.has(t))) {
     return { state: 'detected', detail: 'ArchLab detected this directly in the project infrastructure.' };
   }
 
-  // 2. Findings scan (scoped to security-checks step when requested).
+  // 3. Confirmed dependency / config-file proof — high confidence.
+  const proof = dependencyProof(def, ctx);
+  if (proof) {
+    return { state: 'detected', detail: `Confirmed by a project dependency/config: ${proof}.` };
+  }
+
+  // Findings scan (scoped to security-checks step when requested).
   const pool = def.securityStep
     ? ctx.findings.filter((f) => f.step === 'security-checks')
     : ctx.findings;
@@ -93,21 +150,47 @@ function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardStat
   const hasHigh = matched.some((f) => HIGH_SEVERITIES.includes(f.severity));
   const hasMed = matched.some((f) => MED_SEVERITIES.includes(f.severity));
 
-  // 3. Corpus evidence — keyword present in detected infra and no blocking finding.
-  const corpusHit = def.keywords?.some((k) => ctx.corpus.includes(k)) ?? false;
-  if (corpusHit && !hasHigh) {
-    return { state: 'detected', detail: 'Evidence of this was found in the scanned project code.' };
-  }
-
-  // 4. Related-but-incomplete infrastructure.
-  if (def.partialTypes?.some((t) => ctx.nodeTypes.has(t))) {
+  // 4a. Safety-critical capabilities: corpus keywords can never mark these
+  //     Detected/Partial. Without structural or dependency proof their absence
+  //     is itself a Critical Gap (a HIGH finding gives a concrete reason).
+  if (def.criticalIfMissing) {
+    if (hasHigh) {
+      const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
+      return { state: 'critical-gap', detail: `A ${f.severity} finding flags this as a gap: ${f.title}.` };
+    }
     return {
-      state: 'partial',
-      detail: 'Related infrastructure exists, but this capability looks incomplete.',
+      state: 'critical-gap',
+      detail: 'Not proven by infrastructure or a dependency. Its absence is a security/reliability risk.',
     };
   }
 
-  // 5. Findings indicate the gap explicitly.
+  // 4b. Operational/process capabilities: not verifiable from static code, so
+  //     corpus keywords cannot promote them. Default Missing until an Agent Team
+  //     run or a real dependency proves otherwise.
+  if (def.requiresProof) {
+    if (hasHigh) {
+      const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
+      return { state: 'critical-gap', detail: `A ${f.severity} finding flags this as a gap: ${f.title}.` };
+    }
+    if (def.partialTypes?.some((t) => ctx.nodeTypes.has(t))) {
+      return { state: 'partial', detail: 'Related infrastructure exists, but this capability is unproven.' };
+    }
+    return { state: 'missing', detail: 'Not proven by infrastructure or a dependency; requires verification.' };
+  }
+
+  // 5. Normal cards: require 2+ whole-word corpus hits for Detected.
+  const hits = corpusKeywordHits(def.keywords, ctx.corpus);
+  if (hits >= 2 && !hasHigh) {
+    return { state: 'detected', detail: 'Multiple corroborating signals were found in the scanned code.' };
+  }
+  if (def.partialTypes?.some((t) => ctx.nodeTypes.has(t))) {
+    return { state: 'partial', detail: 'Related infrastructure exists, but this capability looks incomplete.' };
+  }
+  if (hits === 1 && !hasHigh) {
+    return { state: 'partial', detail: 'A single weak signal was found — partial at best, not confirmed.' };
+  }
+
+  // 6. Findings indicate the gap explicitly.
   if (hasHigh) {
     const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
     return { state: 'critical-gap', detail: `A ${f.severity} finding flags this as a gap: ${f.title}.` };
@@ -115,14 +198,6 @@ function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardStat
   if (hasMed) {
     const f = matched.find((m) => MED_SEVERITIES.includes(m.severity))!;
     return { state: 'missing', detail: `A finding notes room to improve here: ${f.title}.` };
-  }
-
-  // 6. Nothing found. Absence of a safety-critical capability is itself a risk.
-  if (def.criticalIfMissing) {
-    return {
-      state: 'critical-gap',
-      detail: 'Not detected. Its absence is a security or reliability risk for an enterprise system.',
-    };
   }
   return { state: 'missing', detail: 'Not detected in this project.' };
 }
@@ -135,8 +210,8 @@ function scoreOf(cards: EnterpriseCard[]): number {
 }
 
 /** Compute the full audit result from infra + findings. */
-function computeAudit(infra: SystemDesignMap, findings: Diagnostic[]): EnterpriseAuditResult {
-  const ctx = buildContext(infra, findings);
+function computeAudit(infra: SystemDesignMap, findings: Diagnostic[], dependencies: string[]): EnterpriseAuditResult {
+  const ctx = buildContext(infra, findings, dependencies);
   const sections: EnterpriseSection[] = ENTERPRISE_SECTIONS.map((section: SectionDef) => {
     const cards: EnterpriseCard[] = section.cards.map((def) => {
       const { state, detail } = evaluateCard(def, ctx);
@@ -324,8 +399,11 @@ function exportReport(result: EnterpriseAuditResult) {
   win.document.close();
 }
 
-export function EnterpriseAudit({ infra, findings }: EnterpriseAuditProps) {
-  const result = useMemo(() => computeAudit(infra, findings), [infra, findings]);
+export function EnterpriseAudit({ infra, findings, dependencies = [] }: EnterpriseAuditProps) {
+  const result = useMemo(
+    () => computeAudit(infra, findings, dependencies),
+    [infra, findings, dependencies],
+  );
   const overallColor = scoreColor(result.score);
 
   return (

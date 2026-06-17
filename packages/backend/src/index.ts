@@ -776,6 +776,53 @@ async function handleClientMessage(
   }
 }
 
+/**
+ * Collect high-confidence capability signals for the Enterprise Audit:
+ *  - every dependency + devDependency name from the project's package.json
+ *  - markers for CI/security config files that prove a capability by presence
+ *    (e.g. ".github/workflows", "dependabot.yml", ".snyk", "Jenkinsfile")
+ *
+ * These are exact, structural signals — unlike keyword scans — so a card can be
+ * marked Detected with confidence when one is present.
+ */
+function collectProjectDependencies(rootPath: string): string[] {
+  const out = new Set<string>();
+  try {
+    const pkgPath = path.join(rootPath, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+        peerDependencies?: Record<string, string>;
+      };
+      for (const group of [pkg.dependencies, pkg.devDependencies, pkg.peerDependencies]) {
+        for (const name of Object.keys(group ?? {})) out.add(name.toLowerCase());
+      }
+    }
+  } catch {
+    /* Unreadable/invalid package.json — fall back to config-file markers only. */
+  }
+
+  // Config-file presence markers (path-based capability proof).
+  const markers: Array<[string, string]> = [
+    ['.github/workflows', '.github/workflows'],
+    ['.gitlab-ci.yml', '.gitlab-ci.yml'],
+    ['Jenkinsfile', 'jenkinsfile'],
+    ['.circleci', '.circleci'],
+    ['.snyk', '.snyk'],
+    ['.github/dependabot.yml', 'dependabot.yml'],
+    ['trivy.yaml', 'trivy'],
+  ];
+  for (const [rel, marker] of markers) {
+    try {
+      if (fs.existsSync(path.join(rootPath, rel))) out.add(marker);
+    } catch {
+      /* ignore */
+    }
+  }
+  return [...out];
+}
+
 /** Analyze a folder and stream the generated canvas back. Returns the analysis. */
 async function handleAnalyze(
   rootPath: string,
@@ -865,6 +912,7 @@ async function handleAnalyze(
     canvas: analysis.canvas,
     inferredSql,
     infra: analysis.infra,
+    dependencies: collectProjectDependencies(analysis.rootPath),
   });
   log(
     emit,
