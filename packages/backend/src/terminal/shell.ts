@@ -58,12 +58,17 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
 
   const home = os.homedir();
   const startCwd = (initialCwd && fs.existsSync(initialCwd)) ? initialCwd : home;
+  // Make the shell report its cwd via OSC 7 on every prompt. Without this, a
+  // shell launched under node-pty (no TERM_PROGRAM=Apple_Terminal, and most
+  // user rc files don't emit it themselves) never tells us when the user `cd`s,
+  // so auto-analysis never fires and the canvas stays "No project loaded".
+  const cwdReporting = buildCwdReportingEnv(home);
   const term = pty.spawn(SHELL, os.platform() === 'win32' ? [] : ['-l'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     cwd: startCwd,
-    env: { ...process.env, TERM: 'xterm-256color' },
+    env: { ...process.env, TERM: 'xterm-256color', ...cwdReporting.env },
   });
 
   // Current output sink. Starts as the initial handlers; swapped on re-attach.
@@ -95,6 +100,7 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
       } catch {
         /* Already gone. */
       }
+      cwdReporting.cleanup();
     },
     attach: (next) => {
       current = next;
@@ -129,6 +135,82 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
   });
 
   return session;
+}
+
+/** Result of preparing the environment that makes a shell emit OSC 7. */
+interface CwdReporting {
+  /** Extra env vars to merge into the PTY's environment. */
+  env: NodeJS.ProcessEnv;
+  /** Remove any temp files created for the shell (called when the PTY dies). */
+  cleanup: () => void;
+}
+
+/**
+ * Build the environment that makes the launched shell emit an OSC 7 cwd report
+ * on every prompt, so `parseOsc7Cwd` can track `cd`s.
+ *
+ * - zsh: we point `ZDOTDIR` at a throwaway directory whose `.zshrc` first sources
+ *   the user's real config, then registers a `precmd` hook that prints OSC 7.
+ *   Login startup files (`.zshenv`/`.zprofile`/`.zlogin`) are forwarded too so
+ *   the user's environment is unchanged.
+ * - bash: we prepend an OSC 7 emitter to `PROMPT_COMMAND`.
+ * - other shells (incl. Windows): left untouched.
+ */
+function buildCwdReportingEnv(home: string): CwdReporting {
+  const noop: CwdReporting = { env: {}, cleanup: () => {} };
+  if (os.platform() === 'win32') return noop;
+
+  const shellName = path.basename(SHELL);
+
+  if (shellName.includes('zsh')) {
+    // Where the user's real zsh config lives (honour an existing ZDOTDIR).
+    const realZdotdir = process.env.ZDOTDIR || home;
+    let dir: string;
+    try {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archlab-zdotdir-'));
+    } catch {
+      return noop;
+    }
+
+    // Forward the login startup files to the user's real ones so nothing in the
+    // user's environment is lost by hijacking ZDOTDIR.
+    const forward = (name: string) =>
+      `[ -f "${realZdotdir}/${name}" ] && source "${realZdotdir}/${name}"\n`;
+
+    const osc7Hook =
+      'autoload -Uz add-zsh-hook 2>/dev/null\n' +
+      "__archlab_osc7() { printf '\\033]7;file://%s%s\\007' \"${HOST}\" \"${PWD}\"; }\n" +
+      'add-zsh-hook precmd __archlab_osc7 2>/dev/null || precmd_functions+=(__archlab_osc7)\n' +
+      '__archlab_osc7\n';
+
+    try {
+      fs.writeFileSync(path.join(dir, '.zshenv'), forward('.zshenv'));
+      fs.writeFileSync(path.join(dir, '.zprofile'), forward('.zprofile'));
+      fs.writeFileSync(path.join(dir, '.zlogin'), forward('.zlogin'));
+      fs.writeFileSync(path.join(dir, '.zshrc'), forward('.zshrc') + osc7Hook);
+    } catch {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+      return noop;
+    }
+
+    return {
+      env: { ZDOTDIR: dir },
+      cleanup: () => {
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+      },
+    };
+  }
+
+  if (shellName.includes('bash')) {
+    const emitter = `printf '\\033]7;file://%s%s\\007' "$HOSTNAME" "$PWD"`;
+    const existing = process.env.PROMPT_COMMAND;
+    return {
+      env: { PROMPT_COMMAND: existing ? `${emitter}; ${existing}` : emitter },
+      cleanup: () => {},
+    };
+  }
+
+  return noop;
 }
 
 /**
