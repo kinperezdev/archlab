@@ -51,7 +51,7 @@ export type ClientMessage =
 /** Messages the server sends to the client. */
 export type ServerMessage =
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string; at: string }
-  | { type: 'project-ready'; projectId: string; name: string; rootPath: string; canvas: CanvasGraph; inferredSql?: string; infra?: SystemDesignMap }
+  | { type: 'project-ready'; projectId: string; name: string; rootPath: string; canvas: CanvasGraph; inferredSql?: string; infra?: SystemDesignMap; dependencies?: string[] }
   | { type: 'canvas-update'; canvas: CanvasGraph }
   | {
       type: 'node-animate';

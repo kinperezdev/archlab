@@ -48,6 +48,8 @@ interface SystemDesignProps {
   hasProject: boolean;
   /** Pipeline diagnostics used by Enterprise Audit to light up capability cards. */
   findings?: Diagnostic[];
+  /** package.json deps + config markers, used by Enterprise Audit for proof. */
+  dependencies?: string[];
   /** Notifies the parent which sub-mode (visual / guide / enterprise) is active. */
   onSubModeChange?: (mode: TabMode) => void;
 }
@@ -824,10 +826,12 @@ function GuideMode({ infra }: { infra: SystemDesignMap }) {
 function DetectedMode({
   infra,
   findings,
+  dependencies,
   onSubModeChange,
 }: {
   infra: SystemDesignMap;
   findings: Diagnostic[];
+  dependencies: string[];
   onSubModeChange?: (mode: TabMode) => void;
 }) {
   const [tabMode, setTabMode] = useState<TabMode>('visual');
@@ -919,7 +923,7 @@ function DetectedMode({
       </div>
 
       {tabMode === 'enterprise' ? (
-        <EnterpriseAudit infra={infra} findings={findings} />
+        <EnterpriseAudit infra={infra} findings={findings} dependencies={dependencies} />
       ) : tabMode === 'guide' ? (
         <GuideMode infra={infra} />
       ) : (
@@ -1240,7 +1244,7 @@ function DesignModeInner() {
 // ---------------------------------------------------------------------------
 // Main System Design Component Wrapper
 // ---------------------------------------------------------------------------
-export function SystemDesign({ infra, hasProject, findings = [], onSubModeChange }: SystemDesignProps) {
+export function SystemDesign({ infra, hasProject, findings = [], dependencies = [], onSubModeChange }: SystemDesignProps) {
   return (
     <div className="sd-root">
       {!hasProject || !infra ? (
@@ -1249,7 +1253,7 @@ export function SystemDesign({ infra, hasProject, findings = [], onSubModeChange
         </div>
       ) : (
         <ReactFlowProvider>
-          <DetectedMode infra={infra} findings={findings} onSubModeChange={onSubModeChange} />
+          <DetectedMode infra={infra} findings={findings} dependencies={dependencies} onSubModeChange={onSubModeChange} />
         </ReactFlowProvider>
       )}
     </div>

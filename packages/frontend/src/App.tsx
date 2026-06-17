@@ -294,6 +294,7 @@ export function App() {
               infra={state.infra}
               hasProject={Boolean(state.projectId)}
               findings={state.diagnostics}
+              dependencies={state.dependencies}
               onSubModeChange={setSystemDesignMode}
             />
           ) : tab === 'blueprint' ? (
