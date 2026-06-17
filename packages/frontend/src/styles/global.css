@@ -447,24 +447,74 @@ body.is-resizing .app-shell {
 .large-project-actions { display: flex; gap: var(--space-2); }
 
 /* Security tab: horizontal pipeline chips overlay (Fix 4) */
+/* Flat single-row toolbar: ghost action buttons + all 7 step pills side by side.
+   No card/shadow — just a subtle bottom border. Pills scroll horizontally on
+   narrow screens instead of wrapping to a second row. Row caps at 36px; 24px
+   controls sit inside 6px top/bottom padding to honour that hard height cap. */
 .security-pipeline-overlay {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-  backdrop-filter: blur(8px);
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  height: 36px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #1a1a2e;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 .security-pipeline-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-start;
+  flex: 0 0 auto;
   gap: var(--space-2);
 }
-/* Constrain to ~4 chips per row so 7 steps wrap into rows of 4 + 3. */
+/* Ghost buttons: no fill, 1px #333 border, compact. */
+.security-pipeline-actions .btn {
+  height: 24px;
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid #333;
+  box-shadow: none;
+  white-space: nowrap;
+}
+.security-pipeline-actions .btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: #444;
+}
+/* Pills sit on the same row and scroll rather than wrap. */
 .security-pipeline-overlay .pipeline-tags {
-  max-width: 560px;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  max-width: none;
+}
+.security-pipeline-overlay .pipeline-tag {
+  height: 24px;
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  box-shadow: none;
+}
+.security-pipeline-overlay .pipeline-tag:hover {
+  transform: none;
+  box-shadow: none;
+}
+.security-pipeline-overlay .pipeline-tag-num {
+  width: 16px;
+  height: 16px;
 }
 
 .finding-filter-clear {

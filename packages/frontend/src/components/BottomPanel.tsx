@@ -85,7 +85,10 @@ export function BottomPanel({
   }, [tabs]);
   useEffect(() => {
     sessionStorage.setItem(ACTIVE_KEY, active);
-  }, [active]);
+    // Tell the backend which terminal is in view so only its `cd` drives the
+    // canvas. The "logs" pseudo-tab is not a terminal, so skip it.
+    if (active !== 'logs') terminalApi.focusTerminal(active);
+  }, [active, terminalApi]);
 
   // Dismiss the context menu on any outside click.
   useEffect(() => {

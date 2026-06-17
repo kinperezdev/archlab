@@ -35,6 +35,8 @@ export interface TerminalApi {
   createTerminal: (id: string) => void;
   /** Kill the backend PTY session for an id. */
   closeTerminal: (id: string) => void;
+  /** Mark a session as the focused tab (only its `cd` drives the canvas). */
+  focusTerminal: (id: string) => void;
   /** Send raw keystrokes/data to a session's stdin. */
   sendInput: (id: string, data: string) => void;
   /** Tell the backend PTY the new viewport size. */
