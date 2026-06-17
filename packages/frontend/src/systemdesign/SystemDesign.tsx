@@ -157,6 +157,33 @@ function evidenceSummary(node: InfraNodeT): string {
   return `${infraMeta(node.type).label} configuration detected`;
 }
 
+/** Show a path as its last two segments, e.g. "systemdesign/enterpriseCatalog.ts". */
+function shortPath(file: string): string {
+  return file.split('/').filter(Boolean).slice(-2).join('/');
+}
+
+/** Max detection-source rows to render per node. */
+const MAX_EVIDENCE_ROWS = 5;
+
+/**
+ * Build the Detection Source list: drop catalog-definition files (not real
+ * project evidence), then keep one entry per unique plain-English summary so the
+ * same detection type does not repeat once per matching file. Capped at 5.
+ */
+function dedupedEvidence(node: InfraNodeT): { file: string; summary: string }[] {
+  const seen = new Set<string>();
+  const items: { file: string; summary: string }[] = [];
+  for (const ev of node.evidence) {
+    if (!ev.file || ev.file.includes('enterpriseCatalog')) continue;
+    const summary = evidenceSummary(node);
+    if (seen.has(summary)) continue;
+    seen.add(summary);
+    items.push({ file: ev.file, summary });
+    if (items.length >= MAX_EVIDENCE_ROWS) break;
+  }
+  return items;
+}
+
 function NodeDetail({ node, infra }: { node: InfraNodeT; infra: SystemDesignMap }) {
   const meta = infraMeta(node.type);
   const m = node.meta;
@@ -176,6 +203,8 @@ function NodeDetail({ node, infra }: { node: InfraNodeT; infra: SystemDesignMap 
         (n) => n.layer === 'data' && n.type !== 'kms' && !(m?.keyAccess ?? []).includes(n.id),
       )
     : [];
+
+  const detectionEvidence = dedupedEvidence(node);
 
   const exposedPaths = node.evidence
     .map((ev) => ev.snippet || ev.pattern)
@@ -285,16 +314,16 @@ function NodeDetail({ node, infra }: { node: InfraNodeT; infra: SystemDesignMap 
       )}
 
       <h5 className="sd-panel-heading">Detection source</h5>
-      {node.evidence.length === 0 ? (
+      {detectionEvidence.length === 0 ? (
         <p className="sd-empty">No evidence captured.</p>
       ) : (
         <ul className="sd-evidence-list">
-          {node.evidence.map((ev, i) => (
+          {detectionEvidence.map((ev, i) => (
             <li key={i} className="sd-evidence-item">
               <span className="sd-evidence-icon" aria-hidden="true">📄</span>
               <span className="sd-evidence-body">
-                <span className="sd-evidence-path">{ev.file}</span>
-                <span className="sd-evidence-desc">{evidenceSummary(node)}</span>
+                <span className="sd-evidence-path">{shortPath(ev.file)}</span>
+                <span className="sd-evidence-desc">{ev.summary}</span>
               </span>
             </li>
           ))}
