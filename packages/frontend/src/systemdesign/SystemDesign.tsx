@@ -149,6 +149,14 @@ function handlePDFExport() {
   printWindow.document.close();
 }
 
+/**
+ * Plain-English summary of one piece of detection evidence. Keeps the panel
+ * human-readable instead of dumping raw snippets, keyword arrays, or regex.
+ */
+function evidenceSummary(node: InfraNodeT): string {
+  return `${infraMeta(node.type).label} configuration detected`;
+}
+
 function NodeDetail({ node, infra }: { node: InfraNodeT; infra: SystemDesignMap }) {
   const meta = infraMeta(node.type);
   const m = node.meta;
@@ -280,13 +288,17 @@ function NodeDetail({ node, infra }: { node: InfraNodeT; infra: SystemDesignMap 
       {node.evidence.length === 0 ? (
         <p className="sd-empty">No evidence captured.</p>
       ) : (
-        node.evidence.map((ev, i) => (
-          <div key={i} className="sd-evidence">
-            <div className="sd-evidence-file">{ev.file}</div>
-            <div className="sd-evidence-pattern">{ev.pattern}</div>
-            {ev.snippet && <code className="sd-evidence-snippet">{ev.snippet}</code>}
-          </div>
-        ))
+        <ul className="sd-evidence-list">
+          {node.evidence.map((ev, i) => (
+            <li key={i} className="sd-evidence-item">
+              <span className="sd-evidence-icon" aria-hidden="true">📄</span>
+              <span className="sd-evidence-body">
+                <span className="sd-evidence-path">{ev.file}</span>
+                <span className="sd-evidence-desc">{evidenceSummary(node)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
 
       <div className="sd-detail-actions">
