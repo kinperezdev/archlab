@@ -43,6 +43,9 @@ export type ClientMessage =
   | { type: 'term-close'; id: string }
   | { type: 'term-input'; id: string; data: string }
   | { type: 'term-resize'; id: string; cols: number; rows: number }
+  // The tab the user is currently looking at. Only the active tab's `cd` drives
+  // auto-analysis, so background tabs never hijack the canvas.
+  | { type: 'term-focus'; id: string }
   | { type: 'term-init' };
 
 /** Messages the server sends to the client. */

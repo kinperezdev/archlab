@@ -78,15 +78,17 @@ export function App() {
     onTerminalData,
     createTerminal,
     closeTerminal,
+    focusTerminal,
     sendTerminalInput,
     resizeTerminal,
   } = useArchLab();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   // Security tab: which pipeline step the findings panel is filtered to (if any).
   const [securityStep, setSecurityStep] = useState<PipelineStepId | null>(null);
-  // Which System Design sub-mode is active, lifted up from SystemDesign so the
-  // sidebars can be hidden only for the full-width Visual sub-mode.
-  const [systemDesignMode, setSystemDesignMode] = useState<TabMode>('visual');
+  // System Design owns its sub-mode display; we only need the setter to keep the
+  // child in sync. The value no longer gates sidebars — they never render on the
+  // System Design tab regardless of sub-mode.
+  const [, setSystemDesignMode] = useState<TabMode>('visual');
   // Launch lock (Layer 1). `null` until we know the status, then gates the app.
   const [access, setAccess] = useState<BrainAccessStatus | null>(null);
 
@@ -180,21 +182,21 @@ export function App() {
       onData: onTerminalData,
       createTerminal: (id: string) => createTerminal(id, state.projectPath || undefined),
       closeTerminal,
+      focusTerminal,
       sendInput: sendTerminalInput,
       resize: resizeTerminal,
     }),
-    [onTerminalData, createTerminal, state.projectPath, closeTerminal, sendTerminalInput, resizeTerminal],
+    [onTerminalData, createTerminal, state.projectPath, closeTerminal, focusTerminal, sendTerminalInput, resizeTerminal],
   );
 
-  const isArchitecture =
-    tab === 'all' || tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security' || tab === 'systemdesign';
-
-  // System Design's Visual sub-mode renders its own full-width surface, so the
-  // architecture sidebars (which mirror canvas nodes) must be hidden for it —
-  // otherwise the left sidebar steals width and the page looks narrower than the
-  // other tabs. The Guide and Enterprise sub-modes render normally with sidebars.
-  const isFullWidthSystemDesign = tab === 'systemdesign' && systemDesignMode === 'visual';
-  const isCanvasTab = isArchitecture && !isFullWidthSystemDesign;
+  // The architecture canvas tabs: the only surfaces with node counts and
+  // findings that make the left (Canvas Status) and right (Findings) sidebars
+  // meaningful. Database, System Design, and Blueprint each render their own
+  // full-width layout, so the sidebars are not rendered at all there — they
+  // would only steal width and show irrelevant information.
+  const isCanvasTab =
+    tab === 'all' || tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security';
+  const isArchitecture = isCanvasTab;
 
   // Count nodes with no edges at all — the project's disconnected parts.
   const isolatedCount = useMemo(() => {
@@ -303,7 +305,7 @@ export function App() {
               <div className="canvas-left-overlay">
                 {tab === 'security' && (
                   <div className="security-pipeline-overlay">
-                    {/* Actions: left-aligned, above the step chips. */}
+                    {/* Single flat row: ghost action buttons then the 7 step pills. */}
                     <div className="security-pipeline-actions">
                       <button
                         className="btn btn-sm"

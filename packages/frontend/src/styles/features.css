@@ -916,9 +916,21 @@
   font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-dim);
+  color: #94a3b8;
 }
-.schema-fk-picker select { flex: 1; font-size: var(--text-xs); padding: 2px 4px; }
+.schema-fk-picker select {
+  flex: 1;
+  font-size: var(--text-xs);
+  padding: 2px 4px;
+  background: #1a1a2e;
+  color: #e2e8f0;
+  border: 1px solid #333;
+  border-radius: 4px;
+}
+.schema-fk-picker select option {
+  background: #1a1a2e;
+  color: #e2e8f0;
+}
 .schema-fk-empty { color: var(--color-text-dim); font-size: 0.65rem; }
 
 /* Rename confirmation dialog */
@@ -1054,8 +1066,8 @@
   z-index: 10;
 }
 .schema-table-name-input {
-  background: var(--bg-elevated);
-  color: #0f172a;
+  background: #1a1a2e;
+  color: #e2e8f0;
   border: 1px solid var(--kind-database);
   border-radius: var(--radius-sm);
   padding: 2px 6px;
@@ -1114,9 +1126,9 @@
 }
 
 .schema-row-editor {
-  background: #f8fafc;
+  background: #0f0f1a;
   padding: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid #1a1a2e;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1126,20 +1138,31 @@
   flex-direction: column;
   gap: 4px;
 }
+/* Field labels: muted light so they read on the dark editor panel. */
 .schema-editor-field label {
   font-size: 0.65rem;
   font-weight: bold;
-  color: #64748b;
+  color: #94a3b8;
   text-transform: uppercase;
 }
+/* Inputs/selects: light text on a dark fill so the typed value is visible. */
 .schema-editor-field input,
 .schema-editor-field select {
   padding: 4px 8px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #333;
   border-radius: 4px;
   font-size: var(--text-xs);
   outline: none;
-  background: var(--bg-elevated);
+  background: #1a1a2e;
+  color: #e2e8f0;
+}
+.schema-editor-field input::placeholder {
+  color: #64748b;
+}
+/* The native dropdown list also needs dark styling in dark themes. */
+.schema-editor-field select option {
+  background: #1a1a2e;
+  color: #e2e8f0;
 }
 .schema-editor-field input:focus,
 .schema-editor-field select:focus {

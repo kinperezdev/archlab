@@ -604,6 +604,12 @@ const terminals = new Map<string, ShellSession>();
 // Track the last active directory to initialize new terminals in.
 let lastActiveCwd = getLastAnalyzedProject()?.rootPath || os.homedir();
 
+// The terminal tab the user is currently looking at. Only this tab's `cd`
+// triggers auto-analysis, so a background tab redrawing its prompt (on resize,
+// reconnect, or its own background output) can never reset the canvas or pull
+// it onto a different project. Null until the frontend reports a focused tab.
+let activeTermId: string | null = null;
+
 /** Send a message to every connected browser. */
 function broadcast(msg: ServerMessage): void {
   const data = JSON.stringify(msg);
@@ -663,8 +669,15 @@ wss.on('connection', (socket) => {
       onData: (data: string) => emit({ type: 'term-data', id, data }),
       onCwdChange: (cwd: string) => {
         lastActiveCwd = cwd;
+        // Always reflect the path in the terminal UI; this is display-only.
         emit({ type: 'term-cwd', id, cwd });
-        void handleAnalyze(cwd, emit, undefined, id);
+        // Only the tab the user is actually looking at may drive the canvas, so
+        // background tabs (and prompt redraws on resize/reconnect) never reset
+        // the project the user is on. Before any tab is focused, fall back to
+        // analyzing so the very first session still maps onto the canvas.
+        if (activeTermId === null || id === activeTermId) {
+          void handleAnalyze(cwd, emit, undefined, id);
+        }
       },
     };
     attachedIds.add(id);
@@ -754,6 +767,11 @@ async function handleClientMessage(
       return;
     case 'term-resize':
       term.ensureSession(msg.id).resize(msg.cols, msg.rows);
+      return;
+    case 'term-focus':
+      // Remember which tab is in view. Switching focus alone never re-analyzes:
+      // the canvas only follows an explicit `cd` in the focused tab.
+      activeTermId = msg.id;
       return;
   }
 }
