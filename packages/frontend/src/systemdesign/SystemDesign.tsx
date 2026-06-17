@@ -50,6 +50,12 @@ interface SystemDesignProps {
   findings?: Diagnostic[];
   /** package.json deps + config markers, used by Enterprise Audit for proof. */
   dependencies?: string[];
+  /** Whether an Anthropic API key is configured (gates Agent Team nudges). */
+  hasApiKey?: boolean;
+  /** Open the Agent Team modal. */
+  onOpenAgentTeam?: () => void;
+  /** Open the API Keys modal. */
+  onOpenApiKeys?: () => void;
   /** Notifies the parent which sub-mode (visual / guide / enterprise) is active. */
   onSubModeChange?: (mode: TabMode) => void;
 }
@@ -827,11 +833,17 @@ function DetectedMode({
   infra,
   findings,
   dependencies,
+  hasApiKey,
+  onOpenAgentTeam,
+  onOpenApiKeys,
   onSubModeChange,
 }: {
   infra: SystemDesignMap;
   findings: Diagnostic[];
   dependencies: string[];
+  hasApiKey: boolean;
+  onOpenAgentTeam?: () => void;
+  onOpenApiKeys?: () => void;
   onSubModeChange?: (mode: TabMode) => void;
 }) {
   const [tabMode, setTabMode] = useState<TabMode>('visual');
@@ -922,8 +934,26 @@ function DetectedMode({
         </div>
       </div>
 
+      {infra.projectContext?.fromReadme && (
+        <div className="sd-context-banner" title={infra.projectContext.purpose}>
+          <span className="sd-context-name">{infra.projectContext.name}</span>
+          {infra.projectContext.purpose && (
+            <span className="sd-context-purpose">{infra.projectContext.purpose}</span>
+          )}
+          <span className="sd-context-source">📖 Read from README</span>
+        </div>
+      )}
+
       {tabMode === 'enterprise' ? (
-        <EnterpriseAudit infra={infra} findings={findings} dependencies={dependencies} />
+        <EnterpriseAudit
+          infra={infra}
+          findings={findings}
+          dependencies={dependencies}
+          hasProject
+          hasApiKey={hasApiKey}
+          onRunAgentTeam={onOpenAgentTeam}
+          onAddApiKey={onOpenApiKeys}
+        />
       ) : tabMode === 'guide' ? (
         <GuideMode infra={infra} />
       ) : (
@@ -1244,7 +1274,16 @@ function DesignModeInner() {
 // ---------------------------------------------------------------------------
 // Main System Design Component Wrapper
 // ---------------------------------------------------------------------------
-export function SystemDesign({ infra, hasProject, findings = [], dependencies = [], onSubModeChange }: SystemDesignProps) {
+export function SystemDesign({
+  infra,
+  hasProject,
+  findings = [],
+  dependencies = [],
+  hasApiKey = false,
+  onOpenAgentTeam,
+  onOpenApiKeys,
+  onSubModeChange,
+}: SystemDesignProps) {
   return (
     <div className="sd-root">
       {!hasProject || !infra ? (
@@ -1253,7 +1292,15 @@ export function SystemDesign({ infra, hasProject, findings = [], dependencies = 
         </div>
       ) : (
         <ReactFlowProvider>
-          <DetectedMode infra={infra} findings={findings} dependencies={dependencies} onSubModeChange={onSubModeChange} />
+          <DetectedMode
+            infra={infra}
+            findings={findings}
+            dependencies={dependencies}
+            hasApiKey={hasApiKey}
+            onOpenAgentTeam={onOpenAgentTeam}
+            onOpenApiKeys={onOpenApiKeys}
+            onSubModeChange={onSubModeChange}
+          />
         </ReactFlowProvider>
       )}
     </div>

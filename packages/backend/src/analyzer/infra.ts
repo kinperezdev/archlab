@@ -21,6 +21,7 @@ import type {
   InfraNode,
   InfraNodeType,
   InfraSuggestion,
+  ProjectContext,
   PubSubTopic,
   SystemDesignMap,
 } from '@archlab/shared';
@@ -75,7 +76,11 @@ let counter = 0;
 const nid = (type: string) => `infra_${type}_${counter++}`;
 
 /** Detect the full infrastructure map for a scanned project. */
-export function detectInfrastructure(scan: ScanResult, _techStack: string[]): SystemDesignMap {
+export function detectInfrastructure(
+  scan: ScanResult,
+  _techStack: string[],
+  readme?: string | null,
+): SystemDesignMap {
   counter = 0;
   const files = scan.files;
   const nodes: InfraNode[] = [];
@@ -228,7 +233,99 @@ export function detectInfrastructure(scan: ScanResult, _techStack: string[]): Sy
     cdn: nodes.find((n) => n.type === 'cdn') ?? null,
   });
 
-  return { nodes, edges, suggestions };
+  const projectContext = buildProjectContext(scan, readme ?? null);
+
+  return { nodes, edges, suggestions, projectContext };
+}
+
+/**
+ * Vocabulary of technologies/infrastructure ArchLab recognises in a README.
+ * Each entry is matched as a whole word (case-insensitive); the canonical form
+ * is what gets surfaced and used as corroborating evidence in the audit.
+ */
+const README_TECH_VOCAB: string[] = [
+  // data stores
+  'redis', 'postgres', 'postgresql', 'mysql', 'mongodb', 'mongo', 'sqlite', 'dynamodb',
+  'cassandra', 'elasticsearch', 'clickhouse', 'supabase', 'prisma', 'drizzle', 'sequelize', 'typeorm',
+  // infra / orchestration
+  'kubernetes', 'k8s', 'docker', 'docker-compose', 'helm', 'terraform', 'pulumi', 'ansible',
+  'nomad', 'istio', 'linkerd', 'envoy', 'consul', 'vault', 'nginx', 'haproxy',
+  // cloud + edge
+  'aws', 'gcp', 'azure', 'cloudflare', 'cloudfront', 'fastly', 'vercel', 'netlify', 'fly.io', 'railway',
+  's3', 'lambda', 'ecs', 'eks', 'cloud run',
+  // messaging / streaming
+  'kafka', 'rabbitmq', 'sqs', 'pubsub', 'bullmq', 'nats',
+  // observability
+  'sentry', 'datadog', 'prometheus', 'grafana', 'opentelemetry', 'jaeger', 'newrelic', 'pino', 'winston',
+  // ci/cd
+  'github actions', 'gitlab ci', 'circleci', 'jenkins', 'argocd', 'argo rollouts',
+  // auth / security
+  'jwt', 'oauth', 'clerk', 'auth0', 'nextauth', 'passport', 'helmet', 'snyk', 'dependabot',
+  // app frameworks
+  'react', 'next.js', 'nextjs', 'vue', 'svelte', 'angular', 'express', 'fastify', 'nestjs',
+  'graphql', 'grpc', 'trpc', 'rest', 'zod', 'stripe',
+];
+
+/** Phrases that signal an architecture decision worth surfacing. */
+const ARCH_PHRASES: string[] = [
+  'monorepo', 'microservice', 'microservices', 'serverless', 'event-driven', 'event driven',
+  'monolith', 'modular monolith', 'domain-driven', 'cqrs', 'hexagonal', 'clean architecture',
+  'multi-tenant', 'multi-region', 'edge', 'ssr', 'server-side rendering', 'static site',
+];
+
+/** Strip markdown noise from a line for a clean one-liner. */
+function cleanLine(line: string): string {
+  return line
+    .replace(/!?\[[^\]]*\]\([^)]*\)/g, '') // images / links
+    .replace(/[#>*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Build the README-derived project understanding. */
+function buildProjectContext(scan: ScanResult, readme: string | null): ProjectContext {
+  if (!readme) {
+    return {
+      name: scan.name,
+      purpose: '',
+      technologies: [],
+      architectureDecisions: [],
+      fromReadme: false,
+    };
+  }
+
+  const lines = readme.split(/\r?\n/);
+
+  // Name: first H1 heading, else the folder name.
+  let name = scan.name;
+  const h1 = lines.find((l) => /^#\s+\S/.test(l));
+  if (h1) name = cleanLine(h1) || scan.name;
+
+  // Purpose: first non-empty, non-heading, non-badge line.
+  let purpose = '';
+  for (const raw of lines) {
+    const l = cleanLine(raw);
+    if (!l) continue;
+    if (/^#/.test(raw.trim())) continue; // headings
+    if (/^\W*(https?:\/\/|badge|build|coverage)/i.test(l)) continue; // badge rows
+    purpose = l.length > 200 ? `${l.slice(0, 197)}...` : l;
+    break;
+  }
+
+  const haystack = readme.toLowerCase();
+  const wordHit = (term: string) =>
+    new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(haystack);
+
+  const technologies = README_TECH_VOCAB.filter(wordHit);
+
+  const architectureDecisions: string[] = [];
+  for (const phrase of ARCH_PHRASES) {
+    if (wordHit(phrase) && !architectureDecisions.includes(phrase)) {
+      architectureDecisions.push(phrase);
+    }
+  }
+
+  return { name, purpose, technologies, architectureDecisions, fromReadme: true };
 }
 
 /** Detect the database and return its node (or null). */

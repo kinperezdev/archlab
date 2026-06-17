@@ -36,6 +36,7 @@ function makeResizeHandler(current: number, set: (n: number) => void) {
   };
 }
 import type { PipelineStepId } from '@archlab/shared';
+import { PORTS } from '@archlab/shared';
 import { TopBar } from './components/TopBar.js';
 import { LeftSidebar } from './components/LeftSidebar.js';
 import { RightSidebar } from './components/RightSidebar.js';
@@ -99,6 +100,24 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
   const [agentTeamOpen, setAgentTeamOpen] = useState(false);
+  // Whether an Anthropic key is configured — drives Agent Team nudges in the
+  // Enterprise Audit. Re-checked whenever the API Keys modal closes.
+  const [hasApiKey, setHasApiKey] = useState(false);
+  useEffect(() => {
+    if (apiKeysOpen) return; // re-check after the modal closes (key may have changed)
+    let cancelled = false;
+    fetch(`http://127.0.0.1:${PORTS.backend}/api/keys`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled && data?.ok) setHasApiKey(Boolean(data.keys?.anthropic));
+      })
+      .catch(() => {
+        /* backend not ready; treat as no key */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiKeysOpen]);
   // Transient "report saved to project root" toast, mirrored from agent state.
   const [reportToast, setReportToast] = useState<string | null>(null);
   const reportSavedPath = state.agentTeam.reportSavedPath;
@@ -295,6 +314,9 @@ export function App() {
               hasProject={Boolean(state.projectId)}
               findings={state.diagnostics}
               dependencies={state.dependencies}
+              hasApiKey={hasApiKey}
+              onOpenAgentTeam={() => setAgentTeamOpen(true)}
+              onOpenApiKeys={() => setApiKeysOpen(true)}
               onSubModeChange={setSystemDesignMode}
             />
           ) : tab === 'blueprint' ? (
