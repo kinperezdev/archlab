@@ -4,6 +4,8 @@
  */
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { CanvasGraph, ProjectIntelligence, SystemDesignMap } from '@archlab/shared';
 import { scanProject, type ScanResult } from './scan.js';
 import { classify } from './classify.js';
@@ -21,6 +23,26 @@ export interface AnalysisResult {
   techStack: string[];
   /** Detected infrastructure map for the System Design tab. */
   infra: SystemDesignMap;
+  /** Raw README contents read from the project root, or null if none. */
+  projectReadme: string | null;
+}
+
+/** Common README filenames, in priority order. */
+const README_NAMES = ['README.md', 'readme.md', 'README.markdown', 'README.txt', 'README'];
+
+/** Read the project's README from its root, if one exists. */
+export function readProjectReadme(root: string): string | null {
+  for (const name of README_NAMES) {
+    try {
+      const p = path.join(root, name);
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        return fs.readFileSync(p, 'utf8');
+      }
+    } catch {
+      /* keep trying other candidates */
+    }
+  }
+  return null;
 }
 
 /** Analyze a project folder end to end. */
@@ -33,9 +55,22 @@ export function analyzeProject(rootPath: string): AnalysisResult {
   const projectId = crypto.createHash('sha1').update(scan.root).digest('hex').slice(0, 12);
   const canvas: CanvasGraph = { nodes: positioned, edges };
   const intelligence = deriveIntelligence(projectId, scan, positioned, techStack);
-  const infra = detectInfrastructure(scan, techStack);
+  // Read the README first so infrastructure detection can use the project's own
+  // stated tech stack and architecture as high-confidence corroborating signals.
+  const projectReadme = readProjectReadme(scan.root);
+  const infra = detectInfrastructure(scan, techStack, projectReadme);
 
-  return { projectId, name: scan.name, rootPath: scan.root, scan, canvas, intelligence, techStack, infra };
+  return {
+    projectId,
+    name: scan.name,
+    rootPath: scan.root,
+    scan,
+    canvas,
+    intelligence,
+    techStack,
+    infra,
+    projectReadme,
+  };
 }
 
 /** First-pass intelligence derived purely from structure (step 1 deepens it). */

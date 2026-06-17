@@ -138,10 +138,31 @@ export interface InfraSuggestion {
 }
 
 /** The complete detected infrastructure map for a project. */
+/**
+ * High-level understanding of the project, read from its README before any
+ * structural analysis. Surfaced as a banner so users can see ArchLab knows what
+ * it is looking at, and used as high-confidence corroborating evidence in the
+ * Enterprise Audit.
+ */
+export interface ProjectContext {
+  /** Project name (README H1 if present, else the folder name). */
+  name: string;
+  /** One-line stated purpose (first real paragraph of the README). */
+  purpose: string;
+  /** Technologies/infrastructure explicitly named in the README (lowercased). */
+  technologies: string[];
+  /** Architecture decisions described in the README (short phrases). */
+  architectureDecisions: string[];
+  /** True when a README file was found and parsed. */
+  fromReadme: boolean;
+}
+
 export interface SystemDesignMap {
   nodes: InfraNode[];
   edges: InfraEdge[];
   suggestions: InfraSuggestion[];
+  /** Project understanding read from the README (optional, present when found). */
+  projectContext?: ProjectContext;
 }
 
 /** The Design Mode free canvas document (persisted to brain/system-design.json). */

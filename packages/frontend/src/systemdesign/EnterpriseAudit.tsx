@@ -1,20 +1,29 @@
 /**
- * Enterprise Audit mode.
+ * Enterprise Audit mode — a ReactFlow capability map.
  *
- * A full-screen dark canvas of glowing capability cards grouped into 8 colored
- * category sections. Every card is live: it reads the real detected infrastructure
- * map (`infra`) and the pipeline findings (`findings`) and resolves to one of four
- * states (detected / partial / missing / critical-gap), then renders with the
- * matching glow, badge, and a rich hover tooltip carrying a copy-paste fix prompt.
- *
- * A score card at the top aggregates every card into an overall Enterprise Score
- * with a circular ring and per-section breakdown bars, and an export button prints
- * the whole audit (including tooltip detail) to PDF.
+ * Every capability is a card node, grouped into 8 horizontal section bands and
+ * wired together by dependency edges. Each card reads the real detected infra
+ * (`infra`), package.json dependencies, README-stated tech, and pipeline
+ * findings and resolves to one of four states (detected / partial / missing /
+ * critical-gap). A compact score header sits above the canvas, and a slide-in
+ * detail panel opens on card click.
  *
  * Detection logic only reads the props passed in — it never touches the backend.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import ReactFlow, {
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  Position,
+  ReactFlowProvider,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
 import type {
   Diagnostic,
   EnterpriseAuditResult,
@@ -25,6 +34,7 @@ import type {
   Severity,
   SystemDesignMap,
 } from '@archlab/shared';
+import type { LucideIcon } from 'lucide-react';
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
 import { ENTERPRISE_SECTIONS, type CardDef, type SectionDef } from './enterpriseCatalog.js';
 
@@ -33,6 +43,14 @@ interface EnterpriseAuditProps {
   findings: Diagnostic[];
   /** package.json dependency names + CI/scan config markers (lowercased). */
   dependencies?: string[];
+  /** Whether the project is loaded (guards against an empty canvas). */
+  hasProject?: boolean;
+  /** Whether an Anthropic API key is configured (gates Agent Team nudges). */
+  hasApiKey?: boolean;
+  /** Open the Agent Team modal (and close the detail panel). */
+  onRunAgentTeam?: () => void;
+  /** Open the API Keys modal. */
+  onAddApiKey?: () => void;
 }
 
 const STATE_POINTS: Record<EnterpriseCardState, number> = {
@@ -49,8 +67,19 @@ const STATE_LABEL: Record<EnterpriseCardState, string> = {
   'critical-gap': 'Critical Gap',
 };
 
+const BADGE: Record<EnterpriseCardState, string> = {
+  detected: '✓',
+  partial: '–',
+  missing: '',
+  'critical-gap': '✕',
+};
+
 const HIGH_SEVERITIES: Severity[] = ['critical', 'high'];
 const MED_SEVERITIES: Severity[] = ['bottleneck', 'medium'];
+
+// ---------------------------------------------------------------------------
+// Detection
+// ---------------------------------------------------------------------------
 
 interface DetectCtx {
   nodeTypes: Set<InfraNodeType>;
@@ -58,6 +87,8 @@ interface DetectCtx {
   corpus: string;
   /** Lowercased package.json dependency names + CI/scan config markers. */
   deps: Set<string>;
+  /** Lowercased technologies named explicitly in the README. */
+  readme: Set<string>;
   findings: Diagnostic[];
 }
 
@@ -74,7 +105,8 @@ function buildContext(infra: SystemDesignMap, findings: Diagnostic[], dependenci
     }
   }
   const deps = new Set(dependencies.map((d) => d.toLowerCase()));
-  return { nodeTypes, corpus: parts.join(' \n ').toLowerCase(), deps, findings };
+  const readme = new Set((infra.projectContext?.technologies ?? []).map((t) => t.toLowerCase()));
+  return { nodeTypes, corpus: parts.join(' \n ').toLowerCase(), deps, readme, findings };
 }
 
 /** Escape a keyword so it can be embedded literally in a RegExp. */
@@ -84,8 +116,7 @@ function escapeRegex(s: string): string {
 
 /**
  * Whole-word keyword test. Word boundaries stop "scale" matching "scalability",
- * "rest" matching "restore", or "sse" matching "classes" — the substring bugs
- * the old `corpus.includes` caused.
+ * "rest" matching "restore", or "sse" matching "classes".
  */
 function wordHit(keyword: string, corpus: string): boolean {
   return new RegExp('\\b' + escapeRegex(keyword) + '\\b', 'i').test(corpus);
@@ -99,8 +130,17 @@ function corpusKeywordHits(keywords: string[] | undefined, corpus: string): numb
 
 /** Does the project depend on any package (or config marker) that proves this card? */
 function dependencyProof(def: CardDef, ctx: DetectCtx): string | null {
-  const hit = def.packages?.find((p) => ctx.deps.has(p.toLowerCase()));
-  return hit ?? null;
+  return def.packages?.find((p) => ctx.deps.has(p.toLowerCase())) ?? null;
+}
+
+/**
+ * Does the README explicitly name a technology that proves this card? Treated as
+ * high confidence — equal to a dependency match.
+ */
+function readmeProof(def: CardDef, ctx: DetectCtx): string | null {
+  const fromKeywords = def.keywords?.find((k) => ctx.readme.has(k.toLowerCase()));
+  if (fromKeywords) return fromKeywords;
+  return def.packages?.find((p) => ctx.readme.has(p.toLowerCase())) ?? null;
 }
 
 /** Does a finding mention any of the keywords in its title or body text? */
@@ -109,19 +149,7 @@ function findingMatches(f: Diagnostic, keywords: string[]): boolean {
   return keywords.some((k) => hay.includes(k));
 }
 
-/**
- * Resolve one card's live state and the human-readable detail line.
- *
- * Precedence (high → low confidence):
- *  1. Negative signal (e.g. dangerouslySetInnerHTML) → forced Critical Gap.
- *  2. Structural infra node type → Detected.
- *  3. Confirmed package.json dependency / config marker → Detected.
- *  4. criticalIfMissing / requiresProof cards: corpus can NEVER promote them —
- *     they fall to their hard default (Critical Gap / Missing) unless 2–3 proved
- *     them, with findings able to flag a gap explicitly.
- *  5. Normal cards: 2+ whole-word corpus hits → Detected; 1 hit or related infra
- *     → Partial; findings → Critical Gap / Missing; otherwise Missing.
- */
+/** Resolve one card's live state and the human-readable detail line. */
 function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardState; detail: string } {
   // 1. Negative signal: its very presence is the risk (anti-pattern in code).
   if (def.negativeKeywords?.some((k) => wordHit(k, ctx.corpus))) {
@@ -137,9 +165,15 @@ function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardStat
   }
 
   // 3. Confirmed dependency / config-file proof — high confidence.
-  const proof = dependencyProof(def, ctx);
-  if (proof) {
-    return { state: 'detected', detail: `Confirmed by a project dependency/config: ${proof}.` };
+  const dep = dependencyProof(def, ctx);
+  if (dep) {
+    return { state: 'detected', detail: `Confirmed by a project dependency/config: ${dep}.` };
+  }
+
+  // 3b. Explicit README mention — equal confidence to a dependency.
+  const readme = readmeProof(def, ctx);
+  if (readme) {
+    return { state: 'detected', detail: `Named in the project README: ${readme}.` };
   }
 
   // Findings scan (scoped to security-checks step when requested).
@@ -150,9 +184,7 @@ function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardStat
   const hasHigh = matched.some((f) => HIGH_SEVERITIES.includes(f.severity));
   const hasMed = matched.some((f) => MED_SEVERITIES.includes(f.severity));
 
-  // 4a. Safety-critical capabilities: corpus keywords can never mark these
-  //     Detected/Partial. Without structural or dependency proof their absence
-  //     is itself a Critical Gap (a HIGH finding gives a concrete reason).
+  // 4a. Safety-critical capabilities: corpus keywords can never promote these.
   if (def.criticalIfMissing) {
     if (hasHigh) {
       const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
@@ -164,9 +196,7 @@ function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardStat
     };
   }
 
-  // 4b. Operational/process capabilities: not verifiable from static code, so
-  //     corpus keywords cannot promote them. Default Missing until an Agent Team
-  //     run or a real dependency proves otherwise.
+  // 4b. Operational/process capabilities: not verifiable from static code.
   if (def.requiresProof) {
     if (hasHigh) {
       const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
@@ -209,31 +239,19 @@ function scoreOf(cards: EnterpriseCard[]): number {
   return Math.max(0, Math.round((sum / cards.length) * 100));
 }
 
-/** Compute the full audit result from infra + findings. */
+/** Compute the full audit result from infra + findings + dependencies. */
 function computeAudit(infra: SystemDesignMap, findings: Diagnostic[], dependencies: string[]): EnterpriseAuditResult {
   const ctx = buildContext(infra, findings, dependencies);
   const sections: EnterpriseSection[] = ENTERPRISE_SECTIONS.map((section: SectionDef) => {
     const cards: EnterpriseCard[] = section.cards.map((def) => {
       const { state, detail } = evaluateCard(def, ctx);
-      return {
-        id: def.id,
-        label: def.label,
-        state,
-        what: def.what,
-        why: def.why,
-        detail,
-        fixPrompt: def.fix,
-      };
+      return { id: def.id, label: def.label, state, what: def.what, why: def.why, detail, fixPrompt: def.fix };
     });
     return { id: section.id, title: section.title, color: section.color, cards, score: scoreOf(cards) };
   });
 
   const allCards = sections.flatMap((s) => s.cards);
   const count = (state: EnterpriseCardState) => allCards.filter((c) => c.state === state).length;
-  const detectedCount = count('detected');
-  const partialCount = count('partial');
-  const missingCount = count('missing');
-  const criticalGapCount = count('critical-gap');
   const score = scoreOf(allCards);
   const verdict =
     score >= 80 ? 'Production Ready' : score >= 50 ? 'Needs Hardening' : 'Not Production Ready';
@@ -243,10 +261,10 @@ function computeAudit(infra: SystemDesignMap, findings: Diagnostic[], dependenci
     score,
     verdict,
     totalCards: allCards.length,
-    detectedCount,
-    partialCount,
-    missingCount,
-    criticalGapCount,
+    detectedCount: count('detected'),
+    partialCount: count('partial'),
+    missingCount: count('missing'),
+    criticalGapCount: count('critical-gap'),
   };
 }
 
@@ -255,87 +273,203 @@ function scoreColor(score: number): string {
   return score >= 80 ? '#22C55E' : score >= 50 ? '#F59E0B' : '#EF4444';
 }
 
-const RING_RADIUS = 70;
-const RING_CIRC = 2 * Math.PI * RING_RADIUS;
+// ---------------------------------------------------------------------------
+// Graph layout
+// ---------------------------------------------------------------------------
 
-const BADGE: Record<EnterpriseCardState, string> = {
-  detected: '✓',
-  partial: '–',
-  missing: '',
-  'critical-gap': '✕',
-};
+const CARD_GAP_X = 200;
+const SECTION_GAP_Y = 180;
 
-/** Look up the Lucide icon for a card from the catalog. */
-function iconFor(sectionId: string, cardId: string) {
-  const section = ENTERPRISE_SECTIONS.find((s) => s.id === sectionId);
-  return section?.cards.find((c) => c.id === cardId)?.icon ?? null;
+/** Dependency connections between cards, by card id. */
+const CARD_EDGES: Array<[string, string]> = [
+  ['cdn', 'load-balancer'],
+  ['load-balancer', 'api-gateway'],
+  ['api-gateway', 'auth-service'],
+  ['auth-service', 'database'],
+  ['rate-limiting', 'api-gateway'],
+  ['waf', 'cdn'],
+  ['input-validation', 'auth-service'],
+  ['secrets-management', 'auth-service'],
+  ['structured-logging', 'error-tracking'],
+  ['error-tracking', 'alerting-rules'],
+  ['health-checks', 'auto-scaling'],
+  ['database', 'read-replicas'],
+  ['read-replicas', 'database-sharding'],
+  ['cicd-pipeline', 'blue-green'],
+  ['blue-green', 'canary-releases'],
+  ['encryption-at-rest', 'database'],
+  ['mtls', 'service-mesh'],
+];
+
+/** Lucide icon for a card, looked up from the catalog. */
+function iconFor(cardId: string): LucideIcon | null {
+  for (const s of ENTERPRISE_SECTIONS) {
+    const c = s.cards.find((card) => card.id === cardId);
+    if (c) return c.icon;
+  }
+  return null;
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const color = scoreColor(score);
-  const offset = RING_CIRC * (1 - score / 100);
+interface CardNodeData {
+  card: EnterpriseCard;
+  color: string;
+  icon: LucideIcon | null;
+  showAgentNudge: boolean;
+  onRunAgentTeam: () => void;
+}
+
+interface LabelNodeData {
+  title: string;
+  color: string;
+}
+
+/** A floating, non-interactive section label above each band. */
+function SectionLabelNode({ data }: NodeProps<LabelNodeData>) {
   return (
-    <div className="ea-ring" style={{ ['--ring-color' as string]: color }}>
-      <svg viewBox="0 0 160 160" width="160" height="160">
-        <circle cx="80" cy="80" r={RING_RADIUS} className="ea-ring-track" />
-        <circle
-          cx="80"
-          cy="80"
-          r={RING_RADIUS}
-          className="ea-ring-progress"
-          stroke={color}
-          strokeDasharray={RING_CIRC}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <div className="ea-ring-center">
-        <span className="ea-ring-score" style={{ color }}>{score}%</span>
-        <span className="ea-ring-lbl">Enterprise Score</span>
-      </div>
+    <div className="ea-flow-section-label" style={{ color: data.color }}>
+      {data.title}
     </div>
   );
 }
 
-function Card({ sectionId, color, card }: { sectionId: string; color: string; card: EnterpriseCard }) {
-  const Icon = iconFor(sectionId, card.id);
+/** A capability card node. */
+function AuditCardNode({ data }: NodeProps<CardNodeData>) {
+  const { card, color, icon: Icon, showAgentNudge, onRunAgentTeam } = data;
   return (
-    <div
-      className={`ea-card ea-state-${card.state}`}
-      style={{ ['--glow' as string]: color }}
-      tabIndex={0}
-    >
-      <div className="ea-card-icon">{Icon && <Icon size={26} strokeWidth={1.75} />}</div>
-      <div className="ea-card-label">{card.label}</div>
+    <div className={`ea-flow-card ea-flow-${card.state}`} style={{ ['--glow' as string]: color }}>
+      <Handle type="target" position={Position.Left} className="ea-flow-handle" />
+      <Handle type="target" position={Position.Top} className="ea-flow-handle" />
+      <div className="ea-flow-card-icon">{Icon && <Icon size={28} strokeWidth={1.75} />}</div>
+      <div className="ea-flow-card-label">{card.label}</div>
       {BADGE[card.state] && (
-        <span className={`ea-card-badge ea-badge-${card.state}`}>{BADGE[card.state]}</span>
+        <span className={`ea-flow-badge ea-badge-${card.state}`}>{BADGE[card.state]}</span>
       )}
-
-      <div className="ea-tooltip" role="tooltip">
-        <div className="ea-tt-head">
-          <span className="ea-tt-title">{card.label}</span>
-          <span className={`ea-tt-state ea-badge-${card.state}`}>{STATE_LABEL[card.state]}</span>
-        </div>
-        <p className="ea-tt-line"><strong>What:</strong> {card.what}</p>
-        <p className="ea-tt-line"><strong>Why it matters:</strong> {card.why}</p>
-        <p className="ea-tt-line"><strong>ArchLab found:</strong> {card.detail}</p>
-        <div className="ea-tt-fix">
-          <CopyPromptButton compact prompt={card.fixPrompt} label="Copy fix prompt" />
-        </div>
-      </div>
+      {showAgentNudge && (
+        <button
+          className="ea-flow-agent-pill"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRunAgentTeam();
+          }}
+        >
+          ⚡ Run Agent Team
+        </button>
+      )}
+      <Handle type="source" position={Position.Right} className="ea-flow-handle" />
+      <Handle type="source" position={Position.Bottom} className="ea-flow-handle" />
     </div>
   );
 }
 
-/** Decorative connector line shown under each section header. */
-function Connector({ color }: { color: string }) {
+const NODE_TYPES = { auditCard: AuditCardNode, sectionLabel: SectionLabelNode };
+
+// ---------------------------------------------------------------------------
+// Score header + detail panel
+// ---------------------------------------------------------------------------
+
+const SMALL_RING_R = 24;
+const SMALL_RING_C = 2 * Math.PI * SMALL_RING_R;
+
+function ScoreHeader({
+  result,
+  hasApiKey,
+  onExport,
+}: {
+  result: EnterpriseAuditResult;
+  hasApiKey: boolean;
+  onExport: () => void;
+}) {
+  const color = scoreColor(result.score);
+  const offset = SMALL_RING_C * (1 - result.score / 100);
   return (
-    <svg className="ea-connector" height="14" aria-hidden="true" preserveAspectRatio="none">
-      <line x1="0" y1="7" x2="100%" y2="7" stroke={color} strokeWidth="2" strokeDasharray="2 8" />
-    </svg>
+    <div className="ea-score-header">
+      <div className="ea-mini-ring" style={{ ['--ring-color' as string]: color }}>
+        <svg viewBox="0 0 56 56" width="56" height="56">
+          <circle cx="28" cy="28" r={SMALL_RING_R} className="ea-ring-track" />
+          <circle
+            cx="28"
+            cy="28"
+            r={SMALL_RING_R}
+            className="ea-ring-progress"
+            stroke={color}
+            strokeDasharray={SMALL_RING_C}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <span className="ea-mini-ring-score" style={{ color }}>{result.score}%</span>
+      </div>
+      <div className="ea-score-header-text">
+        <div className="ea-score-header-verdict" style={{ color }}>
+          {result.verdict}
+          {!hasApiKey && (
+            <span className="ea-score-header-note">Static analysis only · Add API key for AI insights</span>
+          )}
+        </div>
+        <div className="ea-score-header-dots">
+          {result.sections.map((s) => (
+            <span key={s.id} className="ea-dot" style={{ background: s.color }} title={`${s.title}: ${s.score}%`} />
+          ))}
+        </div>
+      </div>
+      <button className="ea-export-btn ea-export-compact" onClick={onExport}>📥 Export</button>
+    </div>
   );
 }
 
-/** Build a standalone HTML document of the audit and print it to PDF. */
+function DetailPanel({
+  card,
+  color,
+  neighbors,
+  showAgentNudge,
+  onClose,
+  onRunAgentTeam,
+}: {
+  card: EnterpriseCard;
+  color: string;
+  neighbors: string[];
+  showAgentNudge: boolean;
+  onClose: () => void;
+  onRunAgentTeam: () => void;
+}) {
+  return (
+    <aside className="ea-detail-panel" style={{ ['--glow' as string]: color }}>
+      <div className="ea-detail-head">
+        <span className="ea-detail-title">{card.label}</span>
+        <span className={`ea-detail-state ea-badge-${card.state}`}>{STATE_LABEL[card.state]}</span>
+        <button className="ea-detail-close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+      <div className="ea-detail-body">
+        <h5 className="ea-detail-label">What it is</h5>
+        <p className="ea-detail-text">{card.what}</p>
+        <h5 className="ea-detail-label">Why it matters at enterprise scale</h5>
+        <p className="ea-detail-text">{card.why}</p>
+        <h5 className="ea-detail-label">What ArchLab found</h5>
+        <p className="ea-detail-text">{card.detail}</p>
+        {neighbors.length > 0 && (
+          <>
+            <h5 className="ea-detail-label">Connected capabilities</h5>
+            <ul className="ea-detail-neighbors">
+              {neighbors.map((n) => <li key={n}>{n}</li>)}
+            </ul>
+          </>
+        )}
+        {showAgentNudge && (
+          <button className="ea-detail-agent-btn" onClick={onRunAgentTeam}>
+            ⚡ Run Agent Team for AI-backed analysis
+          </button>
+        )}
+        <div className="ea-detail-fix">
+          <CopyPromptButton prompt={card.fixPrompt} label="Copy fix prompt" />
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Export (print to PDF)
+// ---------------------------------------------------------------------------
+
 function exportReport(result: EnterpriseAuditResult) {
   const win = window.open('', '_blank');
   if (!win) return;
@@ -399,62 +533,162 @@ function exportReport(result: EnterpriseAuditResult) {
   win.document.close();
 }
 
-export function EnterpriseAudit({ infra, findings, dependencies = [] }: EnterpriseAuditProps) {
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export function EnterpriseAudit({
+  infra,
+  findings,
+  dependencies = [],
+  hasProject = true,
+  hasApiKey = false,
+  onRunAgentTeam,
+  onAddApiKey,
+}: EnterpriseAuditProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   const result = useMemo(
     () => computeAudit(infra, findings, dependencies),
     [infra, findings, dependencies],
   );
-  const overallColor = scoreColor(result.score);
+
+  // Agent-sourced findings carry an agentId; absence means no AI analysis yet.
+  const hasAgentFindings = useMemo(() => findings.some((f) => Boolean(f.agentId)), [findings]);
+
+  // Lookup: card id → { card, color }.
+  const cardMap = useMemo(() => {
+    const m = new Map<string, { card: EnterpriseCard; color: string }>();
+    for (const s of result.sections) {
+      for (const c of s.cards) m.set(c.id, { card: c, color: s.color });
+    }
+    return m;
+  }, [result]);
+
+  const closePanel = useCallback(() => setSelectedId(null), []);
+  const runAgentTeam = useCallback(() => {
+    setSelectedId(null);
+    onRunAgentTeam?.();
+  }, [onRunAgentTeam]);
+
+  /** Whether a card should show the "Run Agent Team" nudge. */
+  const showNudgeFor = useCallback(
+    (state: EnterpriseCardState) =>
+      state === 'critical-gap' && (!hasApiKey || !hasAgentFindings),
+    [hasApiKey, hasAgentFindings],
+  );
+
+  const nodes: Node[] = useMemo(() => {
+    const out: Node[] = [];
+    result.sections.forEach((section, sIdx) => {
+      const bandY = sIdx * SECTION_GAP_Y;
+      out.push({
+        id: `section-${section.id}`,
+        type: 'sectionLabel',
+        position: { x: 0, y: bandY },
+        data: { title: section.title, color: section.color },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+      });
+      section.cards.forEach((card, cIdx) => {
+        out.push({
+          id: card.id,
+          type: 'auditCard',
+          position: { x: cIdx * CARD_GAP_X, y: bandY + 46 },
+          data: {
+            card,
+            color: section.color,
+            icon: iconFor(card.id),
+            showAgentNudge: showNudgeFor(card.state),
+            onRunAgentTeam: runAgentTeam,
+          } satisfies CardNodeData,
+          draggable: false,
+        });
+      });
+    });
+    return out;
+  }, [result, showNudgeFor, runAgentTeam]);
+
+  const edges: Edge[] = useMemo(() => {
+    return CARD_EDGES.filter(([s, t]) => cardMap.has(s) && cardMap.has(t)).map(([source, target]) => {
+      const src = cardMap.get(source)!;
+      const isCritical = src.card.state === 'critical-gap';
+      return {
+        id: `${source}->${target}`,
+        source,
+        target,
+        type: 'smoothstep',
+        animated: isCritical,
+        style: { stroke: `${src.color}66`, strokeWidth: 2 },
+        className: isCritical ? 'ea-edge-critical' : undefined,
+      } satisfies Edge;
+    });
+  }, [cardMap]);
+
+  const selected = selectedId ? cardMap.get(selectedId) ?? null : null;
+  const neighbors = useMemo(() => {
+    if (!selectedId) return [];
+    const ids = new Set<string>();
+    for (const [s, t] of CARD_EDGES) {
+      if (s === selectedId) ids.add(t);
+      if (t === selectedId) ids.add(s);
+    }
+    return [...ids].map((id) => cardMap.get(id)?.card.label ?? id);
+  }, [selectedId, cardMap]);
+
+  if (!hasProject) {
+    return (
+      <div className="ea-placeholder">
+        <p>Analyze a project to run the Enterprise Audit.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="ea-root" id="ea-document">
-      {/* Score header */}
-      <div className="ea-score-card">
-        <ScoreRing score={result.score} />
-        <div className="ea-score-body">
-          <div className="ea-verdict" style={{ color: overallColor }}>{result.verdict}</div>
-          <p className="ea-score-summary">
-            {result.detectedCount} detected · {result.partialCount} partial · {result.missingCount} missing ·{' '}
-            <strong style={{ color: '#EF4444' }}>{result.criticalGapCount} critical gaps</strong> across{' '}
-            {result.totalCards} capabilities.
-          </p>
-          <div className="ea-breakdown">
-            {result.sections.map((s) => (
-              <div key={s.id} className="ea-breakdown-row">
-                <span className="ea-breakdown-label">{s.title}</span>
-                <div className="ea-breakdown-track">
-                  <div
-                    className="ea-breakdown-fill"
-                    style={{ width: `${s.score}%`, background: s.color }}
-                  />
-                </div>
-                <span className="ea-breakdown-score">{s.score}%</span>
-              </div>
-            ))}
-          </div>
-          <button className="ea-export-btn" onClick={() => exportReport(result)}>
-            📥 Export Enterprise Report
-          </button>
-        </div>
-      </div>
+    <div className="ea-flow-root">
+      <ScoreHeader result={result} hasApiKey={hasApiKey} onExport={() => exportReport(result)} />
 
-      {/* Sections */}
-      {result.sections.map((section) => (
-        <section key={section.id} className="ea-section">
-          <div className="ea-section-header">
-            <h3 className="ea-section-title" style={{ color: section.color }}>
-              {section.title}
-            </h3>
-            <span className="ea-section-score" style={{ color: section.color }}>{section.score}%</span>
-          </div>
-          <Connector color={section.color} />
-          <div className="ea-grid">
-            {section.cards.map((card) => (
-              <Card key={card.id} sectionId={section.id} color={section.color} card={card} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {!hasApiKey && (
+        <div className="ea-apikey-banner">
+          <span>⚡ Connect an API key to run Agent Team and get AI-backed analysis for critical gaps.</span>
+          <button className="ea-apikey-btn" onClick={() => onAddApiKey?.()}>Add API Key</button>
+        </div>
+      )}
+
+      <div className="ea-flow-canvas">
+        <ReactFlowProvider>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            minZoom={0.2}
+            maxZoom={1.5}
+            proOptions={{ hideAttribution: true }}
+            nodesConnectable={false}
+            onNodeClick={(_e, node) => {
+              if (node.type === 'auditCard') setSelectedId(node.id);
+            }}
+            onPaneClick={closePanel}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="rgba(255,255,255,0.05)" />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </ReactFlowProvider>
+
+        {selected && (
+          <DetailPanel
+            card={selected.card}
+            color={selected.color}
+            neighbors={neighbors}
+            showAgentNudge={showNudgeFor(selected.card.state)}
+            onClose={closePanel}
+            onRunAgentTeam={runAgentTeam}
+          />
+        )}
+      </div>
     </div>
   );
 }
