@@ -795,7 +795,9 @@ function DetectedMode({
   useEffect(() => {
     onSubModeChange?.(tabMode);
   }, [tabMode, onSubModeChange]);
-  const [showSecurity, setShowSecurity] = useState(false);
+  // Security overlay defaults on so the System Design tab opens with encryption
+  // state visible. The toggle in the toolbar still turns it off.
+  const [showSecurity, setShowSecurity] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -882,22 +884,40 @@ function DetectedMode({
       ) : (
         <div className="sd-detected">
           <div className="sd-toolbar">
-            <label className="sd-security-toggle">
-              <input type="checkbox" checked={showSecurity} onChange={(e) => setShowSecurity(e.target.checked)} />
-              Show Security Layer
-            </label>
-            {showSecurity && (
-              <div className="sd-legend">
-                <span><i style={{ background: '#10b981' }} /> encrypted</span>
-                <span><i style={{ background: '#ef4444' }} /> unencrypted</span>
-                <span><i style={{ background: '#f59e0b' }} /> unknown</span>
+            {/* Controls: the Security Overlay toggle sits inline with the bar. */}
+            <div className="sd-toolbar-controls">
+              <label className="sd-security-toggle">
+                <input
+                  type="checkbox"
+                  className="sd-toggle-input"
+                  checked={showSecurity}
+                  onChange={(e) => setShowSecurity(e.target.checked)}
+                />
+                <span className="sd-toggle-track" aria-hidden="true">
+                  <span className="sd-toggle-thumb" />
+                </span>
+                <span className="sd-toggle-label">Security Overlay</span>
+              </label>
+            </div>
+
+            {/* Legends: layer shapes, then (when on) the security encryption key,
+                separated by a subtle divider. */}
+            <div className="sd-legends">
+              <div className="sd-shapes-legend">
+                <span className="legend-item"><span className="legend-shape edge-circle">●</span> Edge</span>
+                <span className="legend-item"><span className="legend-shape app-rect">■</span> Application</span>
+                <span className="legend-item"><span className="legend-shape data-cylinder">⬡</span> Data Store</span>
               </div>
-            )}
-            {/* Shapes Legend */}
-            <div className="sd-shapes-legend">
-              <span className="legend-item"><span className="legend-shape edge-circle">●</span> Edge</span>
-              <span className="legend-item"><span className="legend-shape app-rect">■</span> Application</span>
-              <span className="legend-item"><span className="legend-shape data-cylinder">⬡</span> Data Store</span>
+              {showSecurity && (
+                <>
+                  <span className="sd-legend-divider" aria-hidden="true" />
+                  <div className="sd-legend">
+                    <span><i style={{ background: '#10b981' }} /> encrypted</span>
+                    <span><i style={{ background: '#ef4444' }} /> unencrypted</span>
+                    <span><i style={{ background: '#f59e0b' }} /> unknown</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -964,13 +984,25 @@ function DetectedMode({
                   <p className="sd-empty">No gaps detected. Your infrastructure looks complete.</p>
                 )}
                 {infra.suggestions.map((s) => (
-                  <button key={s.id} className="sd-sugg-card" onClick={() => setSelectedId(s.id)}>
+                  <div
+                    key={s.id}
+                    className="sd-sugg-card"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedId(s.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') setSelectedId(s.id);
+                    }}
+                  >
                     <div className="sd-sugg-head">
                       <span className="sd-sugg-title">{s.title}</span>
                       <span className={`sd-risk sd-risk-${s.risk}`}>{s.risk} risk</span>
                     </div>
                     <p className="sd-sugg-why">{s.why}</p>
-                  </button>
+                    <div className="sd-sugg-actions" onClick={(e) => e.stopPropagation()}>
+                      <CopyPromptButton compact prompt={s.prompt} label="Copy Fix Prompt" />
+                    </div>
+                  </div>
                 ))}
 
                 {showSecurity && unencrypted.length > 0 && (
