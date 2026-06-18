@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import type { CanvasNode, Diagnostic, PipelineStepId, Severity } from '@archlab/shared';
 import type { AnalysisResult } from '../analyzer/analyzer.js';
+import { detectFrameworks, type TechProfile } from '../analyzer/frameworks.js';
 
 /** Small helper to build a diagnostic with a stable-ish unique id. */
 function diag(
@@ -74,6 +75,7 @@ function hasEffectWithoutDeps(content: string): boolean {
 export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
   const out: Diagnostic[] = [];
   const { scan } = analysis;
+  const fw = detectFrameworks(scan);
 
   // Exposed secrets: a committed .env with assigned values.
   const envFile = scan.files.find((f) => /(^|\/)\.env($|\.)/.test(f.relPath));
@@ -92,10 +94,10 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
     );
   }
 
-  // Missing CORS configuration when a backend exists.
+  // Missing CORS configuration when a backend exists (Express-specific guidance).
   const hasBackend = analysis.canvas.nodes.some((n) => n.lane === 'backend');
   const mentionsCors = scan.files.some((f) => /\bcors\b|Access-Control-Allow-Origin/i.test(f.content));
-  if (hasBackend && !mentionsCors) {
+  if (fw.isExpress && hasBackend && !mentionsCors) {
     out.push(
       diag(
         'security-checks',
@@ -131,9 +133,9 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
     }
   }
 
-  // Missing rate limiting.
+  // Missing rate limiting (Express-specific guidance).
   const mentionsRateLimit = scan.files.some((f) => /rate.?limit|express-rate-limit/i.test(f.content));
-  if (hasBackend && !mentionsRateLimit) {
+  if (fw.isExpress && hasBackend && !mentionsRateLimit) {
     out.push(
       diag(
         'security-checks',
@@ -147,6 +149,137 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
     );
   }
 
+  out.push(...frameworkSecurityChecks(analysis, fw));
+
+  return out;
+}
+
+/** Framework-specific security checks (Django, Spring, Go, Laravel). */
+function frameworkSecurityChecks(analysis: AnalysisResult, fw: TechProfile): Diagnostic[] {
+  const out: Diagnostic[] = [];
+  const { scan } = analysis;
+  const has = (re: RegExp) => scan.files.some((f) => f.content && re.test(f.content));
+
+  // --- Django ---
+  if (fw.isDjango) {
+    if (!has(/ALLOWED_HOSTS/)) {
+      out.push(
+        diag(
+          'security-checks',
+          'high',
+          'Django ALLOWED_HOSTS not configured',
+          'No ALLOWED_HOSTS setting was found in the Django settings.',
+          'An empty or wildcard ALLOWED_HOSTS lets attackers spoof the Host header (cache poisoning, password-reset poisoning).',
+          'Set ALLOWED_HOSTS to your explicit production domains in settings.py and drive it from environment config.',
+          'Split settings into base/dev/prod modules so production never falls back to permissive defaults.',
+        ),
+      );
+    }
+    if (!has(/CSRF_COOKIE_SECURE\s*=\s*True/)) {
+      out.push(
+        diag(
+          'security-checks',
+          'medium',
+          'Django CSRF_COOKIE_SECURE not enabled',
+          'CSRF_COOKIE_SECURE was not found set to True.',
+          'Without it the CSRF cookie can be sent over plain HTTP and intercepted on the network.',
+          'Set CSRF_COOKIE_SECURE = True (and SESSION_COOKIE_SECURE = True) in production settings.',
+          'Also enable SECURE_SSL_REDIRECT and HSTS so all traffic is forced onto HTTPS.',
+        ),
+      );
+    }
+  }
+
+  // --- Spring ---
+  if (fw.isSpring) {
+    if (!has(/@CrossOrigin|CorsConfiguration|addCorsMappings/)) {
+      out.push(
+        diag(
+          'security-checks',
+          'high',
+          'No CORS configuration detected (Spring)',
+          'No @CrossOrigin or CORS configuration bean was found.',
+          'Without an explicit CORS policy, cross-origin browser calls are either blocked or implicitly broad depending on defaults.',
+          'Add a CorsConfigurationSource bean (or @CrossOrigin) with an explicit allowlist of origins, methods, and headers.',
+          'Centralize the allowlist in configuration so environments differ without code changes.',
+        ),
+      );
+    }
+    if (!has(/spring-security|SecurityFilterChain|@EnableWebSecurity/)) {
+      out.push(
+        diag(
+          'security-checks',
+          'high',
+          'No Spring Security detected',
+          'No Spring Security configuration was found on this Spring application.',
+          'Without Spring Security, endpoints have no authentication or authorization enforcement layer.',
+          'Add spring-boot-starter-security and define a SecurityFilterChain that authenticates requests and protects routes.',
+          'Use method-level @PreAuthorize for fine-grained authorization on sensitive operations.',
+        ),
+      );
+    }
+  }
+
+  // --- Go ---
+  if (fw.isGo) {
+    if (!has(/\.Use\(|middleware|negroni|alice\./)) {
+      out.push(
+        diag(
+          'security-checks',
+          'medium',
+          'No middleware chain detected (Go)',
+          'No router middleware chain was found in the Go service.',
+          'Cross-cutting concerns (auth, logging, recovery, CORS) belong in middleware; their absence usually means they are missing or scattered.',
+          'Introduce a middleware chain on your router (e.g. chi/gin Use, or negroni/alice) for auth, recovery, and request logging.',
+          'Add a panic-recovery middleware so a single handler panic cannot take down the process.',
+        ),
+      );
+    }
+    if (!has(/context\.WithTimeout|context\.WithDeadline|ctx,\s*cancel/)) {
+      out.push(
+        diag(
+          'security-checks',
+          'medium',
+          'No request context timeout detected (Go)',
+          'No context.WithTimeout / WithDeadline usage was found around outbound calls.',
+          'Without timeouts, a slow downstream dependency can exhaust goroutines and connections until the service stalls.',
+          'Wrap database and HTTP calls in context.WithTimeout and propagate the request context end to end.',
+          'Add an http.Server with ReadTimeout/WriteTimeout/IdleTimeout set so slow clients cannot pin resources.',
+        ),
+      );
+    }
+  }
+
+  // --- Laravel ---
+  if (fw.isLaravel) {
+    if (!has(/VerifyCsrfToken|@csrf|csrf_field/)) {
+      out.push(
+        diag(
+          'security-checks',
+          'high',
+          'No CSRF protection detected (Laravel)',
+          'The VerifyCsrfToken middleware / @csrf directive was not found.',
+          'State-changing form posts without CSRF tokens are vulnerable to cross-site request forgery.',
+          'Ensure the VerifyCsrfToken middleware is in the web group and add @csrf to every form.',
+          'For SPA/API token flows, use Sanctum and keep CSRF protection on the stateful web routes.',
+        ),
+      );
+    }
+    if (!has(/throttle:|ThrottleRequests|RateLimiter::/)) {
+      out.push(
+        diag(
+          'security-checks',
+          'medium',
+          'No rate limiting middleware detected (Laravel)',
+          'No throttle middleware or RateLimiter definition was found.',
+          'Unthrottled routes are open to brute-force and denial-of-service abuse.',
+          "Apply the 'throttle' middleware to auth and API routes and define named limiters in RouteServiceProvider.",
+          'Tune per-route limits and return 429 with Retry-After so clients back off correctly.',
+        ),
+      );
+    }
+  }
+
   return out;
 }
 
@@ -154,6 +287,7 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
 export function performanceChecks(analysis: AnalysisResult): Diagnostic[] {
   const out: Diagnostic[] = [];
   const { scan } = analysis;
+  const fw = detectFrameworks(scan);
 
   // SELECT * usage.
   const selectStar = scan.files.find((f) => /select\s+\*/i.test(f.content));
@@ -172,8 +306,8 @@ export function performanceChecks(analysis: AnalysisResult): Diagnostic[] {
     );
   }
 
-  // React effect without a dependency array (re-render / leak risk).
-  const effectNoDeps = scan.files.find((f) => hasEffectWithoutDeps(f.content));
+  // React effect without a dependency array (re-render / leak risk). React-only.
+  const effectNoDeps = fw.isReact ? scan.files.find((f) => hasEffectWithoutDeps(f.content)) : undefined;
   if (effectNoDeps) {
     out.push(
       diag(

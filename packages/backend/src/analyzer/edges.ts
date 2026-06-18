@@ -68,7 +68,37 @@ export function detectEdges(
         break;
       }
       case '.py': {
-        for (const match of file.content.matchAll(/(?:from|import)\s+(\.[\w.]+)/g)) {
+        // Both relative (`from .pkg import x`) and absolute (`from app.models import x`).
+        for (const match of file.content.matchAll(/(?:from\s+([\w.]+)\s+import|^import\s+([\w.]+))/gm)) {
+          const spec = match[1] || match[2];
+          if (spec) specs.push(spec);
+        }
+        break;
+      }
+      case '.go': {
+        // import "package/path" and import alias "package/path"
+        for (const match of file.content.matchAll(/import\s+(?:\w+\s+)?"([\w\/.\-]+)"/g)) {
+          specs.push(match[1]);
+        }
+        break;
+      }
+      case '.rb': {
+        // require 'file' and require_relative 'file'
+        for (const match of file.content.matchAll(/require(?:_relative)?\s+['"]([^'"]+)['"]/g)) {
+          specs.push(match[1]);
+        }
+        break;
+      }
+      case '.php': {
+        // use Namespace\Class and require/include 'file'
+        for (const match of file.content.matchAll(/(?:use|require|include)(?:_once)?\s+['"]?([\\/\w]+)['"]?/g)) {
+          specs.push(match[1]);
+        }
+        break;
+      }
+      case '.swift': {
+        // import Framework / import Module
+        for (const match of file.content.matchAll(/^import\s+(\w+)/gm)) {
           specs.push(match[1]);
         }
         break;

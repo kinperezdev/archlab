@@ -37,6 +37,116 @@ function inferType(fieldName: string, tsType: string): string {
   return 'TEXT';
 }
 
+type AddColumn = (tableName: string, col: InferredColumn) => void;
+
+/**
+ * Language-specific model/struct/entity/migration field extractors. Each feeds
+ * the same column-upsert used by the TS interface scanner, so inferred SQL works
+ * across Go, Python, Java/Kotlin, C#, and Ruby projects.
+ */
+function extractLanguageModels(
+  ext: string,
+  content: string,
+  relPath: string,
+  add: AddColumn,
+): void {
+  const fk = (name: string) => name.endsWith('Id') || name.endsWith('_id') || name.toLowerCase().endsWith('id');
+
+  // Go structs with optional `json:"name"` tags.
+  if (ext === '.go') {
+    const structRe = /type\s+(\w+)\s+struct\s*\{([\s\S]*?)\}/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = structRe.exec(content)) !== null) {
+      const model = sm[1].replace(/Model$/, '');
+      const body = sm[2];
+      const fieldRe = /^\s*([A-Z]\w*)\s+([\w.*[\]]+)(?:\s+`([^`]*)`)?/gm;
+      let f: RegExpExecArray | null;
+      while ((f = fieldRe.exec(body)) !== null) {
+        const jsonTag = f[3]?.match(/json:"(\w+)/);
+        const name = (jsonTag?.[1] ?? f[1]).toLowerCase();
+        if (!name || name === 'id') continue;
+        add(model, { name, type: inferType(name, f[2]), isPk: false, isFk: fk(name) });
+      }
+    }
+    return;
+  }
+
+  // Python dataclasses / Pydantic / Django models (annotated or assigned fields).
+  if (ext === '.py') {
+    const classRe = /class\s+(\w+)\s*\(?[^):]*\)?\s*:/g;
+    let cm: RegExpExecArray | null;
+    while ((cm = classRe.exec(content)) !== null) {
+      const model = cm[1];
+      if (/(Config|Meta|Form|Serializer)$/.test(model)) continue;
+      const start = classRe.lastIndex;
+      const next = content.slice(start).search(/\nclass\s/);
+      const body = next === -1 ? content.slice(start) : content.slice(start, start + next);
+      const fieldRe = /^\s{2,}(\w+)\s*[:=]\s*([\w.]+)/gm;
+      let f: RegExpExecArray | null;
+      while ((f = fieldRe.exec(body)) !== null) {
+        const name = f[1];
+        if (name.startsWith('__') || name === 'id' || name === 'objects') continue;
+        add(model, { name, type: inferType(name, f[2]), isPk: false, isFk: fk(name) });
+      }
+    }
+    return;
+  }
+
+  // Java fields (`private Long id;`) and Kotlin properties (`val id: Long`).
+  if (ext === '.java' || ext === '.kt') {
+    const model = content.match(/(?:data\s+)?class\s+(\w+)/)?.[1];
+    if (!model) return;
+    const javaRe = /(?:private|protected|public)\s+([\w<>]+)\s+(\w+)\s*[;=]/g;
+    const ktRe = /\b(?:val|var)\s+(\w+)\s*:\s*([\w<>?]+)/g;
+    let f: RegExpExecArray | null;
+    while ((f = javaRe.exec(content)) !== null) {
+      const name = f[2];
+      if (name === 'id') continue;
+      add(model, { name, type: inferType(name, f[1]), isPk: false, isFk: fk(name) });
+    }
+    while ((f = ktRe.exec(content)) !== null) {
+      const name = f[1];
+      if (name === 'id') continue;
+      add(model, { name, type: inferType(name, f[2]), isPk: false, isFk: fk(name) });
+    }
+    return;
+  }
+
+  // C# auto-properties (`public string Email { get; set; }`).
+  if (ext === '.cs') {
+    const model = content.match(/class\s+(\w+)/)?.[1];
+    if (!model) return;
+    const propRe = /public\s+([\w<>?[\]]+)\s+(\w+)\s*\{/g;
+    let f: RegExpExecArray | null;
+    while ((f = propRe.exec(content)) !== null) {
+      const name = f[2];
+      if (name === 'Id') continue;
+      add(model, { name, type: inferType(name, f[1]), isPk: false, isFk: fk(name) });
+    }
+    return;
+  }
+
+  // Ruby migrations (`create_table :users do |t| t.string :email`).
+  if (ext === '.rb' || relPath.endsWith('.rb')) {
+    const ctRe = /create_table\s+:(\w+)/g;
+    let tm: RegExpExecArray | null;
+    while ((tm = ctRe.exec(content)) !== null) {
+      const table = tm[1];
+      const start = ctRe.lastIndex;
+      const next = content.slice(start).search(/^\s*end\b/m);
+      const body = next === -1 ? content.slice(start) : content.slice(start, start + next);
+      const colRe = /t\.(\w+)\s+:(\w+)/g;
+      let f: RegExpExecArray | null;
+      while ((f = colRe.exec(body)) !== null) {
+        const type = f[1];
+        const name = f[2];
+        if (type === 'index' || type === 'timestamps') continue;
+        add(table, { name, type: inferType(name, type), isPk: false, isFk: fk(name) });
+      }
+    }
+  }
+}
+
 /** Analyze all files in the project to infer database tables and columns. */
 export function inferSchemaFromAppFlow(scan: ScanResult): string {
   const tables: Map<string, Map<string, InferredColumn>> = new Map();
@@ -187,6 +297,9 @@ export function inferSchemaFromAppFlow(scan: ScanResult): string {
         });
       }
     }
+
+    // D. Multi-language model / struct / entity / migration definitions.
+    extractLanguageModels(file.ext, content, file.relPath, addInferredColumn);
   }
 
   // 4. Build standard tables if we detected some FKs referencing missing tables

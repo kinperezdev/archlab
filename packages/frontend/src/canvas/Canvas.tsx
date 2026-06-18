@@ -10,6 +10,7 @@ import ReactFlow, {
   useReactFlow,
 } from 'reactflow';
 import type { CanvasGraph, CanvasNode, Diagnostic } from '@archlab/shared';
+import { isEntryFile } from '@archlab/shared';
 import { ArchNode, type ArchNodeData, type PortInfo } from './ArchNode.js';
 import { LaneGroup, type LaneVariant, type LaneGroupData } from './LaneGroup.js';
 import { inferOperation, destinationLabel, OPERATION_COLORS } from '../lib/operations.js';
@@ -276,9 +277,6 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
   // are matched by conventional filename first (main/index/app/server), with a
   // fallback to the node that imports the most and is imported the least.
   const { entryIds, depthByNode } = useMemo(() => {
-    const FRONTEND_ENTRY = /(^|\/)(main|index|app)\.(tsx|jsx|ts|js)$/i;
-    const BACKEND_ENTRY = /(^|\/)(index|app|server|main)\.(ts|js|mjs|cjs)$/i;
-
     const outDeg = new Map<string, number>();
     const inDeg = new Map<string, number>();
     for (const e of graph.edges) {
@@ -287,9 +285,11 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     }
 
     const entries = new Set<string>();
-    const detectFor = (lane: string, re: RegExp) => {
+    // A node is an entry point if its file matches any language's entry-file
+    // convention (see ENTRY_PATTERNS in @archlab/shared).
+    const detectFor = (lane: string) => {
       const laneNodes = graph.nodes.filter((n) => n.lane === lane);
-      const named = laneNodes.filter((n) => n.filePath && re.test(n.filePath));
+      const named = laneNodes.filter((n) => isEntryFile(n.filePath));
       if (named.length > 0) {
         named.forEach((n) => entries.add(n.id));
         return;
@@ -306,8 +306,8 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
       }
       if (best && (outDeg.get(best) ?? 0) > 0) entries.add(best);
     };
-    detectFor('frontend', FRONTEND_ENTRY);
-    detectFor('backend', BACKEND_ENTRY);
+    detectFor('frontend');
+    detectFor('backend');
 
     // Multi-source BFS over undirected edges to assign a depth to every node.
     const adj = new Map<string, string[]>();

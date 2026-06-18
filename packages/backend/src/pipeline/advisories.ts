@@ -12,6 +12,7 @@
 import crypto from 'node:crypto';
 import type { CanvasNode, Diagnostic, Severity } from '@archlab/shared';
 import type { AnalysisResult } from '../analyzer/analyzer.js';
+import { detectFrameworks, type TechProfile } from '../analyzer/frameworks.js';
 
 /** Regex matching frontend API calls, to see which screens expect a backend. */
 const FETCH_RE = /(?:fetch|axios(?:\.\w+)?)\(\s*[`'"]([^`'"]+)[`'"]/g;
@@ -92,7 +93,7 @@ export function architectureAdvisories(analysis: AnalysisResult): Diagnostic[] {
           `3. A data layer (database) the endpoints read/write.\n` +
           `4. Wire each screen's fetch call to its endpoint.\n\nScreens to connect:\n${screenList}`,
         'Once the backend exists, add auth and a database so the screens can show real, per-user data.',
-        buildBackendPrompt(analysis, frontScreens, apiCalls),
+        buildBackendPrompt(analysis, frontScreens, apiCalls, detectFrameworks(analysis.scan)),
         frontScreens.map((s) => s.id),
       ),
     );
@@ -159,28 +160,85 @@ export function architectureAdvisories(analysis: AnalysisResult): Diagnostic[] {
   return out;
 }
 
+/** Server scaffolding recipe per primary language, used to keep advice on-stack. */
+function backendRecipe(fw: TechProfile): { server: string; db: string; validation: string } {
+  switch (fw.primaryLanguage) {
+    case 'python':
+      return {
+        server: 'a FastAPI (or Django REST Framework) service',
+        db: 'SQLAlchemy + Alembic migrations (or the Django ORM) on Postgres/SQLite',
+        validation: 'Pydantic models for request/response validation',
+      };
+    case 'go':
+      return {
+        server: 'a Go HTTP service using chi or gin',
+        db: 'GORM or sqlx against Postgres/SQLite',
+        validation: 'struct validation (go-playground/validator) and context timeouts',
+      };
+    case 'java':
+    case 'kotlin':
+      return {
+        server: 'a Spring Boot service with @RestController endpoints',
+        db: 'Spring Data JPA entities + repositories on Postgres',
+        validation: 'Bean Validation (jakarta.validation) annotations',
+      };
+    case 'rust':
+      return {
+        server: 'an Axum (or Actix-web) service',
+        db: 'sqlx or Diesel against Postgres/SQLite',
+        validation: 'the validator crate and typed extractors',
+      };
+    case 'php':
+      return {
+        server: 'a Laravel API (routes/api.php with controllers)',
+        db: 'Eloquent models + migrations on Postgres/MySQL',
+        validation: 'Form Request validation',
+      };
+    case 'ruby':
+      return {
+        server: 'a Rails API (or Sinatra) service',
+        db: 'ActiveRecord models + migrations on Postgres',
+        validation: 'strong params and model validations',
+      };
+    case 'csharp':
+      return {
+        server: 'an ASP.NET Core minimal API (or controllers)',
+        db: 'Entity Framework Core (DbContext) on Postgres/SQL Server',
+        validation: 'DataAnnotations or FluentValidation',
+      };
+    default:
+      return {
+        server: 'a Node + TypeScript server (Express or Fastify)',
+        db: 'Prisma (or Drizzle) on Postgres/SQLite',
+        validation: 'Zod schema validation',
+      };
+  }
+}
+
 /** Build a concrete, copy-paste prompt for scaffolding the missing backend. */
 function buildBackendPrompt(
   analysis: AnalysisResult,
   frontScreens: CanvasNode[],
   apiCalls: string[],
+  fw: TechProfile,
 ): string {
-  const stack = analysis.techStack.join(', ') || 'the existing frontend stack';
+  const stack = fw.label || analysis.techStack.join(', ') || 'the existing frontend stack';
   const screensTxt = frontScreens.map((s) => s.label).join(', ') || 'all screens';
   const endpoints = apiCalls.length
     ? apiCalls.join(', ')
     : 'one endpoint per screen that needs data';
+  const recipe = backendRecipe(fw);
 
   return [
     `Add a backend to this ${stack} project.`,
     ``,
-    `1. Scaffold a Node + TypeScript server (Express or Fastify) that runs on localhost.`,
+    `1. Scaffold ${recipe.server} that runs on localhost.`,
     `2. Create JSON REST endpoints for: ${endpoints}.`,
-    `3. Add a database layer (Prisma + SQLite/Postgres) with models for the data these screens show.`,
-    `4. Add input validation (Zod) and centralized error handling on every endpoint.`,
+    `3. Add a database layer (${recipe.db}) with models for the data these screens show.`,
+    `4. Add input validation (${recipe.validation}) and centralized error handling on every endpoint.`,
     `5. Connect these frontend screens to the new endpoints: ${screensTxt}.`,
     `6. Add CORS for the frontend origin and an auth layer if any screen is user-specific.`,
     ``,
-    `Keep everything typed end to end and return a consistent { success, data, error } envelope.`,
+    `Keep the contract consistent and return a predictable { success, data, error } envelope.`,
   ].join('\n');
 }
