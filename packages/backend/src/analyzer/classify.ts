@@ -6,7 +6,20 @@
 
 import path from 'node:path';
 import type { CanvasNode, NodeKind, Lane } from '@archlab/shared';
+import { isEntryFile } from '@archlab/shared';
 import type { ScannedFile, ScanResult } from './scan.js';
+
+/**
+ * Backend framework / server signals across ecosystems. Matched case-insensitively
+ * against file content. Bare words are word-bounded to limit false positives;
+ * symbol-rich tokens (decorators, method chains) are matched literally.
+ */
+const BACKEND_FRAMEWORK_RE =
+  /\b(?:express|fastify|koa|nestjs|flask|django|fastapi|uvicorn|starlette|aiohttp|tornado|gin|echo|fiber|chi|mux|axum|actix|rocket|warp|hyper|spring|ktor|ktorapplication|laravel|artisan|illuminate|symfony|silex|rails|sinatra|rack|vapor|perfect|kitura)\b|app\.listen|createServer|http\.ListenAndServe|@RestController|@Controller|@Service|@Repository|SpringBootApplication|ControllerBase|RestController|asp\.net|\.UseEndpoints|\.MapGet|\.MapPost|WebApplication/i;
+
+/** Endpoint / route-handler signals across web frameworks. */
+const ENDPOINT_RE =
+  /route|controller|endpoint|handler|\.(?:get|post|put|delete)\(|r\.(?:GET|POST|PUT|DELETE)\(|@(?:Get|Post|Put|Delete)Mapping|@RequestMapping|router\.(?:get|post|put|delete)|Route::(?:get|post|put|delete)|(?:get|post)\s+'\/|app\.MapGet|app\.MapPost|\.(?:get|post)\(path:/i;
 
 export interface Classification {
   nodes: CanvasNode[];
@@ -32,14 +45,14 @@ function classifyFile(file: ScannedFile): { lane: Lane; kind: NodeKind } | null 
 
   // Backend signals.
   const looksBackend =
-    /(^|\/)(server|backend|api|routes|controllers|services|middleware|models)\//.test(p) ||
-    /\b(express|fastify|koa|nestjs|flask|django|gin|app\.listen|createServer|ControllerBase|RestController|SpringBootApplication)\b/.test(c);
+    /(^|\/)(server|backend|api|routes|controllers|services|middleware|models|handlers|cmd|internal|app\/http)\//.test(p) ||
+    BACKEND_FRAMEWORK_RE.test(c);
 
   if (looksBackend) {
     if (/middleware/.test(p)) return { lane: 'backend', kind: 'middleware' };
-    if (/(auth|jwt|passport|session|login)/.test(p + c)) return { lane: 'backend', kind: 'auth' };
+    if (/\bauth\b|\bauthentication\b|\bauthorization\b|\bpassport\b|\bjwt\b/.test(p + c)) return { lane: 'backend', kind: 'auth' };
     if (/(model|schema|entity|repository)/.test(p)) return { lane: 'backend', kind: 'database' };
-    if (/(route|controller|endpoint|handler|\.(get|post|put|delete)\()/.test(p + c)) {
+    if (ENDPOINT_RE.test(p + c)) {
       return { lane: 'backend', kind: 'endpoint' };
     }
     return { lane: 'backend', kind: 'endpoint' };
@@ -127,8 +140,20 @@ function detectTechStack(scan: ScanResult): string[] {
   if (scan.files.some((f) => f.relPath === 'Podfile' || f.relPath.endsWith('.xcodeproj'))) {
     stack.add('iOS/Swift');
   }
-  if (scan.files.some((f) => f.relPath === 'build.gradle' || f.relPath === 'settings.gradle')) {
-    stack.add('Android/Kotlin');
+  // Maven projects (pom.xml) are Java. Gradle projects are Android/Kotlin when a
+  // Kotlin source is present, otherwise plain Java/Gradle.
+  if (scan.files.some((f) => f.relPath === 'pom.xml' || f.relPath.endsWith('/pom.xml'))) {
+    stack.add('Java');
+  }
+  const hasGradle = scan.files.some(
+    (f) =>
+      f.relPath.endsWith('build.gradle') ||
+      f.relPath.endsWith('build.gradle.kts') ||
+      f.relPath.endsWith('settings.gradle'),
+  );
+  if (hasGradle) {
+    const hasKotlin = scan.files.some((f) => f.ext === '.kt');
+    stack.add(hasKotlin ? 'Android/Kotlin' : 'Java/Gradle');
   }
 
   // Check file extensions fallback
@@ -146,7 +171,7 @@ function detectTechStack(scan: ScanResult): string[] {
   return [...stack];
 }
 
-import { parsePrismaSchema, parseSqlSchema } from './dbParser.js';
+import { parseSchemaForFile } from './dbParser.js';
 
 /** Run the full classification pass over a scan result. */
 export function classify(scan: ScanResult): Classification {
@@ -159,17 +184,14 @@ export function classify(scan: ScanResult): Classification {
 
     const id = `n_${nodes.length}`;
     
-    // Parse database schemas if this node represents a DB file.
+    // Parse database schemas if this node represents a DB file. Supports Prisma,
+    // SQL, Python (Django/SQLAlchemy), Go (GORM), and Java/Kotlin (JPA).
     const meta: Record<string, string | number | boolean> = { ext: file.ext };
+    if (isEntryFile(file.relPath)) meta.isEntry = true;
     if (decision.kind === 'database' && file.content) {
       try {
-        if (file.ext === '.prisma') {
-          const schema = parsePrismaSchema(file.content);
-          if (schema.length > 0) meta.dbSchema = JSON.stringify(schema);
-        } else if (file.ext === '.sql') {
-          const schema = parseSqlSchema(file.content);
-          if (schema.length > 0) meta.dbSchema = JSON.stringify(schema);
-        }
+        const schema = parseSchemaForFile(file.ext, file.content);
+        if (schema.length > 0) meta.dbSchema = JSON.stringify(schema);
       } catch {
         // Safe fallback if parsing fails on half-written files
       }

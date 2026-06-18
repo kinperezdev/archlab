@@ -107,6 +107,125 @@ export function parsePrismaSchema(content: string): DbTable[] {
   return tables;
 }
 
+/**
+ * Parse Python ORM models — Django (`class X(models.Model)`) and SQLAlchemy
+ * (`class X(Base)` with `Column(...)` fields). Best-effort, regex-based.
+ */
+export function parsePythonModels(content: string): DbTable[] {
+  const tables: DbTable[] = [];
+  const classRegex = /class\s+(\w+)\s*\(([^)]*)\)\s*:/g;
+  let match: RegExpExecArray | null;
+  while ((match = classRegex.exec(content)) !== null) {
+    const className = match[1];
+    const bases = match[2];
+    if (!/models\.Model|Base|db\.Model/.test(bases)) continue;
+
+    // Body = text from this class header to the next top-level `class` (or EOF).
+    const start = classRegex.lastIndex;
+    const nextClass = content.slice(start).search(/\nclass\s+\w+/);
+    const body = nextClass === -1 ? content.slice(start) : content.slice(start, start + nextClass);
+
+    const columns: DbColumn[] = [];
+    // Django: field = models.CharField(...)  |  SQLAlchemy: field = Column(Integer, ...)
+    const fieldRegex = /^\s*(\w+)\s*=\s*(?:models\.(\w+)|Column\(\s*(\w+)?)/gm;
+    let f: RegExpExecArray | null;
+    while ((f = fieldRegex.exec(body)) !== null) {
+      const name = f[1];
+      const type = (f[2] || f[3] || 'TEXT').toUpperCase();
+      if (name === '__tablename__') continue;
+      const isFk = type.includes('FOREIGNKEY') || /_id$/.test(name);
+      columns.push({ name, type, isPk: name === 'id', isFk });
+    }
+    if (columns.length > 0) tables.push({ name: className, columns });
+  }
+  return tables;
+}
+
+/** Parse Go GORM structs — `type User struct { ID uint `gorm:"primaryKey"` }`. */
+export function parseGoStructs(content: string): DbTable[] {
+  const tables: DbTable[] = [];
+  const structRegex = /type\s+(\w+)\s+struct\s*\{([^}]+)\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = structRegex.exec(content)) !== null) {
+    const name = match[1];
+    const body = match[2];
+    const columns: DbColumn[] = [];
+    // Field lines look like: Name  string `json:"name" gorm:"..."`
+    const fieldRegex = /^\s*([A-Z]\w*)\s+([\w\.\*\[\]]+)(?:\s+`([^`]*)`)?/gm;
+    let f: RegExpExecArray | null;
+    while ((f = fieldRegex.exec(body)) !== null) {
+      const fieldName = f[1];
+      const fieldType = f[2];
+      const tag = f[3] ?? '';
+      const isPk = /primaryKey/i.test(tag) || fieldName === 'ID';
+      const isFk = /foreignKey/i.test(tag) || (/ID$/.test(fieldName) && fieldName !== 'ID');
+      columns.push({ name: fieldName, type: fieldType, isPk, isFk });
+    }
+    if (columns.length > 0) tables.push({ name, columns });
+  }
+  return tables;
+}
+
+/** Parse Java/Kotlin JPA entities — `@Entity class User { @Id Long id; }`. */
+export function parseJpaEntities(content: string): DbTable[] {
+  const tables: DbTable[] = [];
+  const entityRegex = /@Entity[\s\S]{0,200}?class\s+(\w+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = entityRegex.exec(content)) !== null) {
+    const name = match[1];
+    // Body = the brace block following the class header.
+    const afterClass = content.slice(match.index);
+    const open = afterClass.indexOf('{');
+    if (open === -1) continue;
+    let depth = 0;
+    let end = open;
+    for (let i = open; i < afterClass.length; i++) {
+      if (afterClass[i] === '{') depth++;
+      else if (afterClass[i] === '}') {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    const body = afterClass.slice(open + 1, end);
+    const columns: DbColumn[] = [];
+    // Java: private Long id;  |  Kotlin: val id: Long
+    const javaField = /(?:private|protected|public)\s+([\w<>]+)\s+(\w+)\s*[;=]/g;
+    const kotlinField = /(?:val|var)\s+(\w+)\s*:\s*([\w<>?]+)/g;
+    const pkNear = (idx: number) => /@Id/.test(body.slice(Math.max(0, idx - 60), idx));
+    let f: RegExpExecArray | null;
+    while ((f = javaField.exec(body)) !== null) {
+      columns.push({ name: f[2], type: f[1], isPk: pkNear(f.index), isFk: /Id$/.test(f[2]) && f[2] !== 'id' });
+    }
+    while ((f = kotlinField.exec(body)) !== null) {
+      columns.push({ name: f[1], type: f[2], isPk: pkNear(f.index) || f[1] === 'id', isFk: /Id$/.test(f[1]) && f[1] !== 'id' });
+    }
+    if (columns.length > 0) tables.push({ name, columns });
+  }
+  return tables;
+}
+
+/** Dispatch to the correct schema parser based on file extension. */
+export function parseSchemaForFile(ext: string, content: string): DbTable[] {
+  switch (ext) {
+    case '.prisma':
+      return parsePrismaSchema(content);
+    case '.sql':
+      return parseSqlSchema(content);
+    case '.py':
+      return parsePythonModels(content);
+    case '.go':
+      return parseGoStructs(content);
+    case '.java':
+    case '.kt':
+      return parseJpaEntities(content);
+    default:
+      return [];
+  }
+}
+
 /** Parses standard SQL schema files (CREATE TABLE statements). */
 export function parseSqlSchema(content: string): DbTable[] {
   const tables: DbTable[] = [];

@@ -19,17 +19,21 @@ const IGNORED_DIRS = new Set([
   '.turbo',
   'coverage',
   '.cache',
-  'vendor',
+  'vendor', // Go / PHP (Composer) dependencies
   '__pycache__',
+  '.pytest_cache',
   '.venv',
   'venv',
-  'Pods',
+  'Pods', // iOS CocoaPods
   '.symlinks',
   '.dart_tool',
   '.gradle',
   'gradle',
   '.idea',
   '.vscode',
+  'target', // Rust / Maven build output
+  '.build', // Swift Package Manager build output
+  'DerivedData', // Xcode build output
 ]);
 
 /** Hard cap so a pathological repo can never hang the scan. */
@@ -121,7 +125,7 @@ export function scanProject(root: string): ScanResult {
       let content = '';
       try {
         const stat = fs.statSync(absPath);
-        if (stat.size <= MAX_READ_BYTES && isTextExt(ext)) {
+        if (stat.size <= MAX_READ_BYTES && (isTextExt(ext) || isAlwaysReadFile(entry.name))) {
           content = fs.readFileSync(absPath, 'utf8');
         }
       } catch {
@@ -171,5 +175,34 @@ function isTextExt(ext: string): boolean {
     '.hpp',
     '.m',
     '.scala',
+    // Build / dependency manifests and templates across ecosystems.
+    '.toml', // Rust Cargo.toml, Python pyproject.toml
+    '.mod', // Go go.mod
+    '.sum', // Go go.sum
+    '.gradle', // Java/Kotlin Gradle build files
+    '.groovy', // Gradle / Jenkins pipelines
+    '.erb', // Ruby ERB templates
+    '.blade', // Laravel Blade templates
+    '.proto', // Protocol Buffers / gRPC
+    '.rake', // Ruby Rake tasks
+    '.podspec', // CocoaPods spec
+    '.xcconfig', // Xcode build config
   ].includes(ext);
+}
+
+/** Extensionless config/build files we always read as text, matched by name. */
+const ALWAYS_READ_FILES = new Set([
+  'Dockerfile',
+  'Makefile',
+  'Gemfile',
+  'Procfile',
+  'Cartfile',
+  'Podfile',
+  'Fastfile',
+  'Dangerfile',
+]);
+
+/** Whether a file (by basename) should always be read regardless of extension. */
+function isAlwaysReadFile(name: string): boolean {
+  return ALWAYS_READ_FILES.has(name);
 }

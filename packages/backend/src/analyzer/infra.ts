@@ -139,8 +139,10 @@ export function detectInfrastructure(
 
   // ---- Application layer ------------------------------------------------
   // Microservices: each file that boots a server is a deployable unit.
-  const serviceFiles = files.filter(
-    (f) => /\.listen\s*\(|createServer\s*\(|app\.listen|fastify\(/.test(f.content),
+  const serviceFiles = files.filter((f) =>
+    /\.listen\s*\(|createServer\s*\(|app\.listen|fastify\(|http\.ListenAndServe|http\.Serve|uvicorn\.run|gunicorn|create_app\(\)|@SpringBootApplication|SpringApplication\.run|fn main\(\).*HttpServer|actix_web::main|WebApplication\.CreateBuilder|app\.Run\(\)|App\.shared\.run\(\)/.test(
+      f.content,
+    ),
   );
   const serviceDirs = new Map<string, ScannedFile[]>();
   for (const f of serviceFiles) {
@@ -166,6 +168,20 @@ export function detectInfrastructure(
     { re: /@clerk\//i, describe: () => 'Clerk auth' },
     { re: /oauth/i, describe: () => 'OAuth flow' },
     { re: /requireAuth|isAuthenticated|authMiddleware|verifyToken/i, describe: () => 'auth middleware pattern' },
+    // Python
+    { re: /PyJWT|python-jose|django\.contrib\.auth/i, describe: () => 'Python auth (PyJWT / Django auth)' },
+    // Go
+    { re: /golang-jwt|github\.com\/dgrijalva\/jwt/i, describe: () => 'Go JWT library' },
+    // Java / Kotlin Spring
+    { re: /spring-security|@PreAuthorize/i, describe: () => 'Spring Security' },
+    // Rust (Cargo.toml)
+    { re: /jsonwebtoken\s*=\s*"/i, describe: () => 'Rust jsonwebtoken crate' },
+    // Ruby
+    { re: /\bdevise\b|\bwarden\b/i, describe: () => 'Ruby auth (Devise / Warden)' },
+    // PHP
+    { re: /tymon\/jwt|laravel\/sanctum/i, describe: () => 'Laravel auth (JWT / Sanctum)' },
+    // C#
+    { re: /Microsoft\.AspNetCore\.Authentication/i, describe: () => 'ASP.NET Core authentication' },
   ]);
   const authNode = auth.length ? add('auth-service', 'application', 'Auth Service', auth) : null;
 
@@ -173,6 +189,20 @@ export function detectInfrastructure(
     { re: /\bioredis\b|require\(['"]redis['"]\)|from ['"]redis['"]/i, describe: () => 'Redis client' },
     { re: /memcached/i, describe: () => 'Memcached client' },
     { re: /node-cache|lru-cache/i, describe: () => 'in-process cache library' },
+    // Python
+    { re: /django\.core\.cache|django-redis/i, describe: () => 'Django cache (redis)' },
+    // Go
+    { re: /go-redis|github\.com\/go-redis/i, describe: () => 'Go Redis client' },
+    // Java / Kotlin Spring
+    { re: /spring-data-redis|@Cacheable/i, describe: () => 'Spring cache (Redis)' },
+    // Rust (Cargo.toml)
+    { re: /redis\s*=\s*"/i, describe: () => 'Rust redis crate' },
+    // Ruby
+    { re: /redis-rb|readthis/i, describe: () => 'Ruby Redis cache' },
+    // PHP
+    { re: /predis\/predis/i, describe: () => 'PHP Predis' },
+    // C#
+    { re: /StackExchange\.Redis/i, describe: () => 'StackExchange.Redis' },
   ]);
   const cacheNode = cache.length ? add('cache', 'application', 'Cache Layer', cache) : null;
 
@@ -334,7 +364,14 @@ function detectDatabase(
   add: (t: InfraNodeType, l: InfraLayer, label: string, ev: InfraEvidence[], meta?: InfraNode['meta']) => InfraNode,
 ): InfraNode | null {
   const map: { type: InfraNodeType; label: string; probes: Probe[] }[] = [
-    { type: 'postgres', label: 'PostgreSQL', probes: [{ re: /\bpg\b|postgres|postgresql/i, describe: () => 'PostgreSQL driver' }] },
+    {
+      type: 'postgres',
+      label: 'PostgreSQL',
+      probes: [
+        { re: /\bpg\b|postgres|postgresql/i, describe: () => 'PostgreSQL driver' },
+        { re: /psycopg2|asyncpg|pgx\.|\.UseNpgsql/i, describe: () => 'PostgreSQL driver (Python/Go/C#)' },
+      ],
+    },
     { type: 'mysql', label: 'MySQL', probes: [{ re: /mysql2?|mariadb/i, describe: () => 'MySQL driver' }] },
     { type: 'mongodb', label: 'MongoDB', probes: [{ re: /mongoose|mongodb/i, describe: () => 'MongoDB / Mongoose' }] },
     { type: 'redis', label: 'Redis (store)', probes: [{ re: /upstash|redis-om/i, describe: () => 'Redis data store' }] },
@@ -353,6 +390,24 @@ function detectDatabase(
     { re: /typeorm/i, describe: () => 'TypeORM' },
     { re: /drizzle-orm/i, describe: () => 'Drizzle ORM' },
     { re: /@supabase\/supabase-js/i, describe: () => 'Supabase client' },
+    // Python
+    { re: /SQLAlchemy|alembic|databases\./i, describe: () => 'Python ORM (SQLAlchemy / databases)' },
+    // Go
+    { re: /gorm\.|database\/sql|sqlx\./i, describe: () => 'Go data layer (GORM / database/sql)' },
+    // Java / Kotlin
+    { re: /JdbcTemplate|@Entity|EntityManager|Hibernate/i, describe: () => 'Java persistence (JPA / Hibernate)' },
+    // Rust
+    { re: /diesel::|sqlx::|rusqlite/i, describe: () => 'Rust data layer (Diesel / sqlx)' },
+    // Ruby
+    { re: /ActiveRecord::|\bsequel\./i, describe: () => 'Ruby ORM (ActiveRecord / Sequel)' },
+    // PHP
+    { re: /Eloquent|DB::table|Schema::create/i, describe: () => 'Laravel Eloquent' },
+    // C#
+    { re: /DbContext|EF\.Core|\.UseSqlServer|\.UseNpgsql/i, describe: () => 'Entity Framework Core' },
+    // Swift mobile
+    { re: /RealmSwift|CoreData|\bGRDB\b/i, describe: () => 'Swift persistence (Realm / CoreData / GRDB)' },
+    // Android / Kotlin
+    { re: /Room\.|@Dao|@Database/i, describe: () => 'Android Room' },
   ]);
   if (orm.length) return add('postgres', 'data', 'Database', orm, { encryptionAtRest: encryptionAtRest(files) });
   return null;
