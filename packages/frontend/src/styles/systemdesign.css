@@ -1316,6 +1316,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow-y: auto;
   background: #080810;
 }
 .ea-placeholder {
@@ -1384,7 +1385,7 @@
 .ea-apikey-btn:hover { background: #fbbf24; }
 
 /* Canvas + detail panel row. */
-.ea-flow-canvas { position: relative; flex: 1; min-height: 0; }
+.ea-flow-canvas { position: relative; flex: 0 0 auto; height: 70vh; min-height: 460px; }
 
 /* Section band label (non-interactive). */
 .ea-flow-section-label {
@@ -1532,3 +1533,76 @@
 }
 .ea-detail-agent-btn:hover { background: #fbbf24; }
 .ea-detail-fix { margin-top: 16px; }
+
+/* ============================================================== */
+/* Enterprise Audit — Master Action Plan (below the canvas)       */
+/* ============================================================== */
+.ea-plan {
+  flex: 0 0 auto;
+  background: #0d0d17;
+  border-top: 2px solid #6366f1;
+  padding: 24px;
+}
+.ea-plan-section { padding: 18px 0; border-bottom: 1px solid #1a1a2e; }
+.ea-plan-section:first-child { padding-top: 0; }
+.ea-plan-section:last-child { border-bottom: none; padding-bottom: 0; }
+.ea-plan-label {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+.ea-plan-verdict { margin: 0; font-size: 14px; line-height: 1.6; color: #e2e8f0; max-width: 80ch; }
+.ea-plan-empty { margin: 0; font-size: 13px; color: #94a3b8; }
+
+.ea-plan-actions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.ea-plan-action {
+  background: #0f0f1a;
+  border: 1px solid #1a1a2e;
+  border-radius: 10px;
+  padding: 14px;
+}
+.ea-plan-action-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.ea-plan-action-name { font-size: 14px; font-weight: 700; color: #fff; }
+.ea-plan-action-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+}
+.ea-plan-action-why { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: #94a3b8; }
+
+.ea-plan-wins { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ea-plan-win { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #e2e8f0; }
+.ea-plan-win-check { color: #64748b; }
+.ea-plan-win-name { font-weight: 600; }
+.ea-plan-win-pkg {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #5ad6b0;
+  background: #0f0f1a;
+  border: 1px solid #1a1a2e;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.ea-plan-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.ea-plan-ai-head .ea-plan-label { margin: 0; }
+.ea-plan-ai-text {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e2e8f0;
+  background: #08080f;
+  border: 1px solid #1a1a2e;
+  border-radius: 8px;
+  padding: 12px;
+}

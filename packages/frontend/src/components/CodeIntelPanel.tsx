@@ -20,6 +20,8 @@ import type {
   AffectedFile,
 } from '@archlab/shared';
 import { tokenizeLine } from '../lib/codeHighlight.js';
+import { useApiKeyContext } from '../state/apiKeyContext.js';
+import { NudgeText } from './ConfidenceNudge.js';
 import {
   fetchFileIntel,
   fetchReferences,
@@ -528,6 +530,7 @@ function ImpactView({
   onClose: () => void;
   onApplied: () => void;
 }) {
+  const { hasApiKey, openApiKeys } = useApiKeyContext();
   const primary =
     impact.affected.find((f) => f.path === impact.request.path) ?? impact.affected[0] ?? null;
   const others = impact.affected.filter((f) => f !== primary);
@@ -626,6 +629,17 @@ function ImpactView({
           ))}
           </section>
         </div>
+
+        {!hasApiKey && (
+          <div className="impact-confidence-note">
+            <NudgeText tone="muted">
+              Impact analysis is estimated from static references.{' '}
+            </NudgeText>
+            <NudgeText tone="amber" onClick={openApiKeys}>
+              ⚡ Connect API key for AI-powered impact tracing.
+            </NudgeText>
+          </div>
+        )}
 
         <footer className="impact-foot">
           {done ? (

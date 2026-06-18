@@ -7,6 +7,8 @@ import { CopyPromptButton } from './CopyPromptButton.js';
 import { promptForInsight } from '../lib/prompts.js';
 import { fetchAccessStatus } from '../lib/brainAccess.js';
 import { BrainSecurity } from './BrainSecurity.js';
+import { useApiKeyContext } from '../state/apiKeyContext.js';
+import { NudgeText } from './ConfidenceNudge.js';
 
 interface BrainPanelProps {
   brain: BrainSummary;
@@ -25,6 +27,7 @@ const AGENT_LABEL: Record<string, string> = {
 
 export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanelProps) {
   const patterns = [...brain.patterns].sort((a, b) => b.count - a.count);
+  const { agentTeamHasRun, openAgentTeam } = useApiKeyContext();
   const [copied, setCopied] = useState(false);
   const [pasteConfig, setPasteConfig] = useState('');
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -137,7 +140,16 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
         ) : (
           <>
         <section className="brain-section">
-          <h3>Proactive insights</h3>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            Proactive insights
+            {agentTeamHasRun ? (
+              <NudgeText tone="green">✓ AI-enhanced insights</NudgeText>
+            ) : (
+              <NudgeText tone="amber" onClick={openAgentTeam}>
+                Heuristic patterns · ⚡ Run Agent Team to get AI insights
+              </NudgeText>
+            )}
+          </h3>
           {brain.insights.length === 0 ? (
             <p className="file-empty">No cross-project insights yet. Analyze more projects.</p>
           ) : (
