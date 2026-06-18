@@ -54,6 +54,9 @@ import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 import { ApiKeysModal } from './components/ApiKeysModal.js';
+import { ApiKeyContext } from './state/apiKeyContext.js';
+import { NudgeText } from './components/ConfidenceNudge.js';
+import { formatRunTimestamp } from './lib/formatTime.js';
 
 export type ArchTab =
   | 'all'
@@ -251,12 +254,28 @@ export function App() {
   // hidden while this is true so it never floats on top of a modal.
   const isAnyModalOpen = brainOpen || shortcutsOpen || apiKeysOpen;
 
+  // Confidence context: has the Agent Team run, and when. Shared app-wide so
+  // every surface can show honest static-vs-AI indicators without prop drilling.
+  const agentTeamHasRun = state.agentTeam.runs.length > 0;
+  const lastAgentRunAt = state.agentTeam.runs[0]?.at ?? null;
+  const apiKeyContextValue = useMemo(
+    () => ({
+      hasApiKey,
+      agentTeamHasRun,
+      lastAgentRunAt,
+      openAgentTeam: () => setAgentTeamOpen(true),
+      openApiKeys: () => setApiKeysOpen(true),
+    }),
+    [hasApiKey, agentTeamHasRun, lastAgentRunAt],
+  );
+
   // Layer 1: a locked brain blocks the entire app at launch until unlocked.
   if (access?.locked) {
     return <LockScreen onUnlocked={setAccess} />;
   }
 
   return (
+    <ApiKeyContext.Provider value={apiKeyContextValue}>
     <div
       className="app-shell"
       style={{ gridTemplateRows: `44px 1fr ${bottomCollapsed ? 0 : bottomHeight}px` }}
@@ -351,6 +370,22 @@ export function App() {
                       >
                         ✔ Run Checks
                       </button>
+
+                      <span className="pipeline-confidence-nudge">
+                        {!hasApiKey ? (
+                          <NudgeText tone="amber" onClick={() => setAgentTeamOpen(true)}>
+                            Static analysis only · ⚡ Run Agent Team for AI-powered findings
+                          </NudgeText>
+                        ) : !agentTeamHasRun ? (
+                          <NudgeText tone="muted" onClick={() => setAgentTeamOpen(true)}>
+                            ⚡ Run Agent Team for deeper analysis
+                          </NudgeText>
+                        ) : (
+                          <NudgeText tone="green">
+                            ✓ AI-enhanced · last run {formatRunTimestamp(lastAgentRunAt)}
+                          </NudgeText>
+                        )}
+                      </span>
                     </div>
 
                     <PipelineTags
@@ -494,5 +529,6 @@ export function App() {
       {shortcutsOpen && <ShortcutsPanel onClose={() => setShortcutsOpen(false)} />}
       {apiKeysOpen && <ApiKeysModal onClose={() => setApiKeysOpen(false)} />}
     </div>
+    </ApiKeyContext.Provider>
   );
 }

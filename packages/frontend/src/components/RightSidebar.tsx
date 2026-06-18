@@ -5,7 +5,7 @@
  * and the running findings list.
  */
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   type CanvasGraph,
   type CanvasNode,
@@ -21,6 +21,8 @@ import {
   promptForBottleneck,
 } from '../lib/prompts.js';
 import { inferOperation, OPERATION_COLORS, type Operation } from '../lib/operations.js';
+import { useApiKeyContext } from '../state/apiKeyContext.js';
+import { ConfidenceBadge, NudgeCard, NudgeText } from './ConfidenceNudge.js';
 
 interface NodeLink {
   node: CanvasNode;
@@ -95,6 +97,7 @@ export function RightSidebar({
   stepFilter,
   onClearStepFilter,
 }: RightSidebarProps) {
+  const { agentTeamHasRun, openAgentTeam } = useApiKeyContext();
   const latest = diagnostics[diagnostics.length - 1] ?? null;
   // When a Security step tag is active, show only that step's findings.
   const visibleDiagnostics = stepFilter
@@ -103,6 +106,13 @@ export function RightSidebar({
   const sorted = [...visibleDiagnostics].sort(
     (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity),
   );
+
+  // Confidence signal for the findings header: static-only vs. AI-enhanced.
+  const hasAiFindings = sorted.some((d) => Boolean(d.agentId));
+  // The last bottleneck card in sorted order — the performance nudge sits after it.
+  const bottlenecks = sorted.filter((d) => d.severity === 'bottleneck');
+  const lastBottleneckId = bottlenecks[bottlenecks.length - 1]?.id ?? null;
+  const confirmedBottlenecks = bottlenecks.filter((d) => d.agentId).length;
 
   return (
     <aside className="right-sidebar" style={{ width }}>
@@ -171,6 +181,12 @@ export function RightSidebar({
       <section className="panel-block panel-grow">
         <h3 className="panel-title">
           Findings ({sorted.length})
+          {sorted.length > 0 &&
+            (hasAiFindings ? (
+              <ConfidenceBadge tone="green">AI + Static</ConfidenceBadge>
+            ) : (
+              <ConfidenceBadge tone="static-blue">Static</ConfidenceBadge>
+            ))}
           {stepFilter && (
             <button className="finding-filter-clear" onClick={onClearStepFilter}>
               filtered · clear ✕
@@ -179,23 +195,52 @@ export function RightSidebar({
         </h3>
         <ul className="finding-list">
           {sorted.map((d) => (
-            <li key={d.id} className={`finding sev-border-${d.severity}`}>
-              <span className={`sev-badge sev-${d.severity}`}>
-                {d.severity === 'bottleneck' ? (d.bottleneckType ?? 'bottleneck') : d.severity}
-              </span>
-              {d.agentId && <span className="agent-origin-badge">{agentLabel(d.agentId)}</span>}
-              <span className="finding-title">{d.title}</span>
-              <CopyPromptButton
-                compact
-                prompt={() =>
-                  buildFindingPrompt(d, {
-                    projectName,
-                    projectPath,
-                    filePath: filePathForDiagnostic(d, graph),
-                  })
-                }
-              />
-            </li>
+            <Fragment key={d.id}>
+              <li className={`finding sev-border-${d.severity}`}>
+                <span className={`sev-badge sev-${d.severity}`}>
+                  {d.severity === 'bottleneck' ? (d.bottleneckType ?? 'bottleneck') : d.severity}
+                </span>
+                {d.agentId ? (
+                  <ConfidenceBadge tone="indigo">AI</ConfidenceBadge>
+                ) : (
+                  <ConfidenceBadge tone="gray">Static</ConfidenceBadge>
+                )}
+                {d.agentId && <span className="agent-origin-badge">{agentLabel(d.agentId)}</span>}
+                <span className="finding-title">{d.title}</span>
+                <CopyPromptButton
+                  compact
+                  prompt={() =>
+                    buildFindingPrompt(d, {
+                      projectName,
+                      projectPath,
+                      filePath: filePathForDiagnostic(d, graph),
+                    })
+                  }
+                />
+              </li>
+              {d.id === lastBottleneckId && (
+                <li className="finding-nudge-li">
+                  {agentTeamHasRun ? (
+                    <NudgeCard tone="green">
+                      <NudgeText tone="green">
+                        ✓ AI performance review complete · {confirmedBottlenecks} bottleneck
+                        {confirmedBottlenecks === 1 ? '' : 's'} confirmed
+                      </NudgeText>
+                    </NudgeCard>
+                  ) : (
+                    <NudgeCard tone="amber">
+                      <NudgeText tone="muted">
+                        These are structural estimates based on graph shape.{' '}
+                      </NudgeText>
+                      <NudgeText tone="amber" onClick={openAgentTeam}>
+                        ⚡ Run Agent Team to profile real hot paths and get code-specific performance
+                        recommendations.
+                      </NudgeText>
+                    </NudgeCard>
+                  )}
+                </li>
+              )}
+            </Fragment>
           ))}
           {sorted.length === 0 && (
             <li className="file-empty">

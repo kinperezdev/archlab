@@ -32,6 +32,8 @@ import type {
   SystemDesignMap,
 } from '@archlab/shared';
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
+import { NudgeCard, NudgeText } from '../components/ConfidenceNudge.js';
+import { useApiKeyContext } from '../state/apiKeyContext.js';
 import { loadSystemDesign, saveSystemDesign } from '../lib/systemDesignStore.js';
 import { EnterpriseAudit } from './EnterpriseAudit.js';
 import { InfraNode, type InfraNodeData } from './InfraNode.js';
@@ -847,6 +849,7 @@ function DetectedMode({
   onSubModeChange?: (mode: TabMode) => void;
 }) {
   const [tabMode, setTabMode] = useState<TabMode>('visual');
+  const { agentTeamHasRun } = useApiKeyContext();
 
   // Lift the active sub-mode up so App can decide whether to show the sidebars.
   useEffect(() => {
@@ -1093,6 +1096,17 @@ function DetectedMode({
                       </div>
                     ))}
                   </div>
+                )}
+
+                {(!hasApiKey || !agentTeamHasRun) && (
+                  <NudgeCard tone="amber">
+                    <NudgeText tone="muted">
+                      Infrastructure detected from code patterns.{' '}
+                    </NudgeText>
+                    <NudgeText tone="amber" onClick={onOpenAgentTeam}>
+                      ⚡ Run Agent Team for AI architectural review.
+                    </NudgeText>
+                  </NudgeCard>
                 )}
               </div>
             )}

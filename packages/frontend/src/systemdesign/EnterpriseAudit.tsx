@@ -11,7 +11,7 @@
  * Detection logic only reads the props passed in — it never touches the backend.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -19,6 +19,8 @@ import ReactFlow, {
   Handle,
   Position,
   ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
   type Edge,
   type Node,
   type NodeProps,
@@ -37,6 +39,8 @@ import type {
 import type { LucideIcon } from 'lucide-react';
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
 import { ENTERPRISE_SECTIONS, type CardDef, type SectionDef } from './enterpriseCatalog.js';
+import { useApiKeyContext } from '../state/apiKeyContext.js';
+import { formatRunTimestamp } from '../lib/formatTime.js';
 
 interface EnterpriseAuditProps {
   infra: SystemDesignMap;
@@ -310,6 +314,49 @@ function iconFor(cardId: string): LucideIcon | null {
   return null;
 }
 
+// Static lookups built once from the catalog (it never changes at runtime).
+const CARD_DEF_BY_ID = new Map<string, CardDef>();
+const CARD_COLOR_BY_ID = new Map<string, string>();
+const SECTION_OF_CARD = new Map<string, { id: string; title: string; color: string }>();
+for (const s of ENTERPRISE_SECTIONS) {
+  for (const c of s.cards) {
+    CARD_DEF_BY_ID.set(c.id, c);
+    CARD_COLOR_BY_ID.set(c.id, s.color);
+    SECTION_OF_CARD.set(c.id, { id: s.id, title: s.title, color: s.color });
+  }
+}
+
+/**
+ * Re-resolve a card's state against the latest context (findings). Used to patch
+ * node data in place when the Agent Team runs — never to rebuild node positions.
+ */
+function reEvaluateCard(card: EnterpriseCard, ctx: DetectCtx): EnterpriseCard {
+  const def = CARD_DEF_BY_ID.get(card.id);
+  if (!def) return card;
+  const { state, detail } = evaluateCard(def, ctx);
+  return { ...card, state, detail };
+}
+
+/** Section priority for the Master Action Plan (lower = surfaced first). */
+const SECTION_PRIORITY: Record<string, number> = {
+  'api-security': 0,
+  'security-hardening': 1,
+  resilience: 2,
+  observability: 3,
+};
+const sectionRank = (sectionId: string): number => SECTION_PRIORITY[sectionId] ?? 5;
+
+/** Config-file markers that are NOT installable npm packages. */
+const PATH_MARKERS = new Set([
+  '.github/workflows', '.gitlab-ci.yml', 'jenkinsfile', '.circleci', '.snyk', 'dependabot.yml', 'trivy',
+]);
+
+/** First installable npm package that proves a card, or null. */
+function npmPackageFor(cardId: string): string | null {
+  const def = CARD_DEF_BY_ID.get(cardId);
+  return def?.packages?.find((p) => !p.startsWith('.') && !PATH_MARKERS.has(p.toLowerCase())) ?? null;
+}
+
 interface CardNodeData {
   card: EnterpriseCard;
   color: string;
@@ -373,17 +420,26 @@ const SMALL_RING_C = 2 * Math.PI * SMALL_RING_R;
 function ScoreHeader({
   result,
   hasApiKey,
+  aiEnhanced,
+  lastRunAt,
   onExport,
 }: {
   result: EnterpriseAuditResult;
   hasApiKey: boolean;
+  aiEnhanced: boolean;
+  lastRunAt: string | null;
   onExport: () => void;
 }) {
   const color = scoreColor(result.score);
   const offset = SMALL_RING_C * (1 - result.score / 100);
   return (
     <div className="ea-score-header">
-      <div className="ea-mini-ring" style={{ ['--ring-color' as string]: color }}>
+      {/* Static-only mode desaturates the ring (70% opacity) to signal lower
+          confidence; AI-enhanced mode shows it at full strength. */}
+      <div
+        className="ea-mini-ring"
+        style={{ ['--ring-color' as string]: color, opacity: aiEnhanced ? 1 : 0.7 }}
+      >
         <svg viewBox="0 0 56 56" width="56" height="56">
           <circle cx="28" cy="28" r={SMALL_RING_R} className="ea-ring-track" />
           <circle
@@ -401,8 +457,14 @@ function ScoreHeader({
       <div className="ea-score-header-text">
         <div className="ea-score-header-verdict" style={{ color }}>
           {result.verdict}
-          {!hasApiKey && (
-            <span className="ea-score-header-note">Static analysis only · Add API key for AI insights</span>
+          {aiEnhanced ? (
+            <span className="ea-score-header-note" style={{ color: '#22C55E' }}>
+              Static + AI analysis · Agent Team last run {formatRunTimestamp(lastRunAt)}
+            </span>
+          ) : (
+            !hasApiKey && (
+              <span className="ea-score-header-note">Static analysis only · Add API key for AI insights</span>
+            )
           )}
         </div>
         <div className="ea-score-header-dots">
@@ -548,6 +610,13 @@ export function EnterpriseAudit({
 }: EnterpriseAuditProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Detection context — the only thing that should change when findings update.
+  const context = useMemo(
+    () => buildContext(infra, findings, dependencies),
+    [infra, findings, dependencies],
+  );
+
+  // Full evaluated result for the score header, detail panel, and action plan.
   const result = useMemo(
     () => computeAudit(infra, findings, dependencies),
     [infra, findings, dependencies],
@@ -556,14 +625,9 @@ export function EnterpriseAudit({
   // Agent-sourced findings carry an agentId; absence means no AI analysis yet.
   const hasAgentFindings = useMemo(() => findings.some((f) => Boolean(f.agentId)), [findings]);
 
-  // Lookup: card id → { card, color }.
-  const cardMap = useMemo(() => {
-    const m = new Map<string, { card: EnterpriseCard; color: string }>();
-    for (const s of result.sections) {
-      for (const c of s.cards) m.set(c.id, { card: c, color: s.color });
-    }
-    return m;
-  }, [result]);
+  // App-wide confidence signal: the Agent Team has run (and when).
+  const { agentTeamHasRun, lastAgentRunAt } = useApiKeyContext();
+  const aiEnhanced = agentTeamHasRun || hasAgentFindings;
 
   const closePanel = useCallback(() => setSelectedId(null), []);
   const runAgentTeam = useCallback(() => {
@@ -573,14 +637,17 @@ export function EnterpriseAudit({
 
   /** Whether a card should show the "Run Agent Team" nudge. */
   const showNudgeFor = useCallback(
-    (state: EnterpriseCardState) =>
-      state === 'critical-gap' && (!hasApiKey || !hasAgentFindings),
+    (state: EnterpriseCardState) => state === 'critical-gap' && (!hasApiKey || !hasAgentFindings),
     [hasApiKey, hasAgentFindings],
   );
 
-  const nodes: Node[] = useMemo(() => {
+  // Build node/edge layout ONCE per project (infra + dependencies). Card states
+  // here are seeded from a findings-free context; the effect below patches them
+  // in place when findings arrive, so positions never reset (no blank canvas).
+  const initialNodes = useMemo<Node[]>(() => {
+    const base = buildContext(infra, [], dependencies);
     const out: Node[] = [];
-    result.sections.forEach((section, sIdx) => {
+    ENTERPRISE_SECTIONS.forEach((section, sIdx) => {
       const bandY = sIdx * SECTION_GAP_Y;
       out.push({
         id: `section-${section.id}`,
@@ -591,16 +658,20 @@ export function EnterpriseAudit({
         selectable: false,
         connectable: false,
       });
-      section.cards.forEach((card, cIdx) => {
+      section.cards.forEach((def, cIdx) => {
+        const { state, detail } = evaluateCard(def, base);
+        const card: EnterpriseCard = {
+          id: def.id, label: def.label, state, what: def.what, why: def.why, detail, fixPrompt: def.fix,
+        };
         out.push({
-          id: card.id,
+          id: def.id,
           type: 'auditCard',
           position: { x: cIdx * CARD_GAP_X, y: bandY + 46 },
           data: {
             card,
             color: section.color,
-            icon: iconFor(card.id),
-            showAgentNudge: showNudgeFor(card.state),
+            icon: iconFor(def.id),
+            showAgentNudge: showNudgeFor(state),
             onRunAgentTeam: runAgentTeam,
           } satisfies CardNodeData,
           draggable: false,
@@ -608,25 +679,74 @@ export function EnterpriseAudit({
       });
     });
     return out;
-  }, [result, showNudgeFor, runAgentTeam]);
+    // showNudgeFor/runAgentTeam intentionally excluded — the effect below keeps
+    // them current without rebuilding (and resetting) the layout.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [infra, dependencies]);
 
-  const edges: Edge[] = useMemo(() => {
-    return CARD_EDGES.filter(([s, t]) => cardMap.has(s) && cardMap.has(t)).map(([source, target]) => {
-      const src = cardMap.get(source)!;
-      const isCritical = src.card.state === 'critical-gap';
-      return {
-        id: `${source}->${target}`,
-        source,
-        target,
-        type: 'smoothstep',
-        animated: isCritical,
-        style: { stroke: `${src.color}66`, strokeWidth: 2 },
-        className: isCritical ? 'ea-edge-critical' : undefined,
-      } satisfies Edge;
-    });
-  }, [cardMap]);
+  const initialEdges = useMemo<Edge[]>(() => {
+    const base = buildContext(infra, [], dependencies);
+    const stateOf = (id: string) => {
+      const def = CARD_DEF_BY_ID.get(id);
+      return def ? evaluateCard(def, base).state : 'missing';
+    };
+    return CARD_EDGES.filter(([s, t]) => CARD_DEF_BY_ID.has(s) && CARD_DEF_BY_ID.has(t)).map(
+      ([source, target]) => {
+        const isCritical = stateOf(source) === 'critical-gap';
+        return {
+          id: `${source}->${target}`,
+          source,
+          target,
+          type: 'smoothstep',
+          animated: isCritical,
+          style: { stroke: `${CARD_COLOR_BY_ID.get(source) ?? '#888'}66`, strokeWidth: 2 },
+          className: isCritical ? 'ea-edge-critical' : undefined,
+        } satisfies Edge;
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [infra, dependencies]);
 
-  const selected = selectedId ? cardMap.get(selectedId) ?? null : null;
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // Reset layout only when the project (infra/dependencies) changes.
+  useEffect(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  // Findings changed: patch ONLY the data of existing card nodes (and edge
+  // criticality). Positions are never touched, so the canvas never blanks.
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.type !== 'auditCard') return n;
+        const data = n.data as CardNodeData;
+        const card = reEvaluateCard(data.card, context);
+        return {
+          ...n,
+          data: { ...data, card, showAgentNudge: showNudgeFor(card.state), onRunAgentTeam: runAgentTeam },
+        };
+      }),
+    );
+    setEdges((eds) =>
+      eds.map((e) => {
+        const def = CARD_DEF_BY_ID.get(e.source);
+        const isCritical = def ? evaluateCard(def, context).state === 'critical-gap' : false;
+        return { ...e, animated: isCritical, className: isCritical ? 'ea-edge-critical' : undefined };
+      }),
+    );
+  }, [context, showNudgeFor, runAgentTeam, setNodes, setEdges]);
+
+  // Selected card + connected neighbors for the detail panel.
+  const selected = useMemo(() => {
+    if (!selectedId) return null;
+    const node = nodes.find((n) => n.id === selectedId);
+    const data = node?.data as CardNodeData | undefined;
+    return data ? { card: data.card, color: data.color } : null;
+  }, [selectedId, nodes]);
+
   const neighbors = useMemo(() => {
     if (!selectedId) return [];
     const ids = new Set<string>();
@@ -634,8 +754,8 @@ export function EnterpriseAudit({
       if (s === selectedId) ids.add(t);
       if (t === selectedId) ids.add(s);
     }
-    return [...ids].map((id) => cardMap.get(id)?.card.label ?? id);
-  }, [selectedId, cardMap]);
+    return [...ids].map((id) => CARD_DEF_BY_ID.get(id)?.label ?? id);
+  }, [selectedId]);
 
   if (!hasProject) {
     return (
@@ -647,7 +767,13 @@ export function EnterpriseAudit({
 
   return (
     <div className="ea-flow-root">
-      <ScoreHeader result={result} hasApiKey={hasApiKey} onExport={() => exportReport(result)} />
+      <ScoreHeader
+        result={result}
+        hasApiKey={hasApiKey}
+        aiEnhanced={aiEnhanced}
+        lastRunAt={lastAgentRunAt}
+        onExport={() => exportReport(result)}
+      />
 
       {!hasApiKey && (
         <div className="ea-apikey-banner">
@@ -661,6 +787,8 @@ export function EnterpriseAudit({
           <ReactFlow
             nodes={nodes}
             edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
             nodeTypes={NODE_TYPES}
             fitView
             fitViewOptions={{ padding: 0.2 }}
@@ -689,6 +817,136 @@ export function EnterpriseAudit({
           />
         )}
       </div>
+
+      <MasterActionPlan result={result} purpose={infra.projectContext?.purpose ?? ''} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Master Action Plan
+// ---------------------------------------------------------------------------
+
+interface PlanCard {
+  card: EnterpriseCard;
+  section: { id: string; title: string; color: string };
+}
+
+function MasterActionPlan({ result, purpose }: { result: EnterpriseAuditResult; purpose: string }) {
+  const allCards: PlanCard[] = useMemo(
+    () =>
+      result.sections.flatMap((s) =>
+        s.cards.map((card) => ({ card, section: { id: s.id, title: s.title, color: s.color } })),
+      ),
+    [result],
+  );
+
+  const criticalGaps = useMemo(
+    () =>
+      allCards
+        .filter((c) => c.card.state === 'critical-gap')
+        .sort((a, b) => sectionRank(a.section.id) - sectionRank(b.section.id)),
+    [allCards],
+  );
+
+  const top5 = criticalGaps.slice(0, 5);
+
+  const quickWins = useMemo(
+    () =>
+      allCards
+        .filter(
+          (c) =>
+            c.card.state === 'missing' &&
+            (c.section.id === 'deployment-scale' || c.section.id === 'observability') &&
+            npmPackageFor(c.card.id),
+        )
+        .slice(0, 6),
+    [allCards],
+  );
+
+  const names = (state: EnterpriseCardState) =>
+    allCards.filter((c) => c.card.state === state).map((c) => c.card.label);
+
+  const verdict = useMemo(() => {
+    const confirmed = result.detectedCount;
+    const crit = result.criticalGapCount;
+    const top3 = criticalGaps.slice(0, 3).map((c) => c.card.label);
+    const risks = top3.length > 0 ? top3.join(', ') : 'none flagged';
+    return `This project scores ${result.score}% across ${result.totalCards} capabilities. ${confirmed} ${
+      confirmed === 1 ? 'capability is' : 'capabilities are'
+    } confirmed, ${crit} ${crit === 1 ? 'has a critical gap' : 'have critical gaps'}. The biggest risks are ${risks}.`;
+  }, [result, criticalGaps]);
+
+  const aiPrompt = useMemo(() => {
+    const list = (arr: string[]) => (arr.length ? arr.join(', ') : 'none');
+    return [
+      'You are a senior software architect. I have run an enterprise audit on my project and got these results:',
+      `Score: ${result.score}%.`,
+      `Critical gaps: ${list(names('critical-gap'))}.`,
+      `Missing capabilities: ${list(names('missing'))}.`,
+      `Confirmed capabilities: ${list(names('detected'))}.`,
+      `Project context: ${purpose || 'not provided'}.`,
+      'Give me a prioritized action plan with specific implementation steps for the top 5 critical gaps.',
+    ].join(' ');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, purpose]);
+
+  return (
+    <div className="ea-plan">
+      <section className="ea-plan-section">
+        <h4 className="ea-plan-label">Overall Verdict</h4>
+        <p className="ea-plan-verdict">{verdict}</p>
+      </section>
+
+      <section className="ea-plan-section">
+        <h4 className="ea-plan-label">Top 5 Critical Actions</h4>
+        {top5.length === 0 ? (
+          <p className="ea-plan-empty">No critical gaps — nice work.</p>
+        ) : (
+          <ul className="ea-plan-actions">
+            {top5.map(({ card, section }) => (
+              <li key={card.id} className="ea-plan-action">
+                <div className="ea-plan-action-head">
+                  <span className="ea-plan-action-name">{card.label}</span>
+                  <span className="ea-plan-action-badge" style={{ color: section.color, borderColor: section.color }}>
+                    {section.title}
+                  </span>
+                </div>
+                <p className="ea-plan-action-why">{card.why}</p>
+                <CopyPromptButton compact prompt={card.fixPrompt} label="Copy Fix Prompt" />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="ea-plan-section">
+        <h4 className="ea-plan-label">Quick Wins</h4>
+        {quickWins.length === 0 ? (
+          <p className="ea-plan-empty">No one-install quick wins detected.</p>
+        ) : (
+          <ul className="ea-plan-wins">
+            {quickWins.map(({ card }) => {
+              const pkg = npmPackageFor(card.id)!;
+              return (
+                <li key={card.id} className="ea-plan-win">
+                  <span className="ea-plan-win-check">☐</span>
+                  <span className="ea-plan-win-name">{card.label}</span>
+                  <code className="ea-plan-win-pkg">npm install {pkg}</code>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="ea-plan-section">
+        <div className="ea-plan-ai-head">
+          <h4 className="ea-plan-label">AI Boost Prompt</h4>
+          <CopyPromptButton compact prompt={aiPrompt} label="Copy" />
+        </div>
+        <textarea className="ea-plan-ai-text" readOnly value={aiPrompt} rows={8} />
+      </section>
     </div>
   );
 }
