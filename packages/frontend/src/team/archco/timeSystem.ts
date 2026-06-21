@@ -41,7 +41,7 @@ export function getCurrentTimeState(): TimeState {
 
   if (isWeekend) {
     timeOfDay = 'weekend';
-    lightLevel = 0.2;
+    lightLevel = (hour >= 8 && hour < 18) ? 0.95 : 0.3;
     officeOccupancy = 0.05; // only on-call
   } else if (hour >= 5 && hour < 8) {
     timeOfDay = 'dawn';
@@ -67,7 +67,10 @@ export function getCurrentTimeState(): TimeState {
 /** Which employee ids are physically present given the current time. */
 export function getPresentEmployees(timeState: TimeState, allEmployees: Employee[]): string[] {
   if (timeState.isWeekend) {
-    return ['jordan-lee', 'sam-rivera']; // SREs always on-call
+    if (timeState.lightLevel > 0.5) {
+      return allEmployees.map((e) => e.id); // All present during weekend day shifts
+    }
+    return ['jordan-lee', 'sam-rivera']; // SREs always on-call at night
   }
   if (timeState.timeOfDay === 'night') {
     return ['jordan-lee', 'sam-rivera', 'sarah-chen']; // SRE + security on-call

@@ -431,17 +431,7 @@ export function App() {
                 </button>
               )}
 
-              {filter === 'all' && state.canvas.nodes.length > 50 && (
-                <div className="large-project-banner">
-                  <span className="large-project-text">
-                    Large project detected — use the Frontend and Backend tabs for a cleaner view
-                  </span>
-                  <span className="large-project-actions">
-                    <button className="btn btn-sm" onClick={() => setTab('frontend')}>Frontend</button>
-                    <button className="btn btn-sm" onClick={() => setTab('backend')}>Backend</button>
-                  </span>
-                </div>
-              )}
+
 
               <Canvas
                 graph={state.canvas}

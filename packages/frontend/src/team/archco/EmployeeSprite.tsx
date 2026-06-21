@@ -14,6 +14,8 @@ interface EmployeeSpriteProps {
   /** Whether the desk is dark/empty (employee is out of office). */
   absent?: boolean;
   working?: boolean;
+  isWalking?: boolean;
+  flip?: boolean;
 }
 
 // Base sprite grid is 16x20 "pixels"; rects are sized in that space and the
@@ -75,6 +77,8 @@ export function EmployeeSprite({
   scale = 1,
   absent = false,
   working = false,
+  isWalking = false,
+  flip = false,
 }: EmployeeSpriteProps) {
   const w = GRID_W * scale;
   const h = GRID_H * scale;
@@ -106,8 +110,14 @@ export function EmployeeSprite({
   const inner = [
     // desk shadow
     `<ellipse cx="8" cy="19" rx="6" ry="1.2" fill="#000000" opacity="0.35"/>`,
+    // office chair back-rest (behind employee)
+    `<rect x="3" y="9.5" width="10" height="9" rx="2.5" fill="#1E293B" stroke="#0F172A" strokeWidth="0.8"/>`,
+    `<rect x="7" y="16.5" width="2" height="3" fill="#0F172A"/>`,
     // body / torso
     `<rect x="4" y="11" width="8" height="7" rx="1.5" fill="${body}"/>`,
+    // clothing detail: white collar and red tie
+    `<polygon points="7,11 9,11 8,13" fill="#FFFFFF"/>`,
+    `<rect x="7.6" y="13" width="0.8" height="3" fill="#EF4444" rx="0.3"/>`,
     // arms
     `<rect x="3" y="11.5" width="1.6" height="5" rx="0.8" fill="${body}"/>`,
     `<rect x="11.4" y="11.5" width="1.6" height="5" rx="0.8" fill="${body}"/>`,
@@ -115,10 +125,14 @@ export function EmployeeSprite({
     `<rect x="7" y="9.5" width="2" height="2" fill="${skin}"/>`,
     // head
     `<rect x="5" y="4" width="6" height="6" rx="1.5" fill="${skin}"/>`,
-    // eyes
-    `<rect x="6.4" y="6.4" width="0.9" height="1" fill="#0F172A"/>`,
-    `<rect x="8.7" y="6.4" width="0.9" height="1" fill="#0F172A"/>`,
     hair,
+    // upgraded high-contrast eyes (white + dark pupil) rendered after hair
+    `<rect x="6.4" y="6.4" width="1" height="1" fill="#FFFFFF"/>`,
+    `<rect x="7.4" y="6.4" width="1" height="1" fill="#0F172A"/>`,
+    `<rect x="8.4" y="6.4" width="1" height="1" fill="#FFFFFF"/>`,
+    `<rect x="9.4" y="6.4" width="1" height="1" fill="#0F172A"/>`,
+    // cute mouth
+    `<rect x="7.4" y="8.2" width="1.2" height="0.8" fill="#B91C1C" opacity="0.65"/>`,
     acc,
   ].join('');
 
@@ -127,7 +141,8 @@ export function EmployeeSprite({
       width={w}
       height={h}
       viewBox={`0 0 ${GRID_W} ${GRID_H}`}
-      className={`archco-sprite${working ? ' archco-sprite-working' : ''}`}
+      className={`archco-sprite${working ? ' archco-sprite-working' : ''}${isWalking ? ' archco-sprite-walking' : ''}`}
+      style={flip ? { transform: 'scaleX(-1)' } : undefined}
       shapeRendering="crispEdges"
       aria-label={`${employee.name}, ${employee.role}`}
       dangerouslySetInnerHTML={{ __html: inner }}
