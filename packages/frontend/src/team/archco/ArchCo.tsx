@@ -75,15 +75,13 @@ export function ArchCo({
     setBurnHistory((h) => pushBurnSample(h, tokenState.burnRate));
   }, [tokenState.burnRate]);
 
+  // Who is in today. Off-duty is handled inside FloorScene (they walk out the
+  // exit door), so we keep the roster here and let the scene empty the office.
   const presentIds = useMemo(() => {
-    if (isOffDuty) {
-      // Everyone takes time off (empty office)
-      return new Set<string>();
-    }
     const base = getPresentEmployees(timeState, EMPLOYEES);
     const assigned = Object.keys(taskBadges);
     return new Set([...base, ...assigned]);
-  }, [timeState, taskBadges, isOffDuty]);
+  }, [timeState, taskBadges]);
 
   const config = FLOOR_CONFIGS[activeFloor];
 
@@ -261,6 +259,7 @@ export function ArchCo({
             }}
             payrollTrigger={payrollTrigger}
             aiUpgradeTrigger={aiUpgradeTrigger}
+            isOffDuty={isOffDuty}
           />
         </div>
 

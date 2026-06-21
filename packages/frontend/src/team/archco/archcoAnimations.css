@@ -172,7 +172,8 @@
   border: none;
   padding: 0;
   cursor: pointer;
-  transition: left 4s ease-in-out, top 4s ease-in-out;
+  /* Normal walking pace across the floor. */
+  transition: left 1.8s ease-in-out, top 1.8s ease-in-out;
 }
 .archco-employee-name {
   font-size: 9px;
@@ -564,6 +565,23 @@
   border: 1px solid #1a1a2e;
   border-radius: 14px;
   overflow: hidden;
+}
+/* Dedicated full-surface ArchCo screen (rendered inside the main content area). */
+.team-review-embedded {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0f;
+  overflow: hidden;
+}
+.team-review-embedded .archco-root {
+  flex: 1;
+  min-height: 0;
+}
+.team-review-embedded .team-review-queue {
+  flex-shrink: 0;
+  max-height: 34%;
 }
 .team-review-queue {
   padding: 10px 16px 14px;
