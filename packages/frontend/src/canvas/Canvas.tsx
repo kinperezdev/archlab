@@ -256,14 +256,18 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     // Drop the Isolated zone well below the Connected graph, with room for its label.
     const zoneTop = maxY + 280;
 
-    const COLS = 4;
-    const CELL_W = 320;
-    const CELL_H = 200;
+    // Grow the Isolated zone HORIZONTALLY: fill a fixed number of rows top-to-
+    // bottom, then add columns to the right. With thousands of nodes you slide
+    // right instead of scrolling down forever. Row count scales a little with
+    // volume so small projects stay compact and huge ones don't get too tall.
+    const CELL_W = 300;
+    const CELL_H = 170;
+    const ROWS = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(isolated.length) / 1.5)));
     const isoPos = new Map<string, { x: number; y: number }>();
     isolated.forEach((n, i) => {
       isoPos.set(n.id, {
-        x: baseX + (i % COLS) * CELL_W,
-        y: zoneTop + Math.floor(i / COLS) * CELL_H,
+        x: baseX + Math.floor(i / ROWS) * CELL_W,
+        y: zoneTop + (i % ROWS) * CELL_H,
       });
     });
 
@@ -629,6 +633,12 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             fitView
             fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
             minZoom={0.4}
+            /* Big graphs: only mount nodes/edges currently in the viewport, and
+               drop per-node focus/elevation overhead so panning stays smooth. */
+            onlyRenderVisibleElements={nodes.length > 150}
+            elevateNodesOnSelect={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
             onNodeClick={(_e, node) => {
               if (node.type === 'laneGroup') return;
               onSelectNode(node.id);
@@ -679,15 +689,19 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           >
             {/* Subtle dot grid on the dark canvas (24px, very low opacity). */}
             <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(255,255,255,0.03)" />
-            <MiniMap
-              pannable
-              zoomable
-              className="arch-minimap"
-              maskColor="rgba(0,0,0,0.55)"
-              nodeColor={minimapNodeColor}
-              nodeStrokeColor={minimapNodeColor}
-              nodeStrokeWidth={3}
-            />
+            {/* The MiniMap renders every node, so it's a bottleneck on huge
+                graphs — only show it below a threshold. */}
+            {nodes.length <= 800 && (
+              <MiniMap
+                pannable
+                zoomable
+                className="arch-minimap"
+                maskColor="rgba(0,0,0,0.55)"
+                nodeColor={minimapNodeColor}
+                nodeStrokeColor={minimapNodeColor}
+                nodeStrokeWidth={3}
+              />
+            )}
             <Controls showInteractive={false} />
           </ReactFlow>
           <div className="canvas-floating-controls">

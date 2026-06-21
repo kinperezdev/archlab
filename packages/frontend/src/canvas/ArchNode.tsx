@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { NodeKind, NodeAnimationState } from '@archlab/shared';
 
@@ -57,7 +58,7 @@ interface DbTable {
   columns: DbColumn[];
 }
 
-export function ArchNode({ data }: NodeProps<ArchNodeData>) {
+function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
   const highlightClass = data.isHighlighted ? 'node-highlight' : '';
   const dimClass = data.isDimmed ? 'node-dimmed' : '';
 
@@ -189,6 +190,9 @@ export function ArchNode({ data }: NodeProps<ArchNodeData>) {
     </div>
   );
 }
+
+/** Memoized so unaffected nodes don't re-render on hover/selection in large graphs. */
+export const ArchNode = memo(ArchNodeImpl);
 
 /**
  * A single connector port: shows "OPERATION → destination", color-coded by
