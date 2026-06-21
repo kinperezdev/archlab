@@ -27,6 +27,8 @@ interface FloorSceneProps {
   taskBadges: Record<string, { label: string; severity: 'critical' | 'high' | 'medium' | 'low' }>;
   threatLevel?: ThreatLevel;
   onSelect: (employee: Employee, dynamicStatus?: string, currentThought?: string) => void;
+  payrollTrigger?: number;
+  aiUpgradeTrigger?: number;
 }
 
 const SCENE_W = 720;
@@ -223,6 +225,8 @@ export function FloorScene({
   taskBadges,
   threatLevel = 'green',
   onSelect,
+  payrollTrigger = 0,
+  aiUpgradeTrigger = 0,
 }: FloorSceneProps) {
   const config = FLOOR_CONFIGS[floor];
   const employees = employeesOnFloor(floor);
@@ -293,7 +297,88 @@ export function FloorScene({
       };
     }
     setEmpStates(initial);
-  }, [employees]);
+    // Reset visitor/mentoring when attendance changes
+    setVisitor(null);
+    setFounderVisitor(null);
+    setMentoringIds(new Set());
+  }, [employees, presentIds]);
+
+  // Listen for payroll triggers to make present employees celebrate!
+  useEffect(() => {
+    if (payrollTrigger === 0) return;
+
+    setEmpStates((prev) => {
+      const next = { ...prev };
+      for (const emp of employees) {
+        if (presentIds.has(emp.id)) {
+          const reactions = [
+            "Thanks for the salary! 💰",
+            "Payroll day! 🎉",
+            "Weekend double pay! 💸",
+            "Salary received! 💵",
+            "Thanks boss! 👍"
+          ];
+          next[emp.id] = {
+            ...next[emp.id],
+            emotion: reactions[Math.floor(Math.random() * reactions.length)]
+          };
+        }
+      }
+      return next;
+    });
+
+    const timer = setTimeout(() => {
+      setEmpStates((prev) => {
+        const next = { ...prev };
+        for (const emp of employees) {
+          if (presentIds.has(emp.id)) {
+            next[emp.id] = {
+              ...next[emp.id],
+              emotion: null
+            };
+          }
+        }
+        return next;
+      });
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [payrollTrigger, employees, presentIds]);
+
+  // Listen for AI Upgrade triggers to make present employees celebrate!
+  useEffect(() => {
+    if (aiUpgradeTrigger === 0) return;
+
+    setEmpStates((prev) => {
+      const next = { ...prev };
+      for (const emp of employees) {
+        if (presentIds.has(emp.id)) {
+          next[emp.id] = {
+            ...next[emp.id],
+            emotion: "AI Brain upgraded! 🤖 +150 XP"
+          };
+        }
+      }
+      return next;
+    });
+
+    const timer = setTimeout(() => {
+      setEmpStates((prev) => {
+        const next = { ...prev };
+        for (const emp of employees) {
+          if (presentIds.has(emp.id)) {
+            next[emp.id] = {
+              ...next[emp.id],
+              emotion: null
+            };
+          }
+        }
+        return next;
+      });
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [aiUpgradeTrigger, employees, presentIds]);
 
   // XP Reward & Local Persistence Saver
   const rewardXP = (empId: string, amount: number) => {
