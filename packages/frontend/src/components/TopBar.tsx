@@ -1,6 +1,6 @@
 /** Top bar: wordmark, project context, breadcrumb, and compact utility cluster. */
 
-import { Bell } from 'lucide-react';
+import { Bell, FolderOpen } from 'lucide-react';
 import type { ArchTab } from '../App.js';
 import PlugConnectedIcon from './ui/plug-connected-icon.js';
 
@@ -12,6 +12,8 @@ interface TopBarProps {
   findingsCount: number;
   hasApiKey: boolean;
   onOpenKeys: () => void;
+  /** Open the native folder picker to set the project (canvas + terminal). */
+  onChooseFolder: () => void;
 }
 
 /** Breadcrumb metadata per tab: which section it lives in and its display name. */
@@ -26,6 +28,7 @@ const TAB_META: Record<ArchTab, { section: string; label: string }> = {
   blueprint: { section: 'Workspace', label: 'Blueprint' },
   docs: { section: 'Workspace', label: 'Docs' },
   archco: { section: 'Tools', label: 'ArchCo' },
+  agentteam: { section: 'Tools', label: 'Agent Team' },
 };
 
 export function TopBar({
@@ -36,17 +39,25 @@ export function TopBar({
   findingsCount,
   hasApiKey,
   onOpenKeys,
+  onChooseFolder,
 }: TopBarProps) {
   const meta = TAB_META[tab];
 
   return (
     <header className="tb">
-      {/* Left: project context (brand lives in the sidebar header) */}
+      {/* Left: folder picker + project context (brand lives in the sidebar) */}
       <div className="tb-left">
+        <button className="tb-folder-btn" onClick={onChooseFolder} title="Choose a project folder (updates canvas + terminal)">
+          <FolderOpen size={14} strokeWidth={1.75} aria-hidden="true" />
+          <span>Open Folder</span>
+        </button>
         {hasProject && (
-          <span className="tb-project" title={projectName}>
-            {projectName}
-          </span>
+          <>
+            <span className="tb-divider" aria-hidden="true" />
+            <span className="tb-project" title={projectName}>
+              {projectName}
+            </span>
+          </>
         )}
       </div>
 

@@ -71,7 +71,8 @@ export type ArchTab =
   | 'systemdesign'
   | 'blueprint'
   | 'docs'
-  | 'archco';
+  | 'archco'
+  | 'agentteam';
 
 /** Tabs that render the architecture canvas (vs. the Database/Blueprint surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
@@ -107,7 +108,6 @@ export function App() {
   const [brainOpen, setBrainOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
-  const [agentTeamOpen, setAgentTeamOpen] = useState(false);
   // Whether an Anthropic key is configured — drives Agent Team nudges in the
   // Enterprise Audit. Re-checked whenever the API Keys modal closes.
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -136,7 +136,28 @@ export function App() {
     return () => clearTimeout(id);
   }, [reportSavedPath]);
   const [bottomHeight, setBottomHeight] = useState(200);
+  // One-shot command pushed into the active terminal (e.g. cd into a chosen folder).
+  const [termCommand, setTermCommand] = useState<{ id: number; text: string } | null>(null);
   const [tab, setTab] = useState<ArchTab>('all');
+
+  // "Choose Folder": open the native picker, analyze the canvas, and cd the
+  // terminal into it (the focused terminal's cwd also drives the canvas).
+  const chooseFolder = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:${PORTS.backend}/api/pick-folder`, { method: 'POST' });
+      const data = await res.json();
+      if (!data?.ok || !data.path) return;
+      const folder = String(data.path);
+      setTermCommand({ id: Date.now(), text: `cd "${folder.replace(/"/g, '\\"')}"\n` });
+      fetch(`http://127.0.0.1:${PORTS.backend}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rootPath: folder }),
+      }).catch(() => {});
+    } catch {
+      /* picker cancelled or backend unavailable */
+    }
+  };
   // Architecture canvas tabs map straight to a canvas filter; others fall to all.
   const filter: CanvasFilter =
     tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security' ? tab : 'all';
@@ -187,7 +208,7 @@ export function App() {
         toggleBottom();
       } else if (e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint', 'docs', 'archco'];
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint', 'docs', 'archco', 'agentteam'];
         if (targetTabs[index]) {
           e.preventDefault();
           setTab(targetTabs[index]);
@@ -268,7 +289,7 @@ export function App() {
       hasApiKey,
       agentTeamHasRun,
       lastAgentRunAt,
-      openAgentTeam: () => setAgentTeamOpen(true),
+      openAgentTeam: () => setTab('agentteam'),
       openApiKeys: () => setApiKeysOpen(true),
     }),
     [hasApiKey, agentTeamHasRun, lastAgentRunAt],
@@ -293,6 +314,7 @@ export function App() {
         findingsCount={state.diagnostics.length}
         hasApiKey={hasApiKey}
         onOpenKeys={() => setApiKeysOpen(true)}
+        onChooseFolder={chooseFolder}
       />
 
       <div className="app-body">
@@ -305,10 +327,9 @@ export function App() {
             analyzedAt={state.analyzedAt}
             findingsCount={state.diagnostics.length}
             isolatedCount={isolatedCount}
-            onOpenAgentTeam={() => setAgentTeamOpen((o) => !o)}
-            agentTeamActive={agentTeamOpen}
+            onOpenAgentTeam={() => setTab('agentteam')}
+            agentTeamActive={tab === 'agentteam'}
             onOpenArchCo={() => setTab('archco')}
-            archcoActive={tab === 'archco'}
             onOpenBrain={() => setBrainOpen(true)}
             onOpenShortcuts={() => setShortcutsOpen(true)}
             onOpenKeys={() => setApiKeysOpen(true)}
@@ -345,7 +366,7 @@ export function App() {
               findings={state.diagnostics}
               dependencies={state.dependencies}
               hasApiKey={hasApiKey}
-              onOpenAgentTeam={() => setAgentTeamOpen(true)}
+              onOpenAgentTeam={() => setTab('agentteam')}
               onOpenApiKeys={() => setApiKeysOpen(true)}
               onSubModeChange={setSystemDesignMode}
             />
@@ -357,6 +378,17 @@ export function App() {
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : tab === 'archco' ? (
             <TeamReview embedded diagnostics={state.diagnostics} />
+          ) : tab === 'agentteam' ? (
+            <AgentTeam
+              embedded
+              team={state.agentTeam}
+              projectName={state.projectName}
+              hasProject={Boolean(state.projectId)}
+              onRun={runAgentTeam}
+              onStop={stopAgentTeam}
+              onRequestRuns={requestAgentRuns}
+              onClose={() => setTab('all')}
+            />
           ) : (
             <ReactFlowProvider>
               {tab === 'security' && (
@@ -388,11 +420,11 @@ export function App() {
 
                       <span className="pipeline-confidence-nudge">
                         {!hasApiKey ? (
-                          <NudgeText tone="amber" onClick={() => setAgentTeamOpen(true)}>
+                          <NudgeText tone="amber" onClick={() => setTab('agentteam')}>
                             Static analysis only · ⚡ Run Agent Team for AI-powered findings
                           </NudgeText>
                         ) : !agentTeamHasRun ? (
-                          <NudgeText tone="muted" onClick={() => setAgentTeamOpen(true)}>
+                          <NudgeText tone="muted" onClick={() => setTab('agentteam')}>
                             ⚡ Run Agent Team for deeper analysis
                           </NudgeText>
                         ) : (
@@ -413,8 +445,8 @@ export function App() {
                 </div>
               )}
 
-              {state.projectId && tab === 'security' && !agentTeamOpen && (
-                <button className="agent-team-promo" onClick={() => setAgentTeamOpen(true)}>
+              {state.projectId && tab === 'security' && (
+                <button className="agent-team-promo" onClick={() => setTab('agentteam')}>
                   <span className="agent-team-promo-glyph">⬡</span>
                   Agent Team available — run AI-powered deep analysis
                   <span className="agent-team-promo-cta">Open →</span>
@@ -435,19 +467,7 @@ export function App() {
           )}
         </main>
 
-        {agentTeamOpen && (
-          <AgentTeam
-            team={state.agentTeam}
-            projectName={state.projectName}
-            hasProject={Boolean(state.projectId)}
-            onRun={runAgentTeam}
-            onStop={stopAgentTeam}
-            onRequestRuns={requestAgentRuns}
-            onClose={() => setAgentTeamOpen(false)}
-          />
-        )}
-
-        {!agentTeamOpen && isCanvasTab && showRightSidebar && (
+        {isCanvasTab && showRightSidebar && (
           <RightSidebar
             projectId={state.projectId}
             projectName={state.projectName}
@@ -498,6 +518,7 @@ export function App() {
         onCollapse={toggleBottom}
         toggleHidden={isAnyModalOpen}
         hidden={bottomCollapsed}
+        runCommand={termCommand}
       />
 
       {brainOpen && (

@@ -17,6 +17,23 @@
 }
 
 .tb-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0; }
+.tb-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid #1e1e2e;
+  background: #14141c;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.tb-folder-btn:hover { background: #1a1a2e; border-color: var(--border-accent); color: #f8fafc; }
 .tb-project {
   max-width: 150px;
   color: #64748b;

@@ -6,15 +6,14 @@
  * Company Wiki on the executive floor. Replaces the old VirtualOffice.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './archcoAnimations.css';
 import type { Employee, Floor } from './companyData.js';
 import { FLOOR_CONFIGS, FLOOR_ORDER } from './floorLayouts.js';
 import { getCurrentTimeState, getPresentEmployees, formatClock } from './timeSystem.js';
 import { EMPLOYEES } from './companyData.js';
-import { calculateTokenState, pushBurnSample, type TokenState } from './tokenMonitor.js';
 import { FloorScene, type ThreatLevel } from './FloorScene.js';
-import { TokenDisplay } from './TokenDisplay.js';
+import { OutsideScene } from './OutsideScene.js';
 import { EmployeeProfile } from './EmployeeProfile.js';
 import { CompanyWiki } from './CompanyWiki.js';
 import { levelForXp, loadGrowthState, saveGrowthState } from './growthSystem.js';
@@ -40,14 +39,12 @@ interface ArchCoProps {
 }
 
 export function ArchCo({
-  tokenBudget = 100_000,
-  tokensUsed = 0,
-  sessionStartTime,
   taskBadges = {},
   threatLevel = 'green',
   recentTasksByEmployee = {},
 }: ArchCoProps) {
-  const [activeFloor, setActiveFloor] = useState<Floor>(2);
+  // 0 is the Outside / ground-level view; 1-6 are the office floors.
+  const [activeFloor, setActiveFloor] = useState<Floor | 0>(2);
   const [timeState, setTimeState] = useState(getCurrentTimeState);
   const [isOffDuty, setIsOffDuty] = useState(false);
   const [payrollTrigger, setPayrollTrigger] = useState(0);
@@ -55,25 +52,13 @@ export function ArchCo({
   const [selected, setSelected] = useState<Employee | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedThought, setSelectedThought] = useState<string | null>(null);
-  const [burnHistory, setBurnHistory] = useState<number[]>([]);
   const [slideDir, setSlideDir] = useState<'left' | 'right'>('right');
-  const startRef = useRef(sessionStartTime ?? Date.now());
 
   // Real-time clock + day/night refresh.
   useEffect(() => {
     const id = window.setInterval(() => setTimeState(getCurrentTimeState()), 30_000);
     return () => window.clearInterval(id);
   }, []);
-
-  const tokenState: TokenState = useMemo(
-    () => calculateTokenState(tokenBudget, tokensUsed, startRef.current),
-    [tokenBudget, tokensUsed],
-  );
-
-  // Sample burn rate for Fran's sparkline.
-  useEffect(() => {
-    setBurnHistory((h) => pushBurnSample(h, tokenState.burnRate));
-  }, [tokenState.burnRate]);
 
   // Who is in today. Off-duty is handled inside FloorScene (they walk out the
   // exit door), so we keep the roster here and let the scene empty the office.
@@ -83,26 +68,34 @@ export function ArchCo({
     return new Set([...base, ...assigned]);
   }, [timeState, taskBadges]);
 
-  const config = FLOOR_CONFIGS[activeFloor];
+  const config = activeFloor === 0 ? null : FLOOR_CONFIGS[activeFloor];
+  const accent = config?.accentColor ?? '#38bdf8';
+  // Outside (0) sits before the office floors in the pill row.
+  const pills: (Floor | 0)[] = [0, ...FLOOR_ORDER];
 
-  const changeFloor = (floor: Floor) => {
+  const changeFloor = (floor: Floor | 0) => {
     if (floor === activeFloor) return;
     setSlideDir(floor > activeFloor ? 'left' : 'right');
     setActiveFloor(floor);
   };
 
   return (
-    <div className="archco-root" style={{ ['--archco-accent' as string]: config.accentColor }}>
+    <div className="archco-root" style={{ ['--archco-accent' as string]: accent }}>
       <header className="archco-topbar">
         <div className="archco-floor-pills">
-          {FLOOR_ORDER.map((f) => (
+          {pills.map((f) => (
             <button
               key={f}
               className={`archco-floor-pill${f === activeFloor ? ' active' : ''}`}
               onClick={() => changeFloor(f)}
-              style={f === activeFloor ? { background: FLOOR_CONFIGS[f].accentColor } : undefined}
+              style={
+                f === activeFloor
+                  ? { background: f === 0 ? '#38bdf8' : FLOOR_CONFIGS[f].accentColor }
+                  : undefined
+              }
+              title={f === 0 ? 'Outside' : FLOOR_CONFIGS[f].name}
             >
-              {f === 1 ? 'G' : f === 6 ? 'F' : f}
+              {f === 0 ? 'G' : f === 6 ? 'F' : f}
             </button>
           ))}
         </div>
@@ -240,27 +233,33 @@ export function ArchCo({
       </header>
 
       <div className="archco-floor-meta">
-        <h2 className="archco-floor-name">{config.name}</h2>
-        <p className="archco-floor-desc">{config.description}</p>
+        <h2 className="archco-floor-name">{config ? config.name : 'Outside · ArchCo HQ'}</h2>
+        <p className="archco-floor-desc">
+          {config ? config.description : 'Front entrance, street & weather'}
+        </p>
       </div>
 
       <div className="archco-stage">
         <div key={activeFloor} className={`archco-slide slide-${slideDir}`}>
-          <FloorScene
-            floor={activeFloor}
-            timeState={timeState}
-            presentIds={presentIds}
-            taskBadges={taskBadges}
-            threatLevel={threatLevel}
-            onSelect={(emp, status, thought) => {
-              setSelected(emp);
-              setSelectedStatus(status || null);
-              setSelectedThought(thought || null);
-            }}
-            payrollTrigger={payrollTrigger}
-            aiUpgradeTrigger={aiUpgradeTrigger}
-            isOffDuty={isOffDuty}
-          />
+          {activeFloor === 0 ? (
+            <OutsideScene timeState={timeState} isOffDuty={isOffDuty} presentIds={presentIds} />
+          ) : (
+            <FloorScene
+              floor={activeFloor}
+              timeState={timeState}
+              presentIds={presentIds}
+              taskBadges={taskBadges}
+              threatLevel={threatLevel}
+              onSelect={(emp, status, thought) => {
+                setSelected(emp);
+                setSelectedStatus(status || null);
+                setSelectedThought(thought || null);
+              }}
+              payrollTrigger={payrollTrigger}
+              aiUpgradeTrigger={aiUpgradeTrigger}
+              isOffDuty={isOffDuty}
+            />
+          )}
         </div>
 
         {activeFloor === 5 && (
@@ -269,7 +268,6 @@ export function ArchCo({
           </div>
         )}
 
-        <TokenDisplay tokenState={tokenState} history={burnHistory} />
       </div>
 
       {selected && (

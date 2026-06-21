@@ -24,6 +24,9 @@ interface BottomPanelProps {
   /** Hide the panel with CSS (display:none) WITHOUT unmounting it, so every
    *  terminal's PTY session, scrollback, and cwd survive being collapsed. */
   hidden?: boolean;
+  /** A one-shot command to run in the active terminal (e.g. cd into a folder).
+   *  The `id` changes each time so the same command can fire repeatedly. */
+  runCommand?: { id: number; text: string } | null;
 }
 
 const TABS_KEY = 'archlab:term-tabs';
@@ -66,11 +69,23 @@ export function BottomPanel({
   onCollapse,
   toggleHidden,
   hidden,
+  runCommand,
 }: BottomPanelProps) {
   const [tabs, setTabs] = useState<TermTab[]>(() => loadTabs());
   const [active, setActive] = useState<string>(
     () => sessionStorage.getItem(ACTIVE_KEY) ?? 'term-1',
   );
+
+  // Run an externally-requested command (e.g. "cd <folder>") in a terminal and
+  // focus it, so choosing a project folder reflects straight into the shell.
+  useEffect(() => {
+    if (!runCommand) return;
+    const targetId = active && active !== 'logs' ? active : tabs[0]?.id;
+    if (!targetId) return;
+    if (active !== targetId) setActive(targetId);
+    terminalApi.sendInput(targetId, runCommand.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runCommand?.id]);
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);

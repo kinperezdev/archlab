@@ -1,5 +1,43 @@
 /* ArchCo — virtual company styles and animations. */
 
+/* ---------- Outside / exterior scene ---------- */
+.outside-wrap { position: relative; }
+.outside-weather {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(10, 10, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+.outside-weather-icon { font-size: 13px; }
+.out-star { animation: out-twinkle 2.6s ease-in-out infinite; }
+@keyframes out-twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+.out-clouds { animation: out-drift 26s linear infinite; }
+@keyframes out-drift { from { transform: translateX(-30px); } to { transform: translateX(30px); } }
+.out-rain line { animation: out-rainfall 0.7s linear infinite; }
+@keyframes out-rainfall {
+  from { transform: translateY(0); }
+  to { transform: translateY(330px); }
+}
+/* Slow, natural walking pace (not a sprint) for the exterior. */
+.outside-walker { transition: left 5.5s linear, top 5.5s linear; }
+.outside-drive {
+  position: absolute;
+  transition: left 5s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .out-star, .out-clouds, .out-rain line { animation: none; }
+}
+
 .archco-root {
   --archco-accent: #6366f1;
   display: flex;
@@ -122,6 +160,8 @@
   overflow: hidden;
   border: 1px solid #1a1a2e;
 }
+/* Center the scene in the stage so it fills the available space. */
+.archco-stage { justify-content: center; }
 .archco-scene-svg {
   position: absolute;
   inset: 0;
@@ -172,8 +212,9 @@
   border: none;
   padding: 0;
   cursor: pointer;
-  /* Normal walking pace across the floor. */
-  transition: left 1.8s ease-in-out, top 1.8s ease-in-out;
+  /* Constant-speed walk (linear). Tuned for the full-width scene so it reads as
+     walking, not sprinting, across the larger distances. */
+  transition: left 4.6s linear, top 4.6s linear;
 }
 .archco-employee-name {
   font-size: 9px;

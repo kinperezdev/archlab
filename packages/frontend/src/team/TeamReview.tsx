@@ -211,41 +211,42 @@ export function TeamReview({ session, diagnostics = [], onClose, embedded = fals
         />
 
         <section className="team-review-queue">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-3)' }}>
             <h3 className="team-review-queue-title" style={{ margin: 0 }}>Review Queue · {queue.length}</h3>
-            {queue.length > 0 && (
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={copyMasterPrompt}
-                  title="Copy the company's consolidated fix plan as one prompt"
-                >
-                  {copiedMaster ? 'Copied ✓' : '⚡ Master Fix Prompt'}
-                </button>
-                <button
-                  className="btn btn-sm"
-                  onClick={() => populateQueue(false)}
-                  title="Rebuild the queue from the current diagnostics"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)' }}
-                >
-                  Sync Diagnostics
-                </button>
-              </div>
-            )}
-          </div>
-          {queue.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) 0' }}>
-              <p className="archco-muted">
-                No items queued. Run a Team Review to populate the company.
-              </p>
+            <div style={{ display: 'flex', gap: '6px' }}>
               <button
-                className="btn"
+                className="btn btn-sm btn-primary"
                 onClick={() => populateQueue(true)}
-                style={{ background: '#4f46e5', color: '#ffffff', padding: '6px 16px', borderRadius: '4px' }}
+                title="Run the team review and put the company to work"
               >
                 ▶ Run Team Review
               </button>
+              {queue.length > 0 && (
+                <>
+                  <button
+                    className="btn btn-sm"
+                    onClick={copyMasterPrompt}
+                    title="Copy the company's consolidated fix plan as one prompt"
+                    style={{ background: 'rgba(99,102,241,0.18)', border: '1px solid var(--border-accent)' }}
+                  >
+                    {copiedMaster ? 'Copied ✓' : '⚡ Master Fix Prompt'}
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => populateQueue(false)}
+                    title="Rebuild the queue from the current diagnostics"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)' }}
+                  >
+                    Sync Diagnostics
+                  </button>
+                </>
+              )}
             </div>
+          </div>
+          {queue.length === 0 ? (
+            <p className="archco-muted" style={{ padding: 'var(--space-2) 0' }}>
+              No items queued. Click <strong>Run Team Review</strong> to put the company to work.
+            </p>
           ) : (
             <ul className="team-review-queue-list">
               {queue.map((item) => (

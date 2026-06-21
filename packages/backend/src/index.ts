@@ -680,6 +680,30 @@ function broadcast(msg: ServerMessage): void {
   }
 }
 
+// Native folder picker (macOS) so the UI can offer a "Choose Folder" button
+// that returns a real absolute path the backend can analyze and the terminal
+// can cd into. Browsers can't expose absolute paths, so this runs the OS dialog.
+app.post('/api/pick-folder', (_req, res) => {
+  if (process.platform !== 'darwin') {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'Native folder picker is only available on macOS.' });
+  }
+  try {
+    const out = execFileSync(
+      'osascript',
+      ['-e', 'POSIX path of (choose folder with prompt "Select a project folder for ArchLab")'],
+      { encoding: 'utf8', timeout: 120_000 },
+    );
+    const folder = out.trim();
+    if (!folder) return res.status(400).json({ ok: false, error: 'No folder chosen.' });
+    return res.json({ ok: true, path: folder });
+  } catch {
+    // Non-zero exit means the user cancelled the dialog.
+    return res.status(400).json({ ok: false, error: 'Folder selection cancelled.' });
+  }
+});
+
 // REST trigger used by the `archlab` terminal CLI. The browser canvas updates
 // live because the whole stream is broadcast to every connected tab.
 app.post('/analyze', (req, res) => {
@@ -892,21 +916,18 @@ async function handleAnalyze(
   customMcps?: Record<string, any>,
   termId?: string,
 ): Promise<AnalysisResult | null> {
-  // Guard: a folder with too many files (e.g. a home directory or a monorepo
-  // root) is not a useful analysis target. Warn and bail so the user picks a
-  // specific project subfolder instead.
-  const FOLDER_FILE_LIMIT = 500;
-  const fileCount = countProjectFiles(rootPath, FOLDER_FILE_LIMIT * 4);
-  if (fileCount > FOLDER_FILE_LIMIT) {
-    const message = `This folder contains ${fileCount}${
-      fileCount >= FOLDER_FILE_LIMIT * 4 ? '+' : ''
-    } files which is too large to analyze effectively. Please cd into a specific project subfolder instead.`;
-    log(emit, 'warn', message);
-    // Surface it right in the originating terminal too (amber, on its own line).
+  // Large projects are fine: the scanner self-caps (see scanProject's MAX_FILES)
+  // and skips oversized files, so analysis stays bounded and never hangs. For
+  // very large trees we map the first slice and tell the user — without bailing.
+  const SCAN_CAP = 5000; // keep in sync with scanProject MAX_FILES
+  const fileCount = countProjectFiles(rootPath, SCAN_CAP + 1);
+  if (fileCount > SCAN_CAP) {
+    const message = `Large project detected (${fileCount}+ files). Mapping the first ${SCAN_CAP} files; cd into a specific subfolder for a tighter view.`;
+    log(emit, 'info', message);
     if (termId) {
-      emit({ type: 'term-data', id: termId, data: `\r\n\x1b[33m${message}\x1b[0m\r\n` });
+      emit({ type: 'term-data', id: termId, data: `\r\n\x1b[36m${message}\x1b[0m\r\n` });
     }
-    return null;
+    // Continue — analyze the capped slice instead of refusing.
   }
 
   log(emit, 'info', `Analyzing project at ${rootPath} ...`);

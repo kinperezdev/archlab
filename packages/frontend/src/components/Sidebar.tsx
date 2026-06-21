@@ -79,7 +79,6 @@ interface SidebarProps {
   onOpenAgentTeam: () => void;
   agentTeamActive: boolean;
   onOpenArchCo: () => void;
-  archcoActive: boolean;
   onOpenBrain: () => void;
   onOpenShortcuts: () => void;
   onOpenKeys: () => void;
@@ -121,11 +120,14 @@ export function Sidebar({
   onOpenAgentTeam,
   agentTeamActive,
   onOpenArchCo,
-  archcoActive,
   onOpenBrain,
   onOpenShortcuts,
   onOpenKeys,
 }: SidebarProps) {
+  // Only one nav item is highlighted at a time. The Agent Team panel overlays
+  // whatever tab is showing, so while it's open it takes the active highlight
+  // and the underlying tab (including ArchCo) is not also shown as active.
+  const activeTab = agentTeamActive ? null : tab;
   return (
     <aside className="nav-sidebar">
       <div className="nav-header">
@@ -145,7 +147,7 @@ export function Sidebar({
                 key={id}
                 Icon={Icon}
                 label={label}
-                active={tab === id}
+                active={activeTab === id}
                 onClick={() => onTabChange(id)}
               />
             ))}
@@ -155,7 +157,7 @@ export function Sidebar({
         <div className="nav-group">
           <div className="nav-group-label">Tools</div>
           <NavItem Icon={UsersIcon} label="Agent Team" active={agentTeamActive} onClick={onOpenAgentTeam} />
-          <NavItem Icon={HotelIcon} label="ArchCo" active={archcoActive} onClick={onOpenArchCo} />
+          <NavItem Icon={HotelIcon} label="ArchCo" active={activeTab === 'archco'} onClick={onOpenArchCo} />
           <NavItem Icon={BrainCircuitIcon} label="Brain" onClick={onOpenBrain} />
         </div>
 

@@ -36,8 +36,6 @@ interface FloorSceneProps {
 const SCENE_W = 720;
 const SCENE_H = 320;
 const ELEVATOR_X = SCENE_W - 56;
-// Exit door sits on the left wall; employees walk here to head home off-duty.
-const EXIT_X = 16;
 
 const SEVERITY_COLOR: Record<'critical' | 'high' | 'medium' | 'low', string> = {
   critical: '#F87171',
@@ -403,16 +401,18 @@ export function FloorScene({
   // they reappear at their desks. Driven purely by the isOffDuty flag.
   useEffect(() => {
     if (isOffDuty) {
-      const goodbyes = ['Heading home! 👋', 'Night, everyone! 🌙', 'See you tomorrow! 🚪', 'Logging off! 💤'];
+      // Everyone rides the elevator down to the ground floor (single exit is
+      // outside), so they walk to the elevator on the right and head down.
+      const goodbyes = ['Heading down! 🛗', 'Night, everyone! 🌙', 'Calling it a day! 👋', 'Logging off! 💤'];
       setEmpStates((prev) => {
         const next = { ...prev };
         for (const emp of employees) {
           if (presentIds.has(emp.id) && next[emp.id]) {
             next[emp.id] = {
               ...next[emp.id],
-              x: EXIT_X,
+              x: ELEVATOR_X - 65,
               isWalking: true,
-              flip: true,
+              flip: false,
               emotion: goodbyes[Math.floor(Math.random() * goodbyes.length)],
             };
           }
@@ -422,7 +422,7 @@ export function FloorScene({
       // After the walk completes, mark them as gone for the day (office empties).
       const timer = setTimeout(() => {
         setLeftForDay(new Set(employees.filter((e) => presentIds.has(e.id)).map((e) => e.id)));
-      }, 2000);
+      }, 4800);
       return () => clearTimeout(timer);
     }
 
@@ -505,7 +505,7 @@ export function FloorScene({
         // Despawn/exit
         setTimeout(() => {
           setFounderVisitor(null);
-        }, 2000);
+        }, 4800);
       }, 3500);
     }
   };
@@ -551,7 +551,7 @@ export function FloorScene({
               if (!current) return prev;
               return { ...prev, [randId]: { ...current, emotion: null, isWalking: false } };
             });
-          }, 2000);
+          }, 4800);
 
           // Phase 3: Spend time on Floor 5 being coached (8 seconds), then return
           setTimeout(() => {
@@ -601,7 +601,7 @@ export function FloorScene({
                   return { ...prev, [randId]: { ...current, emotion: null } };
                 });
               }, 3000);
-            }, 2000);
+            }, 4800);
 
           }, 12500);
           return; // skip other actions on this tick to prevent overlaps
@@ -650,7 +650,7 @@ export function FloorScene({
                 return { ...prev, ['alex-chen']: { ...cto, emotion: 'Check this ref! 💡' } };
               });
               setVisitor((v) => (v ? { ...v, emotion: 'Wassup, got it! 🎯' } : null));
-            }, 2000);
+            }, 4800);
 
             // Phase 4: Visitor understands, gains XP and levels up
             setTimeout(() => {
@@ -661,7 +661,7 @@ export function FloorScene({
               });
               setVisitor((v) => (v ? { ...v, emotion: 'Upgraded! 🎓 +100XP' } : null));
               rewardXP(cand.id, 100);
-            }, 2000);
+            }, 4800);
 
             // Phase 5: Settle and walk back to elevator
             setTimeout(() => {
@@ -673,7 +673,7 @@ export function FloorScene({
               setVisitor(null);
             }, 12000);
 
-          }, 2000);
+          }, 4800);
           return;
         }
       }
@@ -719,7 +719,7 @@ export function FloorScene({
             ];
             const randQ = initialQuestions[Math.floor(Math.random() * initialQuestions.length)];
             setFounderVisitor((v) => (v ? { ...v, isWalking: false, emotion: randQ } : null));
-          }, 2000);
+          }, 4800);
           return;
         }
       }
@@ -803,7 +803,7 @@ export function FloorScene({
 
             // Phase 6: despawn at the elevator.
             setTimeout(() => setVisitor(null), 9600);
-          }, 2000);
+          }, 4800);
           return;
         }
       }
@@ -969,9 +969,9 @@ export function FloorScene({
                   });
                 }, 3000);
 
-              }, 7000); // 5000 conversation + 2000 walk back
+              }, 9800); // 5000 conversation + 4800 walk back
 
-            }, 2000); // Walk to receiver desk
+            }, 4800); // Walk to receiver desk
 
             return; // skip other random actions on this tick
           }
@@ -1011,8 +1011,9 @@ export function FloorScene({
                 targetX = 140 + Math.random() * 280; // random walk
                 chosenEmotion = "Brainstorming stretch... 💡";
               }
-              // Gentle vertical wander so they roam up/down, not only sideways.
-              targetY = Math.max(60, defaultY + (Math.random() * 80 - 40));
+              // Gentle vertical wander, clamped to the floor band so they never
+              // drift up into the wall or down off the bottom edge.
+              targetY = Math.min(SCENE_H - 60, Math.max(96, defaultY + (Math.random() * 44 - 22)));
             }
 
             return {
@@ -1083,6 +1084,8 @@ export function FloorScene({
           const randId = activeIds[Math.floor(Math.random() * activeIds.length)];
           const hasBadge = Boolean(taskBadges[randId]);
           const badgeSev = taskBadges[randId]?.severity;
+          // The actual finding this person was assigned in the team review.
+          const task = taskBadges[randId]?.label ?? 'the issue';
 
           let potentialEmotions = [
             'Wassup man! ☕',
@@ -1130,31 +1133,22 @@ export function FloorScene({
             ];
           } else if (badgeSev === 'critical' || badgeSev === 'high' || (floor === 4 && threatLevel === 'red')) {
             potentialEmotions = [
-              'Need help ASAP! 😰',
-              'Critical alert! 💢',
-              'Fixing the server! ⚡',
-              'Production is burning! 🔥',
-              'Oh no! ❗',
-              'Rollback! Quick! 🚨',
-              'Memory usage is spiking! 📈',
-              'Database connection failed! 🔌',
-              'Who merged this check-in? 💀',
-              'Everything is laggy! ⏳',
-              'We need to restore from backup! 💾',
-              'Is the backend down? 🌐'
+              `🚨 Critical: ${task}`,
+              `Fixing ASAP: ${task} ⚡`,
+              `Triaging: ${task} 💢`,
+              `On it: ${task} 🔥`,
+              `Rolling back: ${task} 🚨`,
+              `Investigating: ${task} 🔍`,
             ];
           } else if (hasBadge) {
             potentialEmotions = [
-              'Grinding on this task... 💼',
-              'Focus mode on! ✏️',
-              'Writing tests... 💻',
-              'Thinking of a fix 🤔',
-              'Resolving merge conflicts ⚔️',
-              'Optimizing layout styling 📐',
-              'Cleaning up the components 🎨',
-              'Writing documentation 📝',
-              'Fixing small bugs 🐜',
-              'Refining user flow 🌊'
+              `Reviewing: ${task} 🔍`,
+              `Fixing: ${task} 🛠️`,
+              `Brainstorming a fix for ${task} 💡`,
+              `Checking the code for ${task} 👀`,
+              `Writing a patch for ${task} ✏️`,
+              `Testing the fix for ${task} 🧪`,
+              `Almost done with ${task} ✅`,
             ];
           }
 
@@ -1593,21 +1587,6 @@ export function FloorScene({
           </text>
         </g>
 
-        {/* Exit door on the left wall — employees walk here to head home off-duty. */}
-        <g>
-          <rect x="4" y="196" width="34" height="84" rx="2" fill="#1E293B" stroke="#475569" strokeWidth="1.5" />
-          <rect x="8" y="202" width="26" height="78" rx="1.5" fill="#0F172A" stroke="#334155" strokeWidth="1" />
-          {/* Door seam + handle */}
-          <line x1="21" y1="204" x2="21" y2="278" stroke="#334155" strokeWidth="1" strokeDasharray="2 3" />
-          <circle cx="17" cy="240" r="1.6" fill="#CBD5E1" />
-          <circle cx="25" cy="240" r="1.6" fill="#CBD5E1" />
-          {/* Illuminated EXIT sign */}
-          <rect x="6" y="182" width="30" height="11" rx="2" fill="#052e16" stroke="#16a34a" strokeWidth="1" />
-          <text x="21" y="190.5" textAnchor="middle" fill="#4ade80" fontSize="7" fontWeight="700" letterSpacing="0.5">
-            EXIT
-          </text>
-        </g>
-
         {/* Floor 4 threat indicator */}
         {floor === 4 && (
           <g>
@@ -1631,7 +1610,7 @@ export function FloorScene({
             <button
               key={emp.id}
               className="archco-employee"
-              style={{ left: x, top: y }}
+              style={{ left: `${(x / SCENE_W) * 100}%`, top: `${(y / SCENE_H) * 100}%` }}
               onClick={() => {
                 const dynStatus = getDynamicStatus(emp, state, badge, mentoringIds, timeState);
                 const ambientMsg = emp.ambientMessages[Math.floor((emp.name.length + emp.role.length) % emp.ambientMessages.length)];
@@ -1678,7 +1657,7 @@ export function FloorScene({
         {visitor && (
           <button
             className="archco-employee archco-visitor"
-            style={{ left: visitor.x, top: visitor.y }}
+            style={{ left: `${(visitor.x / SCENE_W) * 100}%`, top: `${(visitor.y / SCENE_H) * 100}%` }}
             onClick={() => {
               const fullEmp = EMPLOYEES.find(e => e.id === visitor.id);
               if (fullEmp) {
@@ -1731,7 +1710,7 @@ export function FloorScene({
           <>
             <button
               className="archco-employee archco-visitor founder-visitor-btn"
-              style={{ left: founderVisitor.x, top: founderVisitor.y }}
+              style={{ left: `${(founderVisitor.x / SCENE_W) * 100}%`, top: `${(founderVisitor.y / SCENE_H) * 100}%` }}
               onClick={() => {
                 // Clicking the worker opens the chat overlay input modal
                 if (!founderVisitor.isWalking) {
