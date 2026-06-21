@@ -70,10 +70,10 @@ export function getPresentEmployees(timeState: TimeState, allEmployees: Employee
     if (timeState.lightLevel > 0.5) {
       return allEmployees.map((e) => e.id); // All present during weekend day shifts
     }
-    return ['jordan-lee', 'sam-rivera']; // SREs always on-call at night
+    return []; // Weekend nights: everyone has gone home
   }
   if (timeState.timeOfDay === 'night') {
-    return ['jordan-lee', 'sam-rivera', 'sarah-chen']; // SRE + security on-call
+    return ['jordan-lee', 'sam-rivera']; // weekday late night: SREs on-call only
   }
   if (timeState.timeOfDay === 'evening') {
     return allEmployees
@@ -84,6 +84,23 @@ export function getPresentEmployees(timeState: TimeState, allEmployees: Employee
     return ['alex-chen', 'marcus-webb', 'jordan-lee']; // early birds
   }
   return allEmployees.map((e) => e.id); // full office during day
+}
+
+export type Weather = 'clear' | 'cloudy' | 'rain';
+
+/**
+ * Time-tied weather for the outside scene: deterministic from the clock so it
+ * reads as a believable day rather than flickering randomly.
+ */
+export function getWeather(t: TimeState): { kind: Weather; label: string; icon: string } {
+  // Purely hour-based (local clock) so it's correct on weekends/nights too.
+  const h = t.hour;
+  if (h < 5 || h >= 19) return { kind: 'clear', label: 'Clear night', icon: '🌙' };
+  if (h < 8) return { kind: 'cloudy', label: 'Morning mist', icon: '🌥️' };
+  if (h < 12) return { kind: 'clear', label: 'Sunny', icon: '☀️' };
+  if (h < 15) return { kind: 'cloudy', label: 'Partly cloudy', icon: '⛅' };
+  if (h < 18) return { kind: 'rain', label: 'Light rain', icon: '🌧️' };
+  return { kind: 'cloudy', label: 'Overcast evening', icon: '☁️' };
 }
 
 /** Format the clock as HH:MM for the office display. */

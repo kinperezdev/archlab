@@ -22,6 +22,8 @@ interface AgentTeamProps {
   onStop: () => void;
   onRequestRuns: () => void;
   onClose: () => void;
+  /** Render as a full-surface tab (fills the content area) instead of a side panel. */
+  embedded?: boolean;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -32,7 +34,7 @@ const STATUS_LABEL: Record<string, string> = {
   complete: 'Complete',
 };
 
-export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequestRuns, onClose }: AgentTeamProps) {
+export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequestRuns, onClose, embedded = false }: AgentTeamProps) {
   const [mode, setMode] = useState<AgentMode>('sequential');
   const [single, setSingle] = useState<AgentId>('security');
   const [showHistory, setShowHistory] = useState(false);
@@ -55,7 +57,7 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequ
   };
 
   return (
-    <aside className="agent-panel">
+    <aside className={`agent-panel${embedded ? ' agent-panel--embedded' : ''}`}>
       <header className="agent-panel-head">
         <div>
           <h3>Agent Team</h3>
