@@ -981,6 +981,42 @@ async function handleAnalyze(
     'info',
     `Canvas generated: ${analysis.canvas.nodes.length} nodes, ${analysis.canvas.edges.length} edges.`,
   );
+
+  // The brain absorbs the project immediately on first analyze (cd into a
+  // folder), not only when Run Checks is clicked. Diagnostics are empty here;
+  // Run Checks later folds in the full report (which replaces this record).
+  try {
+    let readme = '';
+    for (const name of ['README.md', 'README.txt', 'readme.md', 'README']) {
+      const p = path.join(analysis.rootPath, name);
+      if (fs.existsSync(p)) {
+        readme = fs.readFileSync(p, 'utf8').substring(0, 5000);
+        break;
+      }
+    }
+    const report: DiagnosticReport = {
+      projectId: analysis.projectId,
+      generatedAt: new Date().toISOString(),
+      summary: `Analysis of ${analysis.name}: ${analysis.canvas.nodes.length} nodes mapped.`,
+      diagnostics: [],
+      counts: { critical: 0, high: 0, bottleneck: 0, medium: 0, low: 0, info: 0 },
+    };
+    learnFromProject({
+      projectId: analysis.projectId,
+      name: analysis.name,
+      rootPath: analysis.rootPath,
+      analyzedAt: new Date().toISOString(),
+      intelligence: analysis.intelligence,
+      canvas: analysis.canvas,
+      report,
+      readme: readme || undefined,
+    });
+    log(emit, 'info', 'Global brain absorbed this project.');
+    sendBrain(emit);
+  } catch (err) {
+    log(emit, 'warn', `Brain absorption skipped: ${String(err)}`);
+  }
+
   return analysis;
 }
 
@@ -1006,28 +1042,9 @@ async function handleReanalyze(projectId: string, emit: (m: ServerMessage) => vo
   if (!analysis) return;
 
   // Re-run the project intelligence step on the refreshed structure.
+  // handleAnalyze above already absorbed the refreshed project into the brain
+  // and pushed the updated summary, so no second learnFromProject is needed.
   emit({ type: 'intelligence', intelligence: analysis.intelligence });
-
-  // Fold the refreshed analysis into the brain (no findings yet: that is what
-  // Run Checks adds).
-  const report: DiagnosticReport = {
-    projectId: analysis.projectId,
-    generatedAt: new Date().toISOString(),
-    summary: `Re-analysis of ${analysis.name}: ${analysis.canvas.nodes.length} nodes mapped.`,
-    diagnostics: [],
-    counts: { critical: 0, high: 0, bottleneck: 0, medium: 0, low: 0, info: 0 },
-  };
-  learnFromProject({
-    projectId: analysis.projectId,
-    name: analysis.name,
-    rootPath: analysis.rootPath,
-    analyzedAt: new Date().toISOString(),
-    intelligence: analysis.intelligence,
-    canvas: analysis.canvas,
-    report,
-  });
-  log(emit, 'info', 'Global brain updated with the fresh analysis.');
-  sendBrain(emit);
 }
 
 /** Standalone bottleneck analysis: detect and stream bottleneck diagnostics. */

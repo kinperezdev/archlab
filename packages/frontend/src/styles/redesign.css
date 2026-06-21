@@ -8,11 +8,12 @@
   align-items: center;
   justify-content: space-between;
   height: 44px;
+  max-height: 44px;
   padding: 0 12px;
   background: #0d0d12;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-family: var(--font-sans);
-  gap: 12px;
+  gap: 8px;
 }
 
 .tb-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-shrink: 0; }
@@ -25,28 +26,39 @@
 }
 .tb-logo-text { color: #fff; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
 .tb-slash { color: rgba(255, 255, 255, 0.2); }
-.tb-project { color: rgba(255, 255, 255, 0.5); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-project { max-width: 120px; color: rgba(255, 255, 255, 0.5); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tb-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
 .tb-timestamp { color: rgba(255, 255, 255, 0.3); font-size: 12px; font-family: var(--font-mono); white-space: nowrap; }
 
-/* Center tabs, absolutely centered regardless of side widths */
+/* Centered tabs wrapper that keeps tabs aligned but allows scrolling */
+.tb-tabs-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 8px; /* At least 8px gap between left/right layout elements */
+}
 .tb-tabs {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   gap: 2px;
-  max-width: 50%;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.tb-tabs::-webkit-scrollbar {
+  display: none;
 }
 .tb-tab {
   position: relative;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.4);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease;
@@ -63,7 +75,7 @@
 }
 .tb-tab-content { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; }
 
-.tb-right { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.tb-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .tb-badge {
   display: inline-flex;
   align-items: center;
@@ -81,16 +93,18 @@
 .tb-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   height: 28px;
-  padding: 0 12px;
+  padding: 6px 10px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
 }
 .tb-btn:hover { color: rgba(255, 255, 255, 0.9); border-color: rgba(255, 255, 255, 0.2); }
 .tb-btn-accent {
@@ -101,6 +115,23 @@
 }
 .tb-btn-accent:hover { color: #fff; box-shadow: 0 0 18px rgba(99, 102, 241, 0.45); }
 .tb-btn-accent.active { box-shadow: 0 0 18px rgba(99, 102, 241, 0.55); }
+.tb-btn-icon {
+  width: 28px;
+  padding: 0;
+  font-size: 13px;
+}
+.tb-brain-btn {
+  position: relative;
+}
+.tb-brain-btn .tb-dot-status {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid #0d0d12;
+  z-index: 2;
+}
 .tb-dot-status { width: 6px; height: 6px; border-radius: 50%; }
 .tb-dot-status.on { background: #10b981; }
 .tb-dot-status.off { background: #6b7280; }

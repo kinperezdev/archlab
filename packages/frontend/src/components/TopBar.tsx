@@ -83,31 +83,33 @@ export function TopBar({
       </div>
 
       {/* Middle: section tab selector */}
-      <nav className="tb-tabs" aria-label="Sections">
-        {TABS.map((t) => {
-          const isActive = tab === t.id;
-          return (
-            <motion.button
-              key={t.id}
-              className={`tb-tab ${isActive ? 'active' : ''}`}
-              onClick={() => onTabChange(t.id)}
-              whileTap={{ scale: 0.97 }}
-            >
-              {isActive && (
-                <motion.span
-                  className="tb-tab-bg"
-                  layoutId="tb-tab-indicator"
-                  transition={SPRING}
-                />
-              )}
-              <span className="tb-tab-content">
-                <TabIcon tab={t.id} />
-                <span>{t.label}</span>
-              </span>
-            </motion.button>
-          );
-        })}
-      </nav>
+      <div className="tb-tabs-wrapper">
+        <nav className="tb-tabs" aria-label="Sections">
+          {TABS.map((t) => {
+            const isActive = tab === t.id;
+            return (
+              <motion.button
+                key={t.id}
+                className={`tb-tab ${isActive ? 'active' : ''}`}
+                onClick={() => onTabChange(t.id)}
+                whileTap={{ scale: 0.97 }}
+              >
+                {isActive && (
+                  <motion.span
+                    className="tb-tab-bg"
+                    layoutId="tb-tab-indicator"
+                    transition={SPRING}
+                  />
+                )}
+                <span className="tb-tab-content">
+                  <TabIcon tab={t.id} />
+                  <span>{t.label}</span>
+                </span>
+              </motion.button>
+            );
+          })}
+        </nav>
+      </div>
 
       {/* Right: status indicators & utility buttons */}
       <div className="tb-right">
@@ -134,32 +136,32 @@ export function TopBar({
           👥 ArchCo
         </motion.button>
         <motion.button
-          className="tb-btn"
+          className="tb-btn tb-btn-icon tb-brain-btn"
           onClick={onOpenBrain}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
-          title="Open global brain"
+          title={`Global Brain (${brainProjectCount} projects) · ${connected ? 'Connected' : 'Disconnected'}`}
         >
           <span className={`tb-dot-status ${connected ? 'on' : 'off'}`} />
-          Brain · {brainProjectCount}
+          <span>🧠</span>
         </motion.button>
         <motion.button
-          className="tb-btn"
+          className="tb-btn tb-btn-icon"
           onClick={onOpenShortcuts}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           title="Keyboard Shortcuts Guide"
         >
-          ⌨ Shortcuts
+          ⌨
         </motion.button>
         <motion.button
-          className="tb-btn"
+          className="tb-btn tb-btn-icon"
           onClick={onOpenKeys}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           title="Configure AI API Keys"
         >
-          🔑 API Keys
+          🔑
         </motion.button>
       </div>
     </header>
