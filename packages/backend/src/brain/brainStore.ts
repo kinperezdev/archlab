@@ -48,6 +48,7 @@ function writeJsonFile(file: string, data: unknown): void {
   const tmp = `${file}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
   fs.renameSync(tmp, file);
+  console.log(`[Brain] wrote ${path.basename(file)}`);
 }
 
 /** Append a decision to the company wiki. Returns the full updated list. */
@@ -127,6 +128,7 @@ function saveBrain(state: BrainState): void {
   const tmp = `${BRAIN_STATE_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
   fs.renameSync(tmp, BRAIN_STATE_FILE);
+  console.log(`[Brain] wrote ${path.basename(BRAIN_STATE_FILE)}`);
 }
 
 /**
@@ -209,6 +211,9 @@ function buildInsights(patterns: BrainPattern[]): BrainInsight[] {
 
 /** Write/refresh the per-project living architecture document (Markdown). */
 function writeLivingDocument(record: BrainProjectRecord): void {
+  // Guarantee the projects directory exists before writing (avoids a silent
+  // ENOENT failure if this is ever called before loadBrain/saveBrain).
+  ensureDirs();
   const file = path.join(BRAIN_PROJECTS_DIR, `${slug(record.name)}.md`);
   const lines: string[] = [];
   lines.push(`# ${record.name}`);
@@ -235,6 +240,7 @@ function writeLivingDocument(record: BrainProjectRecord): void {
   }
   lines.push('');
   fs.writeFileSync(file, lines.join('\n'), 'utf8');
+  console.log(`[Brain] wrote projects/${path.basename(file)}`);
 }
 
 /** Lowercase kebab slug helper. */
@@ -354,6 +360,7 @@ export function absorbAgentTeamFindings(
         }
         
         fs.writeFileSync(file, lines.join('\n'), 'utf8');
+        console.log(`[Brain] wrote projects/${path.basename(file)} (agent team review)`);
       }
     } catch {
       // non-fatal

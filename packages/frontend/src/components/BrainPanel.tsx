@@ -26,7 +26,6 @@ const AGENT_LABEL: Record<string, string> = {
 };
 
 export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanelProps) {
-  const patterns = [...brain.patterns].sort((a, b) => b.count - a.count);
   const { agentTeamHasRun, openAgentTeam } = useApiKeyContext();
   const [copied, setCopied] = useState(false);
   const [pasteConfig, setPasteConfig] = useState('');
@@ -34,10 +33,42 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
   const [access, setAccess] = useState<BrainAccessStatus | null>(null);
   const [addMode, setAddMode] = useState<'form' | 'json'>('form');
   const [newMcp, setNewMcp] = useState({ name: '', command: '', args: '' });
+  // Live brain snapshot fetched from the backend on open, so the panel never
+  // shows only stale React state if a WebSocket "brain" message was missed.
+  const [liveBrain, setLiveBrain] = useState<BrainSummary | null>(null);
 
   useEffect(() => {
     fetchAccessStatus().then(setAccess).catch(() => setAccess(null));
   }, []);
+
+  // Fetch the authoritative brain snapshot from the backend when the panel
+  // mounts. Re-fetches once the brain is unlocked (locked → empty payload).
+  useEffect(() => {
+    if (access?.locked) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:${PORTS.backend}/brain`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data) return;
+        setLiveBrain({
+          projectCount: Array.isArray(data.projects) ? data.projects.length : 0,
+          patterns: Array.isArray(data.patterns) ? data.patterns : [],
+          insights: Array.isArray(data.insights) ? data.insights : [],
+        });
+      } catch {
+        // Backend unreachable: fall back to the prop (WebSocket) state.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [access?.locked]);
+
+  // Prefer the freshly fetched snapshot; fall back to the prop from app state.
+  const view = liveBrain ?? brain;
+  const patterns = [...view.patterns].sort((a, b) => b.count - a.count);
 
   const mcpConfig = {
     mcpServers: {
@@ -128,7 +159,7 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
         <header className="brain-modal-head">
           <span className="brain-logo-mark" aria-hidden="true" />
           <h2>Global Brain</h2>
-          <span className="brain-count-badge">{brain.projectCount} projects</span>
+          <span className="brain-count-badge">{view.projectCount} projects</span>
           <button className="btn" onClick={onClose} style={{ marginLeft: 'auto' }}>
             Close
           </button>
@@ -150,12 +181,12 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
               </NudgeText>
             )}
           </h3>
-          {brain.insights.length === 0 ? (
+          {view.insights.length === 0 ? (
             <p className="file-empty">No cross-project insights yet. Analyze more projects.</p>
           ) : (
             <ul className="insight-list">
-              {brain.insights.map((i) => {
-                const pat = i.patternId ? brain.patterns.find((p) => p.id === i.patternId) : undefined;
+              {view.insights.map((i) => {
+                const pat = i.patternId ? view.patterns.find((p) => p.id === i.patternId) : undefined;
                 const projects = pat?.occurrences.length ?? 0;
                 return (
                   <li key={i.id} className="insight insight-card">
