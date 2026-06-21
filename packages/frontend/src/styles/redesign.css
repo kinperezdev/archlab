@@ -80,6 +80,20 @@
 /* Top bar is 48px tall. */
 .app-shell { grid-template-rows: 48px 1fr var(--bottom-row, 200px); }
 
+/* ===================== FLICKER LOADER ===================== */
+.flicker { display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
+.flicker-cell {
+  fill: var(--flicker-off);
+  animation: flicker-pulse var(--flicker-dur) linear infinite;
+}
+@keyframes flicker-pulse {
+  0%, 18% { fill: var(--flicker-on); }
+  19%, 100% { fill: var(--flicker-off); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flicker-cell { animation-duration: 0s; fill: var(--flicker-off); }
+}
+
 /* ===================== CANVAS NODE ===================== */
 .arch-node {
   display: flex;

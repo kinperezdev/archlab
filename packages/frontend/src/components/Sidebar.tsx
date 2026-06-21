@@ -6,31 +6,38 @@
  * (Agent Team, ArchCo, Brain, Shortcuts, API Keys). Pure chrome: every click
  * delegates to the same handlers the app already wired up, so tab switching and
  * modal toggles behave exactly as before.
+ *
+ * Icons are animated (itshover.com). Each one exposes an imperative
+ * start/stop handle; the whole nav row drives it on hover so the glyph animates
+ * even when the cursor is over the label rather than the icon itself.
  */
 
-import {
-  Workflow,
-  Monitor,
-  Server,
-  Network,
-  Shield,
-  Database,
-  Boxes,
-  LayoutTemplate,
-  FileText,
-  Users,
-  Building2,
-  Brain,
-  Keyboard,
-  KeyRound,
-  type LucideIcon,
-} from 'lucide-react';
+import { forwardRef, useRef, type ForwardRefExoticComponent, type RefAttributes } from 'react';
 import type { ArchTab } from '../App.js';
+import type { AnimatedIconHandle, AnimatedIconProps } from './ui/types.js';
+import LayoutDashboardIcon from './ui/layout-dashboard-icon.js';
+import CodeXmlIcon from './ui/code-xml-icon.js';
+import CpuIcon from './ui/cpu-icon.js';
+import RouterIcon from './ui/router-icon.js';
+import ShieldCheck from './ui/shield-check.js';
+import Stack3Icon from './ui/stack-3-icon.js';
+import LayersIcon from './ui/layers-icon.js';
+import PenIcon from './ui/pen-icon.js';
+import BookIcon from './ui/book-icon.js';
+import UsersIcon from './ui/users-icon.js';
+import HotelIcon from './ui/hotel-icon.js';
+import BrainCircuitIcon from './ui/brain-circuit-icon.js';
+import DialpadIcon from './ui/dialpad-icon.js';
+import LockIcon from './ui/lock-icon.js';
+
+type AnimatedIcon = ForwardRefExoticComponent<
+  AnimatedIconProps & RefAttributes<AnimatedIconHandle>
+>;
 
 interface NavTabItem {
   id: ArchTab;
   label: string;
-  Icon: LucideIcon;
+  Icon: AnimatedIcon;
 }
 
 interface NavGroup {
@@ -43,20 +50,20 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Canvas',
     items: [
-      { id: 'all', label: 'Full Flow', Icon: Workflow },
-      { id: 'frontend', label: 'Frontend', Icon: Monitor },
-      { id: 'backend', label: 'Backend', Icon: Server },
-      { id: 'api', label: 'API', Icon: Network },
-      { id: 'security', label: 'Security', Icon: Shield },
+      { id: 'all', label: 'Full Flow', Icon: LayoutDashboardIcon },
+      { id: 'frontend', label: 'Frontend', Icon: CodeXmlIcon },
+      { id: 'backend', label: 'Backend', Icon: CpuIcon },
+      { id: 'api', label: 'API', Icon: RouterIcon },
+      { id: 'security', label: 'Security', Icon: ShieldCheck },
     ],
   },
   {
     label: 'Workspace',
     items: [
-      { id: 'database', label: 'Database', Icon: Database },
-      { id: 'systemdesign', label: 'System Design', Icon: Boxes },
-      { id: 'blueprint', label: 'Blueprint', Icon: LayoutTemplate },
-      { id: 'docs', label: 'Docs', Icon: FileText },
+      { id: 'database', label: 'Database', Icon: Stack3Icon },
+      { id: 'systemdesign', label: 'System Design', Icon: LayersIcon },
+      { id: 'blueprint', label: 'Blueprint', Icon: PenIcon },
+      { id: 'docs', label: 'Docs', Icon: BookIcon },
     ],
   },
 ];
@@ -77,6 +84,26 @@ interface SidebarProps {
   onOpenShortcuts: () => void;
   onOpenKeys: () => void;
 }
+
+/** A nav row whose hover drives the animated icon's start/stop handle. */
+const NavItem = forwardRef<
+  HTMLButtonElement,
+  { Icon: AnimatedIcon; label: string; active?: boolean; onClick: () => void }
+>(function NavItem({ Icon, label, active, onClick }, _ref) {
+  const iconRef = useRef<AnimatedIconHandle>(null);
+  return (
+    <button
+      className={`nav-item ${active ? 'active' : ''}`}
+      onClick={onClick}
+      onMouseEnter={() => iconRef.current?.startAnimation()}
+      onMouseLeave={() => iconRef.current?.stopAnimation()}
+      aria-current={active ? 'page' : undefined}
+    >
+      <Icon ref={iconRef} className="nav-item-icon" size={16} strokeWidth={1.6} />
+      <span>{label}</span>
+    </button>
+  );
+});
 
 /** Compact local time stamp, e.g. "2:05 PM". */
 function formatStamp(epochMs: number): string {
@@ -114,48 +141,28 @@ export function Sidebar({
           <div className="nav-group" key={group.label}>
             <div className="nav-group-label">{group.label}</div>
             {group.items.map(({ id, label, Icon }) => (
-              <button
+              <NavItem
                 key={id}
-                className={`nav-item ${tab === id ? 'active' : ''}`}
+                Icon={Icon}
+                label={label}
+                active={tab === id}
                 onClick={() => onTabChange(id)}
-                aria-current={tab === id ? 'page' : undefined}
-              >
-                <Icon className="nav-item-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-                <span>{label}</span>
-              </button>
+              />
             ))}
           </div>
         ))}
 
         <div className="nav-group">
           <div className="nav-group-label">Tools</div>
-          <button
-            className={`nav-item ${agentTeamActive ? 'active' : ''}`}
-            onClick={onOpenAgentTeam}
-          >
-            <Users className="nav-item-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span>Agent Team</span>
-          </button>
-          <button className={`nav-item ${archcoActive ? 'active' : ''}`} onClick={onOpenArchCo}>
-            <Building2 className="nav-item-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span>ArchCo</span>
-          </button>
-          <button className="nav-item" onClick={onOpenBrain}>
-            <Brain className="nav-item-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span>Brain</span>
-          </button>
+          <NavItem Icon={UsersIcon} label="Agent Team" active={agentTeamActive} onClick={onOpenAgentTeam} />
+          <NavItem Icon={HotelIcon} label="ArchCo" active={archcoActive} onClick={onOpenArchCo} />
+          <NavItem Icon={BrainCircuitIcon} label="Brain" onClick={onOpenBrain} />
         </div>
 
         <div className="nav-group">
           <div className="nav-group-label">Settings</div>
-          <button className="nav-item" onClick={onOpenShortcuts}>
-            <Keyboard className="nav-item-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span>Shortcuts</span>
-          </button>
-          <button className="nav-item" onClick={onOpenKeys}>
-            <KeyRound className="nav-item-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span>API Keys</span>
-          </button>
+          <NavItem Icon={DialpadIcon} label="Shortcuts" onClick={onOpenShortcuts} />
+          <NavItem Icon={LockIcon} label="API Keys" onClick={onOpenKeys} />
         </div>
       </nav>
 
