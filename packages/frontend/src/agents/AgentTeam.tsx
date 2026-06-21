@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import type { AgentFinding, AgentId, AgentMode, ReportItem, TeamReport } from '@archlab/shared';
 import type { AgentTeamState } from '../state/useArchLab.js';
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
+import { FlickerLoader } from '../components/FlickerLoader.js';
 import { AGENT_CATALOG, agentInfo } from './agentCatalog.js';
 
 interface AgentTeamProps {
@@ -93,8 +94,12 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequ
         <div className="agent-run-row">
           {team.running ? (
             <>
-              <button className="btn btn-primary agent-run-btn" disabled style={{ opacity: 0.6 }}>
-                Running…
+              <button
+                className="btn btn-primary agent-run-btn"
+                disabled
+                style={{ opacity: 0.6, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <FlickerLoader size={13} on="#ffffff" off="rgba(255,255,255,0.25)" /> Running…
               </button>
               <button className="btn agent-stop-btn" onClick={onStop}>
                 Stop

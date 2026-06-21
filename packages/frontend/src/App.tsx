@@ -58,6 +58,7 @@ import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 import { ApiKeysModal } from './components/ApiKeysModal.js';
 import { ApiKeyContext } from './state/apiKeyContext.js';
 import { NudgeText } from './components/ConfidenceNudge.js';
+import { FlickerLoader } from './components/FlickerLoader.js';
 import { formatRunTimestamp } from './lib/formatTime.js';
 
 export type ArchTab =
@@ -369,7 +370,7 @@ export function App() {
                       >
                         {state.reanalyzing ? (
                           <>
-                            <span className="btn-spinner" aria-hidden="true" /> Re-analyzing…
+                            <FlickerLoader size={13} /> Re-analyzing…
                           </>
                         ) : (
                           '▶ Re-analyze'
