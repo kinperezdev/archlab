@@ -564,10 +564,10 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           source: e.source,
           target: e.target,
           label: e.label,
-          // Clean right-angled routing with very rounded corners; low zIndex so
-          // edges always paint behind the nodes (never on top).
-          type: 'smoothstep',
-          pathOptions: { borderRadius: 40, offset },
+          // Curved (bezier) branches for the left-to-right mind-map tree; low
+          // zIndex so edges always paint behind the nodes (never on top).
+          type: 'default',
+          pathOptions: { offset },
           zIndex: 0,
           animated: e.animated || isActive,
           className: (e.animated || isActive) ? 'edge-flowing' : undefined,
