@@ -1,25 +1,31 @@
 /**
- * Layout pass — positions nodes as two horizontal swim lanes:
+ * Layout pass — positions nodes as stacked horizontal lanes:
  *
- *   Frontend lane  -> left half of the canvas
- *   Backend lane   -> right half of the canvas
- *   External lane  -> far right (databases, services, configs, MCP)
+ *   Frontend lane  -> top band
+ *   Backend lane   -> middle band
+ *   External lane  -> bottom band (databases, services, configs, MCP)
  *
- * Within each lane, nodes spread horizontally across several columns and wrap
- * to a new row, so a project never collapses into a single vertical stack.
+ * Within each lane, nodes fill a small fixed number of rows and then extend to
+ * the RIGHT, so a large project grows horizontally (you slide right) instead of
+ * stacking into an ever-deeper vertical column you have to scroll down.
  */
 
 import type { CanvasNode, Lane } from '@archlab/shared';
 
-const COL_WIDTH = 400; // generous horizontal gap so edges have room to breathe
-const ROW_HEIGHT = 250; // generous vertical gap between rows
+const COL_WIDTH = 360; // horizontal gap between columns
+const ROW_HEIGHT = 200; // vertical gap between the few rows in a lane
+const ROWS_PER_LANE = 3; // each lane is this many rows tall, then grows rightward
+const LANE_GAP = 220; // vertical gap between lane bands
+const LEFT = 120;
 const TOP = 120;
 
-/** Horizontal start (x0) and column count for each lane region. */
-const LANE_REGIONS: Record<Lane, { x0: number; cols: number }> = {
-  frontend: { x0: 80, cols: 3 }, // left half
-  backend: { x0: 1480, cols: 3 }, // right half, clear of the frontend lane
-  external: { x0: 2880, cols: 1 }, // far right column
+const LANE_HEIGHT = ROWS_PER_LANE * ROW_HEIGHT + LANE_GAP;
+
+/** Vertical start (y0) for each lane band; all lanes share the same left edge. */
+const LANE_Y0: Record<Lane, number> = {
+  frontend: TOP,
+  backend: TOP + LANE_HEIGHT,
+  external: TOP + LANE_HEIGHT * 2,
 };
 
 /** Mutate-free layout: returns new nodes with computed positions. */
@@ -28,16 +34,17 @@ export function layout(nodes: CanvasNode[]): CanvasNode[] {
   const laneIndex: Record<Lane, number> = { frontend: 0, backend: 0, external: 0 };
 
   return nodes.map((node) => {
-    const region = LANE_REGIONS[node.lane] ?? LANE_REGIONS.external;
+    const y0 = LANE_Y0[node.lane] ?? LANE_Y0.external;
     const i = laneIndex[node.lane]++;
-    const col = i % region.cols;
-    const row = Math.floor(i / region.cols);
+    // Fill rows top-to-bottom first, then move to the next column on the right.
+    const row = i % ROWS_PER_LANE;
+    const col = Math.floor(i / ROWS_PER_LANE);
 
     return {
       ...node,
       position: {
-        x: region.x0 + col * COL_WIDTH,
-        y: TOP + row * ROW_HEIGHT,
+        x: LEFT + col * COL_WIDTH,
+        y: y0 + row * ROW_HEIGHT,
       },
     };
   });

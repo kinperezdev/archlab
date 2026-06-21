@@ -633,9 +633,9 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             fitView
             fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
             minZoom={0.4}
-            /* Big graphs: only mount nodes/edges currently in the viewport, and
-               drop per-node focus/elevation overhead so panning stays smooth. */
-            onlyRenderVisibleElements={nodes.length > 150}
+            /* Drop per-node focus/elevation overhead so panning large graphs
+               stays smooth. (onlyRenderVisibleElements is intentionally NOT set:
+               our nodes are CSS-measured, and it can hide unmeasured nodes.) */
             elevateNodesOnSelect={false}
             nodesFocusable={false}
             edgesFocusable={false}
