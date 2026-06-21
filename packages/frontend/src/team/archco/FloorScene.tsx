@@ -216,6 +216,8 @@ interface EmpState {
   isWalking: boolean;
   flip: boolean;
   emotion: string | null;
+  /** Raise the speech bubble so two people talking don't cover each other. */
+  emotionRaised?: boolean;
 }
 
 export function FloorScene({
@@ -666,6 +668,90 @@ export function FloorScene({
       }
 
       // -------------------------------------------------------------
+      // CASE B3: CROSS-FLOOR VISIT — a colleague rides the elevator in from
+      // another floor to ask someone present on THIS floor a question.
+      // -------------------------------------------------------------
+      if (floor !== 5 && floor !== 6 && !visitor && mentoringIds.size === 0 && Math.random() < 0.12) {
+        // Hosts: people present on the current floor who can be asked.
+        const hosts = employees.filter((e) => presentIds.has(e.id));
+        // Guests: people whose home floor is elsewhere but who are in today.
+        const guests = EMPLOYEES.filter((e) => e.floor !== floor && presentIds.has(e.id));
+        if (hosts.length > 0 && guests.length > 0) {
+          const guest = guests[Math.floor(Math.random() * guests.length)];
+          const host = hosts[Math.floor(Math.random() * hosts.length)];
+          const hostX = Math.min(host.deskPosition.x, ELEVATOR_X - 60);
+          const hostY = host.deskPosition.y + 40;
+          const hostFirst = host.name.split(' ')[0];
+          const questions = [
+            `Hey ${hostFirst}, can you review my PR? 🔍`,
+            `${hostFirst}, quick question on the API? 🤔`,
+            `Got a sec, ${hostFirst}? Need a second pair of eyes 👀`,
+            `${hostFirst}, how do you handle this edge case? 🧩`,
+            `Can you unblock me on this, ${hostFirst}? 🙏`,
+          ];
+          const randQ = questions[Math.floor(Math.random() * questions.length)];
+
+          setVisitor({
+            id: guest.id,
+            name: guest.name,
+            role: guest.role,
+            color: guest.color,
+            skinTone: guest.skinTone,
+            hairStyle: guest.hairStyle,
+            hairColor: guest.hairColor,
+            accessory: guest.accessory,
+            x: ELEVATOR_X - 65,
+            y: hostY,
+            isWalking: true,
+            flip: true,
+            emotion: `Heading to ${config.name}... 🛗`,
+          });
+
+          // Phase 1: walk over near the host (leaving room for both bubbles).
+          setTimeout(() => {
+            setVisitor((v) => (v ? { ...v, x: hostX + 60, isWalking: true, flip: true } : null));
+          }, 100);
+
+          // Phase 2: arrive and ask.
+          setTimeout(() => {
+            setVisitor((v) => (v ? { ...v, isWalking: false, emotion: randQ } : null));
+
+            // Phase 3: host answers.
+            setTimeout(() => {
+              setEmpStates((prev) => {
+                const h = prev[host.id];
+                if (!h) return prev;
+                return { ...prev, [host.id]: { ...h, emotion: 'Sure! Here you go 💡', emotionRaised: true } };
+              });
+            }, 1600);
+
+            // Phase 4: visitor thanks + both gain a little XP.
+            setTimeout(() => {
+              setVisitor((v) => (v ? { ...v, emotion: 'Thanks, appreciate it! 🙏 +25XP' } : null));
+              rewardXP(guest.id, 25);
+              rewardXP(host.id, 25);
+            }, 3600);
+
+            // Phase 5: clear host bubble, visitor heads back to the elevator.
+            setTimeout(() => {
+              setEmpStates((prev) => {
+                const h = prev[host.id];
+                if (!h) return prev;
+                return { ...prev, [host.id]: { ...h, emotion: null, emotionRaised: false } };
+              });
+              setVisitor((v) =>
+                v ? { ...v, x: ELEVATOR_X - 65, isWalking: true, flip: false, emotion: 'Back to my floor!' } : null,
+              );
+            }, 5600);
+
+            // Phase 6: despawn at the elevator.
+            setTimeout(() => setVisitor(null), 9600);
+          }, 4600);
+          return;
+        }
+      }
+
+      // -------------------------------------------------------------
       // CASE E: COLLEAGUE SYNC AND COLLABORATION (Floors 1-4)
       // -------------------------------------------------------------
       if (floor !== 5 && floor !== 6 && Math.random() < 0.28 && mentoringIds.size === 0) {
@@ -685,7 +771,9 @@ export function FloorScene({
           if (senderState && receiverState && !senderState.isWalking && !receiverState.isWalking) {
             const senderDefaultX = Math.min(sender.deskPosition.x, ELEVATOR_X - 60);
             const receiverDefaultX = Math.min(receiver.deskPosition.x, ELEVATOR_X - 60);
-            const targetX = receiverDefaultX + (senderDefaultX < receiverDefaultX ? -20 : 20);
+            // Stand a comfortable distance apart so their speech bubbles have room.
+            const approachFromLeft = senderDefaultX < receiverDefaultX;
+            const targetX = receiverDefaultX + (approachFromLeft ? -52 : 52);
 
             // 1. Sender starts walking and tells receiver they are heading over
             setEmpStates((prev) => {
@@ -750,6 +838,9 @@ export function FloorScene({
                     [receiver.id]: {
                       ...r,
                       flip: lookLeft,
+                      // Raise the responder's bubble so it stacks above the
+                      // asker's instead of covering it.
+                      emotionRaised: true,
                       emotion: responses[Math.floor(Math.random() * responses.length)]
                     }
                   };
@@ -761,7 +852,7 @@ export function FloorScene({
                 setEmpStates((prev) => {
                   const r = prev[receiver.id];
                   if (!r) return prev;
-                  return { ...prev, [receiver.id]: { ...r, emotion: null } };
+                  return { ...prev, [receiver.id]: { ...r, emotion: null, emotionRaised: false } };
                 });
 
                 setEmpStates((prev) => {
@@ -1321,6 +1412,46 @@ export function FloorScene({
           <path d="M 530 270 Q 538 248 532 254" fill="none" stroke="#166534" strokeWidth="3" strokeLinecap="round" />
         </g>
 
+        {/* Corporate office decor (standard floors) — gives the space a real
+            office feel: ceiling lights, a wall clock, framed art, a water
+            cooler, and a lounge coffee table. */}
+        {floor <= 4 && (
+          <g>
+            {/* Recessed ceiling light panels */}
+            <rect x="120" y="2" width="80" height="5" rx="2.5" fill="#E2E8F0" opacity="0.16" />
+            <rect x="320" y="2" width="80" height="5" rx="2.5" fill="#E2E8F0" opacity="0.16" />
+            <rect x="520" y="2" width="80" height="5" rx="2.5" fill="#E2E8F0" opacity="0.16" />
+
+            {/* Wall clock */}
+            <circle cx="610" cy="34" r="11" fill="#0F172A" stroke="#475569" strokeWidth="1.5" />
+            <circle cx="610" cy="34" r="1.3" fill="#94A3B8" />
+            <line x1="610" y1="34" x2="610" y2="27" stroke="#CBD5E1" strokeWidth="1.2" strokeLinecap="round" />
+            <line x1="610" y1="34" x2="615" y2="34" stroke="#CBD5E1" strokeWidth="1.2" strokeLinecap="round" />
+
+            {/* Framed wall art */}
+            <rect x="150" y="20" width="26" height="20" rx="1" fill="#1E293B" stroke="#64748B" strokeWidth="1.2" />
+            <path d="M153 37 L160 29 L165 33 L170 26 L173 37 Z" fill="#334155" />
+
+            {/* Water cooler (lounge) */}
+            <rect x="92" y="246" width="14" height="22" rx="2" fill="#CBD5E1" stroke="#64748B" strokeWidth="1" />
+            <rect x="95" y="234" width="8" height="13" rx="3" fill="#38BDF8" opacity="0.7" />
+            <rect x="96" y="258" width="6" height="3" fill="#0F172A" />
+
+            {/* Lounge coffee table */}
+            <ellipse cx="150" cy="272" rx="34" ry="4" fill="#000000" opacity="0.2" />
+            <rect x="120" y="258" width="60" height="8" rx="2" fill="#3F2A1A" stroke="#5B3A22" strokeWidth="1" />
+            <rect x="124" y="266" width="4" height="8" fill="#2A1C10" />
+            <rect x="172" y="266" width="4" height="8" fill="#2A1C10" />
+            {/* Coffee cup + steam on the table */}
+            <ellipse cx="138" cy="258" rx="5" ry="1.6" fill="#94A3B8" />
+            <rect x="135" y="254" width="6" height="4" rx="1" fill="#F8FAFC" />
+            <path d="M141 255 q3 0 3 2 q0 2 -3 2" fill="none" stroke="#F8FAFC" strokeWidth="0.8" />
+            {/* Stacked magazines */}
+            <rect x="156" y="256" width="16" height="2.5" rx="0.5" fill="#6366F1" />
+            <rect x="158" y="253.5" width="14" height="2.5" rx="0.5" fill="#10B981" />
+          </g>
+        )}
+
         {/* Desks and monitors for employees */}
         {employees.map((emp) => {
           const present = presentIds.has(emp.id);
@@ -1332,6 +1463,14 @@ export function FloorScene({
 
           return (
             <g key={`desk-${emp.id}`} opacity={present ? 1 : 0.45}>
+              {/* Static office chair — stays at the workstation even when the
+                  employee gets up and roams, so every desk reads as "theirs". */}
+              <ellipse cx={x + 16} cy={y + 36} rx="13" ry="3" fill="#000000" opacity="0.2" />
+              <rect x={x + 4} y={y + 4} width="24" height="20" rx="4" fill="#283548" stroke="#1E293B" strokeWidth="1" />
+              <rect x={x + 7} y={y + 22} width="18" height="6" rx="2" fill="#334155" />
+              <rect x={x + 15} y={y + 28} width="2" height="6" fill="#1E293B" />
+              <rect x={x + 10} y={y + 33} width="12" height="2.5" rx="1" fill="#1E293B" />
+
               {/* Desk Shadow */}
               <ellipse cx={x + 16} cy={deskY + 12} rx="28" ry="3" fill="#000000" opacity="0.25" />
               
@@ -1431,7 +1570,7 @@ export function FloorScene({
             >
               {/* Floating Emotion Speech Bubble */}
               {present && state?.emotion && (
-                <div className="archco-emotion-bubble">
+                <div className={`archco-emotion-bubble${state.emotionRaised ? ' raised' : ''}`}>
                   {state.emotion}
                 </div>
               )}
@@ -1463,18 +1602,19 @@ export function FloorScene({
           );
         })}
 
-        {/* Floor 5 Visitor rendering */}
-        {floor === 5 && visitor && (
+        {/* Visitor rendering — a colleague who travelled in from another floor */}
+        {visitor && (
           <button
             className="archco-employee archco-visitor"
             style={{ left: visitor.x, top: visitor.y }}
             onClick={() => {
               const fullEmp = EMPLOYEES.find(e => e.id === visitor.id);
               if (fullEmp) {
-                onSelect(fullEmp, 'Visiting CTO Suite 👥', visitor.emotion || 'Syncing with Alex Chen... 💬');
+                const status = floor === 5 ? 'Visiting CTO Suite 👥' : `Visiting ${config.name} 👋`;
+                onSelect(fullEmp, status, visitor.emotion || 'Asking a colleague... 💬');
               }
             }}
-            title={`${visitor.name} · ${visitor.role} (Visitor)`}
+            title={`${visitor.name} · ${visitor.role} (Visiting)`}
           >
             {visitor.emotion && (
               <div className="archco-emotion-bubble">
