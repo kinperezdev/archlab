@@ -39,6 +39,7 @@ function load(): InfraHistory {
 function save(history: InfraHistory): void {
   fs.mkdirSync(BRAIN_DIR, { recursive: true });
   fs.writeFileSync(INFRA_FILE, JSON.stringify(history, null, 2), 'utf8');
+  console.log(`[Brain] wrote ${path.basename(INFRA_FILE)}`);
 }
 
 /** Fold one project's detected infrastructure into the cross-project history. */
