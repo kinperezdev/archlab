@@ -25,6 +25,7 @@ const TAB_META: Record<ArchTab, { section: string; label: string }> = {
   systemdesign: { section: 'Workspace', label: 'System Design' },
   blueprint: { section: 'Workspace', label: 'Blueprint' },
   docs: { section: 'Workspace', label: 'Docs' },
+  archco: { section: 'Tools', label: 'ArchCo' },
 };
 
 export function TopBar({

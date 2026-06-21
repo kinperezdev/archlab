@@ -30,6 +30,8 @@ interface TeamReviewProps {
   session?: ReviewSession;
   diagnostics?: Diagnostic[];
   onClose?: () => void;
+  /** Render as a full-surface tab (no modal backdrop) instead of an overlay. */
+  embedded?: boolean;
 }
 
 type BadgeSeverity = 'critical' | 'high' | 'medium' | 'low';
@@ -139,7 +141,7 @@ function buildCompanyMasterPrompt(queue: ReviewQueueItem[]): string {
   return lines.join('\n');
 }
 
-export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewProps) {
+export function TeamReview({ session, diagnostics = [], onClose, embedded = false }: TeamReviewProps) {
   const [localQueue, setLocalQueue] = useState<ReviewQueueItem[]>(session?.queue ?? []);
   const [copiedMaster, setCopiedMaster] = useState(false);
 
@@ -198,9 +200,8 @@ export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewPro
     }
   };
 
-  return (
-    <div className="team-review-overlay" onClick={onClose}>
-      <div className="team-review-panel" onClick={(e) => e.stopPropagation()}>
+  const body = (
+    <>
         <ArchCo
           tokenBudget={session?.tokenBudget ?? 5000}
           tokensUsed={session?.tokensUsed ?? 0}
@@ -257,6 +258,17 @@ export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewPro
             </ul>
           )}
         </section>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="team-review-embedded">{body}</div>;
+  }
+
+  return (
+    <div className="team-review-overlay" onClick={onClose}>
+      <div className="team-review-panel" onClick={(e) => e.stopPropagation()}>
+        {body}
       </div>
     </div>
   );

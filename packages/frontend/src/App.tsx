@@ -70,7 +70,8 @@ export type ArchTab =
   | 'security'
   | 'systemdesign'
   | 'blueprint'
-  | 'docs';
+  | 'docs'
+  | 'archco';
 
 /** Tabs that render the architecture canvas (vs. the Database/Blueprint surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
@@ -107,7 +108,6 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
   const [agentTeamOpen, setAgentTeamOpen] = useState(false);
-  const [teamReviewOpen, setTeamReviewOpen] = useState(false);
   // Whether an Anthropic key is configured — drives Agent Team nudges in the
   // Enterprise Audit. Re-checked whenever the API Keys modal closes.
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -187,7 +187,7 @@ export function App() {
         toggleBottom();
       } else if (e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint', 'docs'];
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint', 'docs', 'archco'];
         if (targetTabs[index]) {
           e.preventDefault();
           setTab(targetTabs[index]);
@@ -307,8 +307,8 @@ export function App() {
             isolatedCount={isolatedCount}
             onOpenAgentTeam={() => setAgentTeamOpen((o) => !o)}
             agentTeamActive={agentTeamOpen}
-            onOpenArchCo={() => setTeamReviewOpen((o) => !o)}
-            archcoActive={teamReviewOpen}
+            onOpenArchCo={() => setTab('archco')}
+            archcoActive={tab === 'archco'}
             onOpenBrain={() => setBrainOpen(true)}
             onOpenShortcuts={() => setShortcutsOpen(true)}
             onOpenKeys={() => setApiKeysOpen(true)}
@@ -355,6 +355,8 @@ export function App() {
             <Docs hasApiKey={hasApiKey} />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
+          ) : tab === 'archco' ? (
+            <TeamReview embedded diagnostics={state.diagnostics} />
           ) : (
             <ReactFlowProvider>
               {tab === 'security' && (
@@ -432,13 +434,6 @@ export function App() {
             </ReactFlowProvider>
           )}
         </main>
-
-        {teamReviewOpen && (
-          <TeamReview
-            diagnostics={state.diagnostics}
-            onClose={() => setTeamReviewOpen(false)}
-          />
-        )}
 
         {agentTeamOpen && (
           <AgentTeam

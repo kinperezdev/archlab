@@ -29,11 +29,15 @@ interface FloorSceneProps {
   onSelect: (employee: Employee, dynamicStatus?: string, currentThought?: string) => void;
   payrollTrigger?: number;
   aiUpgradeTrigger?: number;
+  /** When true, present employees walk out the exit door and the office empties. */
+  isOffDuty?: boolean;
 }
 
 const SCENE_W = 720;
 const SCENE_H = 320;
 const ELEVATOR_X = SCENE_W - 56;
+// Exit door sits on the left wall; employees walk here to head home off-duty.
+const EXIT_X = 16;
 
 const SEVERITY_COLOR: Record<'critical' | 'high' | 'medium' | 'low', string> = {
   critical: '#F87171',
@@ -229,6 +233,7 @@ export function FloorScene({
   onSelect,
   payrollTrigger = 0,
   aiUpgradeTrigger = 0,
+  isOffDuty = false,
 }: FloorSceneProps) {
   const config = FLOOR_CONFIGS[floor];
   // Stable per floor: employeesOnFloor() filters a fresh array each call, so we
@@ -242,6 +247,8 @@ export function FloorScene({
   // Track dynamic state for walking/emotions
   const [empStates, setEmpStates] = useState<Record<string, EmpState>>({});
   const [mentoringIds, setMentoringIds] = useState<ReadonlySet<string>>(new Set());
+  // Employees who have walked out the exit door for the day (off-duty).
+  const [leftForDay, setLeftForDay] = useState<ReadonlySet<string>>(new Set());
   
   // Floor 5 Visitor state
   const [visitor, setVisitor] = useState<{
@@ -392,6 +399,53 @@ export function FloorScene({
     return () => clearTimeout(timer);
   }, [aiUpgradeTrigger, employees, presentIds]);
 
+  // Off-duty: present employees walk to the exit door and head home; on return
+  // they reappear at their desks. Driven purely by the isOffDuty flag.
+  useEffect(() => {
+    if (isOffDuty) {
+      const goodbyes = ['Heading home! 👋', 'Night, everyone! 🌙', 'See you tomorrow! 🚪', 'Logging off! 💤'];
+      setEmpStates((prev) => {
+        const next = { ...prev };
+        for (const emp of employees) {
+          if (presentIds.has(emp.id) && next[emp.id]) {
+            next[emp.id] = {
+              ...next[emp.id],
+              x: EXIT_X,
+              isWalking: true,
+              flip: true,
+              emotion: goodbyes[Math.floor(Math.random() * goodbyes.length)],
+            };
+          }
+        }
+        return next;
+      });
+      // After the walk completes, mark them as gone for the day (office empties).
+      const timer = setTimeout(() => {
+        setLeftForDay(new Set(employees.filter((e) => presentIds.has(e.id)).map((e) => e.id)));
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+
+    // Back on duty: clear the "left" set and settle everyone at their desks.
+    setLeftForDay(new Set());
+    setEmpStates((prev) => {
+      const next = { ...prev };
+      for (const emp of employees) {
+        if (next[emp.id]) {
+          next[emp.id] = {
+            ...next[emp.id],
+            x: Math.min(emp.deskPosition.x, ELEVATOR_X - 60),
+            y: emp.deskPosition.y + 40,
+            isWalking: false,
+            flip: false,
+            emotion: null,
+          };
+        }
+      }
+      return next;
+    });
+  }, [isOffDuty, employees, presentIds]);
+
   // XP Reward & Local Persistence Saver
   const rewardXP = (empId: string, amount: number) => {
     const emp = EMPLOYEES.find((e) => e.id === empId);
@@ -445,12 +499,13 @@ export function FloorScene({
       setTimeout(() => {
         // Start walking back to elevator
         setFounderVisitor((v) => v ? { ...v, x: ELEVATOR_X - 65, isWalking: true, flip: false, emotion: 'Upgraded! 🎓 +150XP' } : null);
+        // (walk-back budget aligned with the normal 1.8s pace below)
         rewardXP(founderVisitor.id, 150);
 
         // Despawn/exit
         setTimeout(() => {
           setFounderVisitor(null);
-        }, 4500);
+        }, 2000);
       }, 3500);
     }
   };
@@ -460,6 +515,8 @@ export function FloorScene({
     if (employees.length === 0) return;
     
     const tick = setInterval(() => {
+      // Nobody is around while the office is off-duty — skip all activity.
+      if (isOffDuty) return;
       // -------------------------------------------------------------
       // CASE A: FLOORS 1-4 MENTORING WALK TRIGGER
       // -------------------------------------------------------------
@@ -494,7 +551,7 @@ export function FloorScene({
               if (!current) return prev;
               return { ...prev, [randId]: { ...current, emotion: null, isWalking: false } };
             });
-          }, 4500);
+          }, 2000);
 
           // Phase 3: Spend time on Floor 5 being coached (8 seconds), then return
           setTimeout(() => {
@@ -544,7 +601,7 @@ export function FloorScene({
                   return { ...prev, [randId]: { ...current, emotion: null } };
                 });
               }, 3000);
-            }, 4500);
+            }, 2000);
 
           }, 12500);
           return; // skip other actions on this tick to prevent overlaps
@@ -604,7 +661,7 @@ export function FloorScene({
               });
               setVisitor((v) => (v ? { ...v, emotion: 'Upgraded! 🎓 +100XP' } : null));
               rewardXP(cand.id, 100);
-            }, 4500);
+            }, 2000);
 
             // Phase 5: Settle and walk back to elevator
             setTimeout(() => {
@@ -616,7 +673,7 @@ export function FloorScene({
               setVisitor(null);
             }, 12000);
 
-          }, 4600);
+          }, 2000);
           return;
         }
       }
@@ -662,7 +719,7 @@ export function FloorScene({
             ];
             const randQ = initialQuestions[Math.floor(Math.random() * initialQuestions.length)];
             setFounderVisitor((v) => (v ? { ...v, isWalking: false, emotion: randQ } : null));
-          }, 4600);
+          }, 2000);
           return;
         }
       }
@@ -746,7 +803,7 @@ export function FloorScene({
 
             // Phase 6: despawn at the elevator.
             setTimeout(() => setVisitor(null), 9600);
-          }, 4600);
+          }, 2000);
           return;
         }
       }
@@ -912,9 +969,9 @@ export function FloorScene({
                   });
                 }, 3000);
 
-              }, 9500); // 5000 + 4500 (walk back)
+              }, 7000); // 5000 conversation + 2000 walk back
 
-            }, 4500); // Walk to receiver desk
+            }, 2000); // Walk to receiver desk
 
             return; // skip other random actions on this tick
           }
@@ -1128,7 +1185,7 @@ export function FloorScene({
     }, 2200);
 
     return () => clearInterval(tick);
-  }, [employees, presentIds, taskBadges, floor, threatLevel, mentoringIds, visitor]);
+  }, [employees, presentIds, taskBadges, floor, threatLevel, mentoringIds, visitor, isOffDuty]);
 
 
   return (
@@ -1536,6 +1593,21 @@ export function FloorScene({
           </text>
         </g>
 
+        {/* Exit door on the left wall — employees walk here to head home off-duty. */}
+        <g>
+          <rect x="4" y="196" width="34" height="84" rx="2" fill="#1E293B" stroke="#475569" strokeWidth="1.5" />
+          <rect x="8" y="202" width="26" height="78" rx="1.5" fill="#0F172A" stroke="#334155" strokeWidth="1" />
+          {/* Door seam + handle */}
+          <line x1="21" y1="204" x2="21" y2="278" stroke="#334155" strokeWidth="1" strokeDasharray="2 3" />
+          <circle cx="17" cy="240" r="1.6" fill="#CBD5E1" />
+          <circle cx="25" cy="240" r="1.6" fill="#CBD5E1" />
+          {/* Illuminated EXIT sign */}
+          <rect x="6" y="182" width="30" height="11" rx="2" fill="#052e16" stroke="#16a34a" strokeWidth="1" />
+          <text x="21" y="190.5" textAnchor="middle" fill="#4ade80" fontSize="7" fontWeight="700" letterSpacing="0.5">
+            EXIT
+          </text>
+        </g>
+
         {/* Floor 4 threat indicator */}
         {floor === 4 && (
           <g>
@@ -1550,7 +1622,7 @@ export function FloorScene({
       {/* Employees layered over the SVG (HTML for crisp text + click). */}
       <div className="archco-employee-layer">
         {employees.map((emp) => {
-          const present = presentIds.has(emp.id);
+          const present = presentIds.has(emp.id) && !leftForDay.has(emp.id);
           const badge = taskBadges[emp.id];
           const state = empStates[emp.id];
           const x = state ? state.x : Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
