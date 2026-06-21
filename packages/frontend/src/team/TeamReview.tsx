@@ -6,7 +6,7 @@
  * level on Floor 4 reflects the current diagnostics.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Diagnostic, Severity } from '@archlab/shared';
 import { ArchCo } from './archco/ArchCo.js';
 import type { ThreatLevel } from './archco/FloorScene.js';
@@ -99,8 +99,49 @@ export function deriveThreatLevel(diagnostics: Diagnostic[] = []): ThreatLevel {
   return 'green';
 }
 
+const QUEUE_SEVERITY_ORDER: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
+
+/**
+ * The company's consolidated fix plan: every queued item, sorted by priority and
+ * stamped with the employee ArchCo assigned it to, framed as a single delegation
+ * prompt a coding agent can execute on the company's behalf.
+ */
+function buildCompanyMasterPrompt(queue: ReviewQueueItem[]): string {
+  // Re-derive which employee owns each item so the prompt names the assignee
+  // (mirrors buildTaskBadges' round-robin assignment).
+  const ownerById: Record<string, string> = {};
+  const assignedCount: Record<string, number> = {};
+  for (const item of queue) {
+    const candidates = EMPLOYEES.filter((e) => matchesSpecialization(item.type, e.specialization));
+    const pool = candidates.length > 0 ? candidates : EMPLOYEES;
+    const chosen = pool.reduce((best, e) =>
+      (assignedCount[e.id] ?? 0) < (assignedCount[best.id] ?? 0) ? e : best,
+    );
+    assignedCount[chosen.id] = (assignedCount[chosen.id] ?? 0) + 1;
+    ownerById[item.id] = chosen.name;
+  }
+
+  const sorted = [...queue].sort(
+    (a, b) => QUEUE_SEVERITY_ORDER.indexOf(a.severity) - QUEUE_SEVERITY_ORDER.indexOf(b.severity),
+  );
+  const lines: string[] = [];
+  lines.push(
+    'You are executing the fix plan delegated by ArchCo, the engineering company managing this project.',
+    'Implement every item below with minimal, well-scoped changes, in priority order (critical first). Preserve existing behavior and follow the project conventions. Note any follow-up tests.',
+    '',
+    '## Fix plan',
+  );
+  sorted.forEach((item, i) => {
+    lines.push(`${i + 1}. [${item.severity.toUpperCase()}] ${item.title}`);
+    lines.push(`   - Area: ${item.type}`);
+    if (ownerById[item.id]) lines.push(`   - Owner: ${ownerById[item.id]}`);
+  });
+  return lines.join('\n');
+}
+
 export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewProps) {
   const [localQueue, setLocalQueue] = useState<ReviewQueueItem[]>(session?.queue ?? []);
+  const [copiedMaster, setCopiedMaster] = useState(false);
 
   useEffect(() => {
     if (session?.queue) {
@@ -108,7 +149,10 @@ export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewPro
     }
   }, [session?.queue]);
 
-  const handleRunTeamReview = () => {
+  // Build the queue from the live diagnostics. `allowMocks` only applies to the
+  // empty-state "Run Team Review" demo; Sync Diagnostics always mirrors reality,
+  // so syncing with zero diagnostics clears the queue instead of injecting fakes.
+  const populateQueue = (allowMocks: boolean) => {
     if (diagnostics.length > 0) {
       const mapped = diagnostics.map((d) => ({
         id: d.id,
@@ -117,18 +161,42 @@ export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewPro
         title: d.title,
       }));
       setLocalQueue(mapped);
-    } else {
-      const mocks: ReviewQueueItem[] = [
+    } else if (allowMocks) {
+      setLocalQueue([
         { id: 'mock-1', type: 'security', severity: 'critical', title: 'Verify public S3 write permissions' },
         { id: 'mock-2', type: 'performance', severity: 'bottleneck', title: 'Optimize database connection pool' },
         { id: 'mock-3', type: 'api', severity: 'medium', title: 'Audit auth middleware token validation' },
         { id: 'mock-4', type: 'frontend', severity: 'low', title: 'Refactor layout bundle chunk size' },
-      ];
-      setLocalQueue(mocks);
+      ]);
+    } else {
+      setLocalQueue([]);
     }
   };
 
   const queue = localQueue;
+
+  // Stable identities: buildTaskBadges / deriveThreatLevel run on every render
+  // otherwise, and their churn re-created the `presentIds` set inside ArchCo,
+  // resetting the floor each render. Memoizing keeps the office stable.
+  const taskBadges = useMemo(() => buildTaskBadges(queue), [queue]);
+  const threatLevel = useMemo(() => deriveThreatLevel(diagnostics), [diagnostics]);
+  // Surface each assigned employee's current item as their recent-work history.
+  const recentTasksByEmployee = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const [empId, badge] of Object.entries(taskBadges)) map[empId] = [badge.label];
+    return map;
+  }, [taskBadges]);
+
+  const copyMasterPrompt = async () => {
+    if (queue.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(buildCompanyMasterPrompt(queue));
+      setCopiedMaster(true);
+      setTimeout(() => setCopiedMaster(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
 
   return (
     <div className="team-review-overlay" onClick={onClose}>
@@ -136,21 +204,32 @@ export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewPro
         <ArchCo
           tokenBudget={session?.tokenBudget ?? 5000}
           tokensUsed={session?.tokensUsed ?? 0}
-          taskBadges={buildTaskBadges(queue)}
-          threatLevel={deriveThreatLevel(diagnostics)}
+          taskBadges={taskBadges}
+          threatLevel={threatLevel}
+          recentTasksByEmployee={recentTasksByEmployee}
         />
 
         <section className="team-review-queue">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
             <h3 className="team-review-queue-title" style={{ margin: 0 }}>Review Queue · {queue.length}</h3>
             {queue.length > 0 && (
-              <button 
-                className="btn btn-sm" 
-                onClick={handleRunTeamReview}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)' }}
-              >
-                Sync Diagnostics
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={copyMasterPrompt}
+                  title="Copy the company's consolidated fix plan as one prompt"
+                >
+                  {copiedMaster ? 'Copied ✓' : '⚡ Master Fix Prompt'}
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => populateQueue(false)}
+                  title="Rebuild the queue from the current diagnostics"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)' }}
+                >
+                  Sync Diagnostics
+                </button>
+              </div>
             )}
           </div>
           {queue.length === 0 ? (
@@ -158,9 +237,9 @@ export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewPro
               <p className="archco-muted">
                 No items queued. Run a Team Review to populate the company.
               </p>
-              <button 
-                className="btn" 
-                onClick={handleRunTeamReview}
+              <button
+                className="btn"
+                onClick={() => populateQueue(true)}
                 style={{ background: '#4f46e5', color: '#ffffff', padding: '6px 16px', borderRadius: '4px' }}
               >
                 ▶ Run Team Review
