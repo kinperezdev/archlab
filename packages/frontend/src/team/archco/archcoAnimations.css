@@ -683,6 +683,11 @@
   animation: archco-popup 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
   z-index: 999;
 }
+/* Raised variant: lifts a responder's bubble so two people talking stack
+   their bubbles instead of covering each other. */
+.archco-emotion-bubble.raised {
+  margin-bottom: 34px;
+}
 .archco-emotion-bubble::after {
   content: '';
   position: absolute;

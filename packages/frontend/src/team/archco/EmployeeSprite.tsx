@@ -108,12 +108,10 @@ export function EmployeeSprite({
   const acc = accessoryRects(employee.accessory);
 
   const inner = [
-    // desk shadow
+    // soft contact shadow under the person
     `<ellipse cx="8" cy="19" rx="6" ry="1.2" fill="#000000" opacity="0.35"/>`,
-    // office chair back-rest (behind employee)
-    `<rect x="3" y="9.5" width="10" height="9" rx="2.5" fill="#1E293B" stroke="#0F172A" strokeWidth="0.8"/>`,
-    `<rect x="7" y="16.5" width="2" height="3" fill="#0F172A"/>`,
-    // body / torso
+    // body / torso (the chair lives at the desk in the scene, not on the sprite,
+    // so people don't "carry" a chair around as they walk)
     `<rect x="4" y="11" width="8" height="7" rx="1.5" fill="${body}"/>`,
     // clothing detail: white collar and red tie
     `<polygon points="7,11 9,11 8,13" fill="#FFFFFF"/>`,
