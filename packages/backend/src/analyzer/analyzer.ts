@@ -49,8 +49,10 @@ export function readProjectReadme(root: string): string | null {
 export function analyzeProject(rootPath: string): AnalysisResult {
   const scan = scanProject(rootPath);
   const { nodes: rawNodes, techStack, fileToNode } = classify(scan);
-  const positioned = layout(rawNodes);
-  const edges = detectEdges(scan.files, fileToNode, positioned);
+  // Detect edges first (it doesn't need positions) so the layout can use the
+  // parent→child relationships to build a left-to-right tree.
+  const edges = detectEdges(scan.files, fileToNode, rawNodes);
+  const positioned = layout(rawNodes, edges);
 
   const projectId = crypto.createHash('sha1').update(scan.root).digest('hex').slice(0, 12);
   const canvas: CanvasGraph = { nodes: positioned, edges };
