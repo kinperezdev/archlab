@@ -119,10 +119,10 @@
   background: #16161e;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 8px 12px;
-  min-width: 180px;
-  max-width: 280px;
-  min-height: 52px;
+  padding: 7px 11px;
+  min-width: 140px;
+  max-width: 188px;
+  min-height: 44px;
   box-sizing: border-box;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   color: var(--text-primary);
