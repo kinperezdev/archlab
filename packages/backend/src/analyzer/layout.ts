@@ -9,8 +9,8 @@
 
 import type { CanvasNode, CanvasEdge } from '@archlab/shared';
 
-const COL_WIDTH = 300; // horizontal gap between depth levels
-const ROW_GAP = 70; // vertical gap between sibling leaves (tight, mind-map style)
+const COL_WIDTH = 240; // horizontal gap between depth levels (short wires)
+const ROW_GAP = 56; // vertical gap between sibling leaves (tight, mind-map style)
 const LEFT = 80;
 const TOP = 80;
 

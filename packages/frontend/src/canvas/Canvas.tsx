@@ -277,6 +277,47 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     return { layoutNodes: laid, isolatedIds: new Set(isolated.map((n) => n.id)) };
   }, [filteredNodes, graph.edges]);
 
+  // Mind-map branch coloring: every top-level subtree (a direct child of a root
+  // and all its descendants) shares one color, so each whole branch reads as a
+  // single colored limb — like the reference mental-model diagram.
+  const branchColorById = useMemo(() => {
+    const childrenOf = new Map<string, string[]>();
+    const indeg = new Map<string, number>();
+    for (const n of graph.nodes) {
+      childrenOf.set(n.id, []);
+      indeg.set(n.id, 0);
+    }
+    for (const e of graph.edges) {
+      if (e.source === e.target || !childrenOf.has(e.source) || !indeg.has(e.target)) continue;
+      childrenOf.get(e.source)!.push(e.target);
+      indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
+    }
+    const roots = graph.nodes.filter((n) => (indeg.get(n.id) ?? 0) === 0).map((n) => n.id);
+    const PALETTE = [
+      '#34d399', '#60a5fa', '#fbbf24', '#c084fc', '#fb923c',
+      '#2dd4bf', '#f472b6', '#f87171', '#a3e635', '#818cf8',
+    ];
+    const color = new Map<string, string>();
+    const rootSet = new Set(roots);
+    let idx = 0;
+    const paint = (start: string, col: string) => {
+      const stack = [start];
+      while (stack.length) {
+        const id = stack.pop()!;
+        if (color.has(id)) continue;
+        color.set(id, col);
+        for (const c of childrenOf.get(id) ?? []) if (!rootSet.has(c) && !color.has(c)) stack.push(c);
+      }
+    };
+    for (const r of roots) {
+      for (const child of childrenOf.get(r) ?? []) {
+        if (color.has(child)) continue;
+        paint(child, PALETTE[idx++ % PALETTE.length]);
+      }
+    }
+    return color;
+  }, [graph.nodes, graph.edges]);
+
   // Detect each lane's entry point and every node's depth from it. Entry points
   // are matched by conventional filename first (main/index/app/server), with a
   // fallback to the node that imports the most and is imported the least.
@@ -414,6 +455,7 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           isolationReason: isIsolated ? isolationReasonFor(n.kind) : undefined,
           isEntry: entryIds.has(n.id),
           depth: depthByNode.get(n.id),
+          branchColor: branchColorById.get(n.id),
           // Backend nodes get explicit operation-labeled connector ports.
           ports: n.lane === 'backend' && !isIsolated ? portsFor(n.id, graph, degree) : undefined,
         },
@@ -424,7 +466,7 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     // filteredNodes is captured via structureKey and stable laneGroups to avoid
     // rebuilds on every animation frame; positions/ids are what actually matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structureKey, setNodes]);
+  }, [structureKey, branchColorById, setNodes]);
 
   // 1b. Patch live animation state onto the EXISTING nodes in place. This is
   //     what the pipeline drives: color/glow updates only, nodes stay mounted.
@@ -549,9 +591,10 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           direction: 'out',
         });
         const opColor = OPERATION_COLORS[operation];
-        // Mind-map branch color: tint each edge with its child node's kind color
-        // so branches read as colored limbs of the tree.
-        const branchColor = KIND_COLORS[target?.kind ?? 'unknown'] ?? opColor;
+        // Mind-map branch color: the whole subtree shares one color (fall back to
+        // the child's kind color for anything outside a tree branch).
+        const branchColor =
+          branchColorById.get(e.target) ?? KIND_COLORS[target?.kind ?? 'unknown'] ?? opColor;
 
         // Opacity: 0.5 at rest; when a node is active its edges go full 1.0 and
         // every other edge fades to 0.15 so the connection path pops.
@@ -592,7 +635,7 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
       });
 
     setEdges(nextEdges);
-  }, [graph.edges, filteredNodes, activeNodeId, hoveredEdgeId, selectedEdges, setEdges]);
+  }, [graph.edges, filteredNodes, activeNodeId, hoveredEdgeId, selectedEdges, branchColorById, setEdges]);
 
   // 4. Auto Arrange nodes back to their default layout positions
   const handleAutoArrange = () => {
@@ -614,6 +657,7 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           isolationReason: isIsolated ? isolationReasonFor(n.kind) : undefined,
           isEntry: entryIds.has(n.id),
           depth: depthByNode.get(n.id),
+          branchColor: branchColorById.get(n.id),
         },
       };
     });
