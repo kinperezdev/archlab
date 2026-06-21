@@ -49,6 +49,7 @@ export function ArchCo({
 }: ArchCoProps) {
   const [activeFloor, setActiveFloor] = useState<Floor>(2);
   const [timeState, setTimeState] = useState(getCurrentTimeState);
+  const [isOffDuty, setIsOffDuty] = useState(false);
   const [selected, setSelected] = useState<Employee | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedThought, setSelectedThought] = useState<string | null>(null);
@@ -73,10 +74,14 @@ export function ArchCo({
   }, [tokenState.burnRate]);
 
   const presentIds = useMemo(() => {
+    if (isOffDuty) {
+      // SREs stay on-call, everyone else takes off
+      return new Set(['jordan-lee', 'sam-rivera']);
+    }
     const base = getPresentEmployees(timeState, EMPLOYEES);
     const assigned = Object.keys(taskBadges);
     return new Set([...base, ...assigned]);
-  }, [timeState, taskBadges]);
+  }, [timeState, taskBadges, isOffDuty]);
 
   const config = FLOOR_CONFIGS[activeFloor];
 
@@ -146,6 +151,29 @@ export function ArchCo({
           }}
         >
           🤖 AI Update
+        </button>
+
+        <button
+          className="archco-ai-update-btn"
+          style={{
+            marginLeft: '8px',
+            background: isOffDuty 
+              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(245, 158, 11, 0.25) 100%)' 
+              : 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%)',
+            borderColor: isOffDuty ? 'rgba(239, 68, 68, 0.6)' : 'rgba(16, 185, 129, 0.6)',
+            color: isOffDuty ? '#EF4444' : '#34D399',
+            boxShadow: isOffDuty 
+              ? '0 0 12px rgba(239, 68, 68, 0.2)' 
+              : '0 0 12px rgba(16, 185, 129, 0.2)',
+            textShadow: isOffDuty
+              ? '0 0 8px rgba(239, 68, 68, 0.3)'
+              : '0 0 8px rgba(16, 185, 129, 0.3)',
+          }}
+          onClick={() => {
+            setIsOffDuty(!isOffDuty);
+          }}
+        >
+          {isOffDuty ? '🏖️ On Time-Off' : '💼 Go Off-Duty'}
         </button>
 
         <div className="archco-clock">
