@@ -43,7 +43,6 @@ import type { InfraNode as InfraNodeT, InfraEdge } from '@archlab/shared';
 const nodeTypes = { infra: InfraNode };
 
 export type TabMode = 'visual' | 'guide' | 'enterprise';
-type Mode = 'detected' | 'design';
 
 interface SystemDesignProps {
   infra: SystemDesignMap | null;
@@ -1129,7 +1128,7 @@ interface Ghost {
 let designCounter = Date.now();
 const nextDesignId = () => `sd_${designCounter++}`;
 
-function DesignModeInner() {
+export function DesignModeInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<InfraNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loaded, setLoaded] = useState(false);

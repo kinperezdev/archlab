@@ -43,7 +43,16 @@ try {
 } catch {
   // Ignore env loading errors
 }
-import { learnFromProject, loadBrain } from './brain/brainStore.js';
+import {
+  learnFromProject,
+  loadBrain,
+  addWikiEntry,
+  getWikiEntries,
+  searchWiki,
+  loadArchcoGrowth,
+  saveArchcoGrowth,
+  type WikiEntry,
+} from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
 import { runAgentTeam, abortAgentTeam } from './agents/runner.js';
 import { listAgentRuns } from './agents/store.js';
@@ -294,6 +303,59 @@ app.post('/system-design', (req, res) => {
   try {
     fs.mkdirSync(path.dirname(SYSTEM_DESIGN_FILE), { recursive: true });
     fs.writeFileSync(SYSTEM_DESIGN_FILE, JSON.stringify({ nodes, edges }, null, 2), 'utf8');
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// ---- ArchCo Company Wiki + employee growth state ---------------------------
+
+app.get('/brain/archco-wiki', (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  const project = typeof req.query.project === 'string' ? req.query.project : undefined;
+  try {
+    const entries = q ? searchWiki(q) : getWikiEntries(project);
+    return res.json(entries);
+  } catch {
+    return res.json([]);
+  }
+});
+
+app.post('/brain/archco-wiki', (req, res) => {
+  const body = req.body ?? {};
+  if (!body.projectName || !body.decision) {
+    return res.status(400).json({ ok: false, error: 'projectName and decision are required' });
+  }
+  const entry: WikiEntry = {
+    id: typeof body.id === 'string' ? body.id : `wiki_${crypto.randomUUID()}`,
+    projectName: String(body.projectName),
+    decision: String(body.decision),
+    madeBy: Array.isArray(body.madeBy) ? body.madeBy.map(String) : [],
+    rationale: String(body.rationale ?? ''),
+    outcome: body.outcome ? String(body.outcome) : undefined,
+    tags: Array.isArray(body.tags) ? body.tags.map(String) : [],
+    createdAt: typeof body.createdAt === 'number' ? body.createdAt : Date.now(),
+  };
+  try {
+    const entries = addWikiEntry(entry);
+    return res.json(entries);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get('/brain/archco-growth', (_req, res) => {
+  try {
+    return res.json(loadArchcoGrowth());
+  } catch {
+    return res.json({});
+  }
+});
+
+app.put('/brain/archco-growth', (req, res) => {
+  try {
+    saveArchcoGrowth(req.body ?? {});
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });

@@ -15,6 +15,8 @@ interface TopBarProps {
   onOpenKeys: () => void;
   onOpenAgentTeam: () => void;
   agentTeamActive: boolean;
+  onOpenTeamReview: () => void;
+  teamReviewActive: boolean;
   tab: ArchTab;
   onTabChange: (tab: ArchTab) => void;
 }
@@ -28,6 +30,7 @@ const TABS: { id: ArchTab; label: string }[] = [
   { id: 'security', label: 'Security' },
   { id: 'systemdesign', label: 'System Design' },
   { id: 'blueprint', label: 'Blueprint' },
+  { id: 'docs', label: 'Docs' },
 ];
 
 const SPRING = { type: 'spring', stiffness: 400, damping: 30 } as const;
@@ -52,6 +55,8 @@ export function TopBar({
   onOpenKeys,
   onOpenAgentTeam,
   agentTeamActive,
+  onOpenTeamReview,
+  teamReviewActive,
   tab,
   onTabChange,
 }: TopBarProps) {
@@ -118,6 +123,15 @@ export function TopBar({
           title="Open the Agent Team panel"
         >
           ⬡ Agent Team
+        </motion.button>
+        <motion.button
+          className={`tb-btn ${teamReviewActive ? 'active' : ''}`}
+          onClick={onOpenTeamReview}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          title="Open ArchCo Team Review"
+        >
+          👥 ArchCo
         </motion.button>
         <motion.button
           className="tb-btn"
