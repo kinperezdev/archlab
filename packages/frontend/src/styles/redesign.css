@@ -212,6 +212,16 @@
 .kind-mcp { --node-color: var(--kind-mcp); }
 .kind-unknown { --node-color: var(--kind-unknown); }
 
+/* Mind-map pill nodes: kind-colored border + rounder corners so each node reads
+   as a colored pill branching off the tree (matches the reference layout). */
+.arch-node {
+  border-radius: 12px;
+  border: 1.5px solid color-mix(in srgb, var(--node-color, #6366f1) 60%, transparent);
+}
+.arch-node .node-name { color: color-mix(in srgb, var(--node-color, #f8f8ff) 75%, #ffffff); }
+/* Wires are decorative only — never hover/click targets (nodes are). */
+.react-flow__edge { pointer-events: none; }
+
 /* Re-flatten per-kind node backgrounds (canvas.css tints them per kind). */
 .arch-node[class*="kind-"] { background: #16161e; }
 .arch-node.is-entry[class*="kind-"] { background: rgba(99, 102, 241, 0.08); }

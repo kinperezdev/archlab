@@ -549,6 +549,9 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           direction: 'out',
         });
         const opColor = OPERATION_COLORS[operation];
+        // Mind-map branch color: tint each edge with its child node's kind color
+        // so branches read as colored limbs of the tree.
+        const branchColor = KIND_COLORS[target?.kind ?? 'unknown'] ?? opColor;
 
         // Opacity: 0.5 at rest; when a node is active its edges go full 1.0 and
         // every other edge fades to 0.15 so the connection path pops.
@@ -571,15 +574,17 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           zIndex: 0,
           animated: e.animated || isActive,
           className: (e.animated || isActive) ? 'edge-flowing' : undefined,
+          // Wires are not hover/click targets — only nodes are interactive.
+          interactionWidth: 0,
           markerEnd: {
             type: MarkerType.ArrowClosed,
             width: 16,
             height: 16,
-            color: opColor,
+            color: branchColor,
           },
           style: {
             strokeWidth: isActive ? 3 : 1.5,
-            stroke: opColor,
+            stroke: branchColor,
             opacity,
             transition: 'stroke-width 0.15s ease, opacity 0.15s ease',
           },
