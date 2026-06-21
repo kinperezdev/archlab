@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Employee, Floor, HairStyle, Accessory } from './companyData.js';
 import { employeesOnFloor, EMPLOYEES } from './companyData.js';
 import { FLOOR_CONFIGS } from './floorLayouts.js';
@@ -229,7 +229,12 @@ export function FloorScene({
   aiUpgradeTrigger = 0,
 }: FloorSceneProps) {
   const config = FLOOR_CONFIGS[floor];
-  const employees = employeesOnFloor(floor);
+  // Stable per floor: employeesOnFloor() filters a fresh array each call, so we
+  // memoize it. Without this, every render produced a new array identity, which
+  // re-ran the position-init effect below and reset sprites to their desks (and
+  // wiped emotion bubbles) on every render — the "steady sprites" and the
+  // "rapid payroll bubble glitch" both trace back to that.
+  const employees = useMemo(() => employeesOnFloor(floor), [floor]);
   const lit = timeState.lightLevel;
 
   // Track dynamic state for walking/emotions
@@ -284,24 +289,29 @@ export function FloorScene({
       .catch(() => {});
   }, [floor]);
 
-  // Initialize employee positions on mount or list changes
+  // Seed positions for any employee on this floor that doesn't have a state yet,
+  // and drop states for employees no longer on the floor. Runs only when the
+  // floor's roster actually changes — never on every render — so live positions
+  // and emotion bubbles are preserved between ticks.
   useEffect(() => {
-    const initial: Record<string, EmpState> = {};
-    for (const emp of employees) {
-      initial[emp.id] = {
-        x: Math.min(emp.deskPosition.x, ELEVATOR_X - 60),
-        y: emp.deskPosition.y + 40,
-        isWalking: false,
-        flip: false,
-        emotion: null,
-      };
-    }
-    setEmpStates(initial);
-    // Reset visitor/mentoring when attendance changes
+    setEmpStates((prev) => {
+      const next: Record<string, EmpState> = {};
+      for (const emp of employees) {
+        next[emp.id] =
+          prev[emp.id] ?? {
+            x: Math.min(emp.deskPosition.x, ELEVATOR_X - 60),
+            y: emp.deskPosition.y + 40,
+            isWalking: false,
+            flip: false,
+            emotion: null,
+          };
+      }
+      return next;
+    });
     setVisitor(null);
     setFounderVisitor(null);
     setMentoringIds(new Set());
-  }, [employees, presentIds]);
+  }, [employees]);
 
   // Listen for payroll triggers to make present employees celebrate!
   useEffect(() => {
@@ -829,15 +839,17 @@ export function FloorScene({
           const randId = activeIds[Math.floor(Math.random() * activeIds.length)];
           const emp = employees.find((e) => e.id === randId)!;
           const defaultX = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
+          const defaultY = emp.deskPosition.y + 40;
 
           let chosenEmotion: string | null = null;
           let targetX = defaultX;
+          let targetY = defaultY;
 
           setEmpStates((prev) => {
             const current = prev[randId];
             if (!current) return prev;
 
-            const atDesk = Math.abs(current.x - defaultX) < 5;
+            const atDesk = Math.abs(current.x - defaultX) < 5 && Math.abs(current.y - defaultY) < 5;
 
             if (atDesk) {
               const roll = Math.random();
@@ -851,6 +863,8 @@ export function FloorScene({
                 targetX = 140 + Math.random() * 280; // random walk
                 chosenEmotion = "Brainstorming stretch... 💡";
               }
+              // Gentle vertical wander so they roam up/down, not only sideways.
+              targetY = Math.max(60, defaultY + (Math.random() * 80 - 40));
             }
 
             return {
@@ -858,7 +872,8 @@ export function FloorScene({
               [randId]: {
                 ...current,
                 x: targetX,
-                isWalking: targetX !== current.x,
+                y: targetY,
+                isWalking: targetX !== current.x || targetY !== current.y,
                 flip: targetX < current.x,
                 emotion: chosenEmotion || current.emotion,
               },
@@ -887,7 +902,8 @@ export function FloorScene({
                 [randId]: {
                   ...current,
                   x: defaultX,
-                  isWalking: defaultX !== current.x,
+                  y: defaultY,
+                  isWalking: defaultX !== current.x || defaultY !== current.y,
                   flip: defaultX < current.x,
                   emotion: headingBackEmotion,
                 },

@@ -113,6 +113,19 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequ
         <RunHistory team={team} />
       ) : (
         <div className="agent-list">
+          {!team.running &&
+            (() => {
+              const allFindings = AGENT_CATALOG.flatMap((a) => team.agents[a.id].findings);
+              if (allFindings.length === 0 && !team.report) return null;
+              return (
+                <MasterPrompt
+                  findings={allFindings}
+                  report={team.report ?? null}
+                  projectName={projectName}
+                />
+              );
+            })()}
+
           {AGENT_CATALOG.map((a) => {
             const st = team.agents[a.id];
             const lastRunAt = team.runs[0]?.at ?? null;
@@ -153,6 +166,102 @@ export function AgentTeam({ team, projectName, hasProject, onRun, onStop, onRequ
         </div>
       )}
     </aside>
+  );
+}
+
+const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
+
+/**
+ * Compile every agent finding plus the orchestrator report into one
+ * comprehensive, copy-paste prompt for a coding agent to execute the fixes.
+ */
+function buildMasterPrompt(
+  findings: AgentFinding[],
+  report: TeamReport | null,
+  projectName: string | null,
+): string {
+  const sorted = [...findings].sort(
+    (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity),
+  );
+  const lines: string[] = [];
+
+  lines.push(
+    `You are a senior engineer fixing the project${projectName ? ` "${projectName}"` : ''}.`,
+  );
+  lines.push(
+    'ArchLab\'s Agent Team analyzed the codebase and produced the findings below. Implement all of the fixes with minimal, well-scoped changes. Preserve existing behavior, follow the project\'s conventions, and work in priority order (critical → high → medium → low). If a finding is a false positive, say why and skip it.',
+  );
+
+  if (report?.summary) {
+    lines.push('', '## Summary', report.summary);
+  }
+
+  if (sorted.length > 0) {
+    lines.push('', '## Findings to fix');
+    sorted.forEach((f, i) => {
+      lines.push(`${i + 1}. [${f.severity.toUpperCase()}] ${f.title}`);
+      if (f.file) lines.push(`   - File: ${f.file}`);
+      if (f.description) lines.push(`   - Problem: ${f.description}`);
+      if (f.suggestedFix) lines.push(`   - Suggested fix: ${f.suggestedFix}`);
+      lines.push(`   - Found by: ${agentInfo(f.agentId).name}`);
+    });
+  }
+
+  const section = (title: string, items?: ReportItem[]) => {
+    if (!items || items.length === 0) return;
+    lines.push('', `## ${title}`);
+    items.forEach((it) =>
+      lines.push(`- ${it.title}${it.effort ? ` (${it.effort})` : ''}: ${it.detail}`),
+    );
+  };
+  if (report) {
+    section('Priority Actions', report.priorityActions);
+    section('Quick Wins', report.quickWins);
+  }
+
+  lines.push(
+    '',
+    '## Deliverable',
+    'For each fix: briefly explain the change, apply it, and note any follow-up tests to add. Group related edits and keep diffs reviewable.',
+  );
+
+  return lines.join('\n');
+}
+
+/** The consolidated "master fix prompt" card shown after a run completes. */
+function MasterPrompt({
+  findings,
+  report,
+  projectName,
+}: {
+  findings: AgentFinding[];
+  report: TeamReport | null;
+  projectName: string | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  const prompt = buildMasterPrompt(findings, report, projectName);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked; the text is still visible below */
+    }
+  };
+
+  return (
+    <div className="master-prompt">
+      <div className="master-prompt-head">
+        <span className="master-prompt-title">⚡ Master Fix Prompt</span>
+        <span className="master-prompt-sub">{findings.length} findings · ready to paste</span>
+        <button className="btn btn-primary master-prompt-copy" onClick={copy}>
+          {copied ? 'Copied ✓' : 'Copy'}
+        </button>
+      </div>
+      <pre className="master-prompt-body">{prompt}</pre>
+    </div>
   );
 }
 

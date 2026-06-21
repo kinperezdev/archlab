@@ -121,14 +121,25 @@ export function ArchCo({
               if (newLvl > emp.level) {
                 emp.level = newLvl;
               }
-              // Add a trending specialization
+              // Add a trending specialization (deduped, capped so repeated syncs
+              // don't grow the list unbounded).
               const newTrend = trends[Math.floor(Math.random() * trends.length)];
               if (!emp.specialization.includes(newTrend)) {
                 emp.specialization.push(newTrend);
+                if (emp.specialization.length > 8) emp.specialization.shift();
               }
-              // Update catchphrases and messages with latest news/trends
-              emp.catchphrases.unshift(`Did you study the latest ${newTrend} specs? 🤖`);
-              emp.ambientMessages.unshift(`studying latest ${newTrend} trends...`);
+              // Refresh catchphrases/messages with the latest trend, keeping only
+              // a few of the freshest so they never accumulate forever.
+              const phrase = `Did you study the latest ${newTrend} specs? 🤖`;
+              const ambient = `studying latest ${newTrend} trends...`;
+              if (emp.catchphrases[0] !== phrase) {
+                emp.catchphrases.unshift(phrase);
+                emp.catchphrases = emp.catchphrases.slice(0, 6);
+              }
+              if (emp.ambientMessages[0] !== ambient) {
+                emp.ambientMessages.unshift(ambient);
+                emp.ambientMessages = emp.ambientMessages.slice(0, 6);
+              }
             });
 
             // Persist upgraded growth state to backend
