@@ -421,7 +421,8 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const [pendingRename, setPendingRename] = useState<PendingRename | null>(null);
-  const [showEditor, setShowEditor] = useState(true);
+  const [showEditor, setShowEditor] = useState(false);
+  const [showWarnings, setShowWarnings] = useState(false);
   // Large-schema controls (only active when >50 tables are detected).
   const [search, setSearch] = useState('');
   const [dbFilter, setDbFilter] = useState<'all' | 'confirmed' | 'inferred' | 'related'>('all');
@@ -454,6 +455,9 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const circularWarning = useMemo(() => checkCircularDependencies(resolvedTables), [resolvedTables]);
   const validationErrors = useMemo(() => checkFkValidity(resolvedTables), [resolvedTables]);
   const typeMismatches = useMemo(() => checkFkTypeMismatches(resolvedTables), [resolvedTables]);
+  const totalIssues = useMemo(() => {
+    return (circularWarning ? 1 : 0) + validationErrors.length + typeMismatches.length;
+  }, [circularWarning, validationErrors, typeMismatches]);
 
   // Large-schema handling: above this many tables, the canvas filters/searches
   // instead of rendering everything at once.
@@ -712,6 +716,28 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
           <div className="db-editor-head">
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
               <h3>SQL Schema</h3>
+              {totalIssues > 0 && (
+                <button
+                  className="warning-toggle-badge"
+                  onClick={() => setShowWarnings(!showWarnings)}
+                  title={`${totalIssues} schema issues detected. Click to toggle list.`}
+                  style={{
+                    background: showWarnings ? '#ef4444' : '#f59e0b',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  ⚠️ {totalIssues} {showWarnings ? 'Hide' : 'Issues'}
+                </button>
+              )}
             </div>
             <div className="db-editor-actions">
               {hasInferred && (
@@ -739,7 +765,7 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
           </div>
 
           {/* Smart warnings overlay */}
-          {(circularWarning || validationErrors.length > 0 || typeMismatches.length > 0) && (
+          {showWarnings && (circularWarning || validationErrors.length > 0 || typeMismatches.length > 0) && (
             <div className="db-editor-warnings">
               {circularWarning && (
                 <div className="warning-item critical">

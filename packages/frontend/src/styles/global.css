@@ -645,8 +645,9 @@ body.is-resizing .app-shell {
   cursor: pointer;
   font-size: 10px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 12px;
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
 .sidebar-edge-toggle:hover {

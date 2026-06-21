@@ -6,6 +6,7 @@
  * level on Floor 4 reflects the current diagnostics.
  */
 
+import { useState, useEffect } from 'react';
 import type { Diagnostic, Severity } from '@archlab/shared';
 import { ArchCo } from './archco/ArchCo.js';
 import type { ThreatLevel } from './archco/FloorScene.js';
@@ -99,7 +100,36 @@ export function deriveThreatLevel(diagnostics: Diagnostic[] = []): ThreatLevel {
 }
 
 export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewProps) {
-  const queue = session?.queue ?? [];
+  const [localQueue, setLocalQueue] = useState<ReviewQueueItem[]>(session?.queue ?? []);
+
+  useEffect(() => {
+    if (session?.queue) {
+      setLocalQueue(session.queue);
+    }
+  }, [session?.queue]);
+
+  const handleRunTeamReview = () => {
+    if (diagnostics.length > 0) {
+      const mapped = diagnostics.map((d) => ({
+        id: d.id,
+        type: d.step || 'General',
+        severity: d.severity,
+        title: d.title,
+      }));
+      setLocalQueue(mapped);
+    } else {
+      const mocks: ReviewQueueItem[] = [
+        { id: 'mock-1', type: 'security', severity: 'critical', title: 'Verify public S3 write permissions' },
+        { id: 'mock-2', type: 'performance', severity: 'bottleneck', title: 'Optimize database connection pool' },
+        { id: 'mock-3', type: 'api', severity: 'medium', title: 'Audit auth middleware token validation' },
+        { id: 'mock-4', type: 'frontend', severity: 'low', title: 'Refactor layout bundle chunk size' },
+      ];
+      setLocalQueue(mocks);
+    }
+  };
+
+  const queue = localQueue;
+
   return (
     <div className="team-review-overlay" onClick={onClose}>
       <div className="team-review-panel" onClick={(e) => e.stopPropagation()}>
@@ -111,11 +141,31 @@ export function TeamReview({ session, diagnostics = [], onClose }: TeamReviewPro
         />
 
         <section className="team-review-queue">
-          <h3 className="team-review-queue-title">Review Queue · {queue.length}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+            <h3 className="team-review-queue-title" style={{ margin: 0 }}>Review Queue · {queue.length}</h3>
+            {queue.length > 0 && (
+              <button 
+                className="btn btn-sm" 
+                onClick={handleRunTeamReview}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)' }}
+              >
+                Sync Diagnostics
+              </button>
+            )}
+          </div>
           {queue.length === 0 ? (
-            <p className="archco-muted">
-              No items queued. Run a Team Review to populate the company.
-            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) 0' }}>
+              <p className="archco-muted">
+                No items queued. Run a Team Review to populate the company.
+              </p>
+              <button 
+                className="btn" 
+                onClick={handleRunTeamReview}
+                style={{ background: '#4f46e5', color: '#ffffff', padding: '6px 16px', borderRadius: '4px' }}
+              >
+                ▶ Run Team Review
+              </button>
+            </div>
           ) : (
             <ul className="team-review-queue-list">
               {queue.map((item) => (

@@ -42,6 +42,37 @@
 .archco-floor-pill.active {
   color: #0a0a0f;
 }
+.archco-ai-update-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #34D399;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+  width: auto;
+  height: auto;
+}
+.archco-ai-update-btn:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(59, 130, 246, 0.35) 100%);
+  border-color: rgba(16, 185, 129, 0.8);
+  color: #FFFFFF;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.4), 0 0 4px rgba(59, 130, 246, 0.3);
+}
+.archco-ai-update-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+}
 .archco-clock {
   display: flex;
   align-items: center;
@@ -85,7 +116,8 @@
 .archco-scene-wrap {
   position: relative;
   width: 100%;
-  height: 320px;
+  aspect-ratio: 720 / 320;
+  height: auto;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #1a1a2e;
@@ -140,14 +172,22 @@
   border: none;
   padding: 0;
   cursor: pointer;
+  transition: left 4s ease-in-out, top 4s ease-in-out;
 }
 .archco-employee-name {
   font-size: 9px;
-  color: #94a3b8;
+  color: #FFFFFF;
+  font-weight: 700;
   white-space: nowrap;
+  text-shadow: 
+    -1px -1px 0 #000000,  
+     1px -1px 0 #000000,
+    -1px  1px 0 #000000,
+     1px  1px 0 #000000,
+     0px 1px 2px rgba(0, 0, 0, 0.6);
 }
 .archco-employee:hover .archco-employee-name {
-  color: #e2e8f0;
+  color: #FDE047; /* Yellow highlight on hover */
 }
 .archco-task-badge {
   font-size: 10px;
@@ -162,12 +202,19 @@
 }
 .archco-sprite {
   image-rendering: pixelated;
+  transform-origin: bottom center;
+}
+.archco-sprite:not(.archco-sprite-working):not(.archco-sprite-absent) {
+  animation: archco-idle 3s ease-in-out infinite;
 }
 .archco-sprite-working {
-  animation: archco-type 0.9s steps(2) infinite;
+  animation: archco-type 0.3s ease-in-out infinite;
 }
 .archco-sprite-absent {
-  opacity: 0.5;
+  opacity: 0.45;
+}
+.archco-led-blink {
+  animation: archco-blink 1s steps(2) infinite;
 }
 
 /* Floor slide transition */
@@ -577,8 +624,14 @@
   50% { opacity: 0.25; }
 }
 @keyframes archco-type {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1px); }
+  0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+  25% { transform: translateY(-0.8px) scale(0.98, 1.02) rotate(-1.5deg); }
+  50% { transform: translateY(0.2px) scale(1.02, 0.98) rotate(1.5deg); }
+  75% { transform: translateY(-0.6px) scale(0.99, 1.01) rotate(-1deg); }
+}
+@keyframes archco-idle {
+  0%, 100% { transform: scale(1); }
+  55% { transform: scale(0.98, 1.02) translateY(0.3px); }
 }
 @keyframes archco-flash {
   0% { opacity: 0.6; }
@@ -595,4 +648,76 @@
 @keyframes archco-slide-right {
   from { transform: translateX(-24px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+@keyframes archco-walk-bob {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-4px) scaleY(1.05); }
+}
+@keyframes archco-popup {
+  from { transform: translateX(-50%) scale(0); opacity: 0; }
+  to { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+.archco-sprite-walking {
+  animation: archco-walk-bob 0.3s ease-in-out infinite;
+}
+
+/* Speech Balloon Bubble chat (Retro Sprite style with warm white bg, black border and tail) */
+.archco-emotion-bubble {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  border-radius: 6px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #000000;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.2);
+  animation: archco-popup 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  z-index: 999;
+}
+.archco-emotion-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid #000000;
+}
+.archco-emotion-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #FFFFFF;
+  z-index: 31;
+}
+
+/* Green founder coaching variant */
+.archco-emotion-bubble.founder-bubble {
+  background: #10B981;
+  border-color: #059669;
+  color: #FFFFFF;
+}
+.archco-emotion-bubble.founder-bubble::after {
+  border-top-color: #059669;
+}
+.archco-emotion-bubble.founder-bubble::before {
+  border-top-color: #10B981;
 }

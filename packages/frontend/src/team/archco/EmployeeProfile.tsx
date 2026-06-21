@@ -20,6 +20,8 @@ interface EmployeeProfileProps {
   employee: Employee;
   recentTasks?: string[];
   recentAchievements?: Achievement[];
+  currentStatus?: string;
+  currentThought?: string;
   onClose: () => void;
   onViewHistory?: (employeeId: string) => void;
 }
@@ -36,6 +38,8 @@ export function EmployeeProfile({
   employee,
   recentTasks = [],
   recentAchievements = [],
+  currentStatus,
+  currentThought,
   onClose,
   onViewHistory,
 }: EmployeeProfileProps) {
@@ -84,8 +88,33 @@ export function EmployeeProfile({
             <div className="archco-profile-stats">
               <Stat label="Tasks" value={employee.tasksCompleted.toLocaleString()} />
               <Stat label="Level" value={String(level)} />
-              <Stat label="Status" value={employee.status} />
+              <Stat label="Status" value={currentStatus || employee.status} />
             </div>
+
+            {currentThought && (
+              <Section title="Current Thought Process">
+                <div 
+                  className="archco-thought-bubble-profile"
+                  style={{
+                    background: 'rgba(30, 41, 59, 0.45)',
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '11px',
+                    fontStyle: 'italic',
+                    color: '#93C5FD',
+                    marginBottom: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  <span style={{ fontSize: '14px' }}>💭</span>
+                  <span>"{currentThought}"</span>
+                </div>
+              </Section>
+            )}
 
             <Section title="Specializations">
               <div className="archco-pill-row">

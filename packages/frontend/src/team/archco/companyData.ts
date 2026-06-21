@@ -17,7 +17,7 @@ export type Department =
   | 'qa'
   | 'finops';
 
-export type Floor = 1 | 2 | 3 | 4 | 5;
+export type Floor = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type HairStyle =
   | 'short'
