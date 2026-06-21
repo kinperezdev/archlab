@@ -32,6 +32,8 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [access, setAccess] = useState<BrainAccessStatus | null>(null);
   const [addMode, setAddMode] = useState<'form' | 'json'>('form');
+  // Category tabs so the panel shows one group at a time instead of one long scroll.
+  const [tab, setTab] = useState<'insights' | 'patterns' | 'connect' | 'security'>('insights');
   const [newMcp, setNewMcp] = useState({ name: '', command: '', args: '' });
   // Live brain snapshot fetched from the backend on open, so the panel never
   // shows only stale React state if a WebSocket "brain" message was missed.
@@ -170,6 +172,39 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
           <BrainSecurity access={access} onChange={setAccess} lockedView />
         ) : (
           <>
+        <nav className="brain-tabs" aria-label="Brain categories">
+          <button
+            className={`brain-tab ${tab === 'insights' ? 'active' : ''}`}
+            onClick={() => setTab('insights')}
+          >
+            Insights
+            {view.insights.length + persistentIssues.length > 0 && (
+              <span className="brain-tab-badge">{view.insights.length + persistentIssues.length}</span>
+            )}
+          </button>
+          <button
+            className={`brain-tab ${tab === 'patterns' ? 'active' : ''}`}
+            onClick={() => setTab('patterns')}
+          >
+            Patterns
+            {patterns.length > 0 && <span className="brain-tab-badge">{patterns.length}</span>}
+          </button>
+          <button
+            className={`brain-tab ${tab === 'connect' ? 'active' : ''}`}
+            onClick={() => setTab('connect')}
+          >
+            Connect &amp; Import
+          </button>
+          <button
+            className={`brain-tab ${tab === 'security' ? 'active' : ''}`}
+            onClick={() => setTab('security')}
+          >
+            Security
+          </button>
+        </nav>
+
+        {tab === 'insights' && (
+          <>
         <section className="brain-section">
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             Proactive insights
@@ -232,7 +267,10 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
             </ul>
           </section>
         )}
+          </>
+        )}
 
+        {tab === 'patterns' && (
         <section className="brain-section">
           <h3>Cross-project patterns</h3>
           {patterns.length === 0 ? (
@@ -251,8 +289,10 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
             </ul>
           )}
         </section>
+        )}
 
-        <section className="brain-section" style={{ borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-6)', marginTop: 'var(--space-6)' }}>
+        {tab === 'connect' && (
+        <section className="brain-section">
           <h3>Claude Desktop Connection & Import</h3>
           
           <div style={{ marginBottom: 'var(--space-6)' }}>
@@ -397,8 +437,9 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
             )}
           </div>
         </section>
+        )}
 
-        {access && <BrainSecurity access={access} onChange={setAccess} />}
+        {tab === 'security' && access && <BrainSecurity access={access} onChange={setAccess} />}
           </>
         )}
       </div>

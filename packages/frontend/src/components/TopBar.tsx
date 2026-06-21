@@ -1,168 +1,99 @@
-/** Top bar: gradient logo, project context, animated tab bar, status badges. */
+/** Top bar: wordmark, project context, breadcrumb, and compact utility cluster. */
 
-import { motion } from 'framer-motion';
+import { Bell } from 'lucide-react';
 import type { ArchTab } from '../App.js';
-import { TabIcon } from './TabIcon.js';
+import PlugConnectedIcon from './ui/plug-connected-icon.js';
 
 interface TopBarProps {
   connected: boolean;
   projectName: string;
   hasProject: boolean;
-  brainProjectCount: number;
-  analyzedAt: number | null;
-  onOpenBrain: () => void;
-  onOpenShortcuts: () => void;
-  onOpenKeys: () => void;
-  onOpenAgentTeam: () => void;
-  agentTeamActive: boolean;
-  onOpenTeamReview: () => void;
-  teamReviewActive: boolean;
   tab: ArchTab;
-  onTabChange: (tab: ArchTab) => void;
+  findingsCount: number;
+  hasApiKey: boolean;
+  onOpenKeys: () => void;
 }
 
-const TABS: { id: ArchTab; label: string }[] = [
-  { id: 'all', label: 'Full Flow' },
-  { id: 'frontend', label: 'Frontend' },
-  { id: 'backend', label: 'Backend' },
-  { id: 'database', label: 'Database' },
-  { id: 'api', label: 'API' },
-  { id: 'security', label: 'Security' },
-  { id: 'systemdesign', label: 'System Design' },
-  { id: 'blueprint', label: 'Blueprint' },
-  { id: 'docs', label: 'Docs' },
-];
-
-const SPRING = { type: 'spring', stiffness: 400, damping: 30 } as const;
-
-/** Compact local time stamp, e.g. "14:05:32". */
-function formatTime(epochMs: number): string {
-  return new Date(epochMs).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
+/** Breadcrumb metadata per tab: which section it lives in and its display name. */
+const TAB_META: Record<ArchTab, { section: string; label: string }> = {
+  all: { section: 'Canvas', label: 'Full Flow' },
+  frontend: { section: 'Canvas', label: 'Frontend' },
+  backend: { section: 'Canvas', label: 'Backend' },
+  api: { section: 'Canvas', label: 'API' },
+  security: { section: 'Canvas', label: 'Security' },
+  database: { section: 'Workspace', label: 'Database' },
+  systemdesign: { section: 'Workspace', label: 'System Design' },
+  blueprint: { section: 'Workspace', label: 'Blueprint' },
+  docs: { section: 'Workspace', label: 'Docs' },
+};
 
 export function TopBar({
   connected,
   projectName,
   hasProject,
-  brainProjectCount,
-  analyzedAt,
-  onOpenBrain,
-  onOpenShortcuts,
-  onOpenKeys,
-  onOpenAgentTeam,
-  agentTeamActive,
-  onOpenTeamReview,
-  teamReviewActive,
   tab,
-  onTabChange,
+  findingsCount,
+  hasApiKey,
+  onOpenKeys,
 }: TopBarProps) {
+  const meta = TAB_META[tab];
+
   return (
     <header className="tb">
-      {/* Left: logo + project context */}
+      {/* Left: project context (brand lives in the sidebar header) */}
       <div className="tb-left">
-        <span className="tb-logo-mark" aria-hidden="true" />
-        <span className="tb-logo-text">ArchLab</span>
         {hasProject && (
-          <>
-            <span className="tb-slash">/</span>
-            <span className="tb-project" title={projectName}>{projectName}</span>
-            {analyzedAt && (
-              <>
-                <span className="tb-dot" />
-                <span className="tb-timestamp" title="Time of the last analysis">
-                  {formatTime(analyzedAt)}
-                </span>
-              </>
-            )}
-          </>
+          <span className="tb-project" title={projectName}>
+            {projectName}
+          </span>
         )}
       </div>
 
-      {/* Middle: section tab selector */}
-      <div className="tb-tabs-wrapper">
-        <nav className="tb-tabs" aria-label="Sections">
-          {TABS.map((t) => {
-            const isActive = tab === t.id;
-            return (
-              <motion.button
-                key={t.id}
-                className={`tb-tab ${isActive ? 'active' : ''}`}
-                onClick={() => onTabChange(t.id)}
-                whileTap={{ scale: 0.97 }}
-              >
-                {isActive && (
-                  <motion.span
-                    className="tb-tab-bg"
-                    layoutId="tb-tab-indicator"
-                    transition={SPRING}
-                  />
-                )}
-                <span className="tb-tab-content">
-                  <TabIcon tab={t.id} />
-                  <span>{t.label}</span>
-                </span>
-              </motion.button>
-            );
-          })}
-        </nav>
+      {/* Center: breadcrumb for the active tab */}
+      <div className="tb-breadcrumb">
+        <span className="tb-crumb-section">{meta.section}</span>
+        <span className="tb-crumb-slash">/</span>
+        <span className="tb-crumb-current">{meta.label}</span>
       </div>
 
-      {/* Right: status indicators & utility buttons */}
+      {/* Right: connection, findings count, key status */}
       <div className="tb-right">
-        {hasProject && (
-          <>
-          </>
-        )}
-        <motion.button
-          className={`tb-btn tb-btn-accent ${agentTeamActive ? 'active' : ''}`}
-          onClick={onOpenAgentTeam}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          title="Open the Agent Team panel"
+        <span
+          className={`tb-conn ${connected ? 'on' : 'off'}`}
+          title={connected ? 'Connected to backend' : 'Disconnected'}
+          aria-label={connected ? 'Connected to backend' : 'Disconnected'}
+          role="img"
         >
-          ⬡ Agent Team
-        </motion.button>
-        <motion.button
-          className={`tb-btn ${teamReviewActive ? 'active' : ''}`}
-          onClick={onOpenTeamReview}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          title="Open ArchCo Team Review"
+          <PlugConnectedIcon
+            size={16}
+            strokeWidth={1.75}
+            color={connected ? 'var(--success)' : '#64748b'}
+          />
+        </span>
+        <span
+          className="tb-conn"
+          title={findingsCount > 0 ? `${findingsCount} findings` : 'No findings'}
+          aria-label={`${findingsCount} findings`}
+          role="img"
         >
-          👥 ArchCo
-        </motion.button>
-        <motion.button
-          className="tb-btn tb-btn-icon tb-brain-btn"
-          onClick={onOpenBrain}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          title={`Global Brain (${brainProjectCount} projects) · ${connected ? 'Connected' : 'Disconnected'}`}
-        >
-          <span className={`tb-dot-status ${connected ? 'on' : 'off'}`} />
-          <span>🧠</span>
-        </motion.button>
-        <motion.button
-          className="tb-btn tb-btn-icon"
-          onClick={onOpenShortcuts}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          title="Keyboard Shortcuts Guide"
-        >
-          ⌨
-        </motion.button>
-        <motion.button
-          className="tb-btn tb-btn-icon"
+          <Bell size={15} strokeWidth={1.75} aria-hidden="true" />
+          {findingsCount > 0 && <span className="tb-bell-badge">{findingsCount}</span>}
+        </span>
+
+        <span className="tb-divider" aria-hidden="true" />
+
+        <button
+          className="tb-key-status"
           onClick={onOpenKeys}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          title="Configure AI API Keys"
+          title={
+            hasApiKey
+              ? 'API key configured'
+              : `No API key configured${connected ? '' : ' · disconnected'}`
+          }
+          aria-label="API key status"
         >
-          🔑
-        </motion.button>
+          <span className={`tb-key-dot ${hasApiKey ? 'on' : 'off'}`} />
+        </button>
       </div>
     </header>
   );

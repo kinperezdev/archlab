@@ -38,7 +38,7 @@ function makeResizeHandler(current: number, set: (n: number) => void) {
 import type { PipelineStepId } from '@archlab/shared';
 import { PORTS } from '@archlab/shared';
 import { TopBar } from './components/TopBar.js';
-import { LeftSidebar } from './components/LeftSidebar.js';
+import { Sidebar } from './components/Sidebar.js';
 import { RightSidebar } from './components/RightSidebar.js';
 import { BottomPanel } from './components/BottomPanel.js';
 import { PipelineTags } from './components/PipelineTags.js';
@@ -282,31 +282,35 @@ export function App() {
     <ApiKeyContext.Provider value={apiKeyContextValue}>
     <div
       className="app-shell"
-      style={{ gridTemplateRows: `44px 1fr ${bottomCollapsed ? 0 : bottomHeight}px` }}
+      style={{ gridTemplateRows: `48px 1fr ${bottomCollapsed ? 0 : bottomHeight}px` }}
     >
       <TopBar
         connected={state.connected}
         projectName={state.projectName ?? ''}
         hasProject={Boolean(state.projectId)}
-        brainProjectCount={state.brain.projectCount}
-        analyzedAt={state.analyzedAt}
-        onOpenBrain={() => setBrainOpen(true)}
-        onOpenShortcuts={() => setShortcutsOpen(true)}
-        onOpenKeys={() => setApiKeysOpen(true)}
-        onOpenAgentTeam={() => setAgentTeamOpen((o) => !o)}
-        agentTeamActive={agentTeamOpen}
-        onOpenTeamReview={() => setTeamReviewOpen((o) => !o)}
-        teamReviewActive={teamReviewOpen}
         tab={tab}
-        onTabChange={setTab}
+        findingsCount={state.diagnostics.length}
+        hasApiKey={hasApiKey}
+        onOpenKeys={() => setApiKeysOpen(true)}
       />
 
       <div className="app-body">
-        {isCanvasTab && showLeftSidebar && (
-          <LeftSidebar
-            graph={state.canvas}
-            onSelectNode={handleSelectNode}
-            onCollapse={toggleLeftSidebar}
+        {showLeftSidebar && (
+          <Sidebar
+            tab={tab}
+            onTabChange={setTab}
+            projectName={state.projectName ?? ''}
+            hasProject={Boolean(state.projectId)}
+            analyzedAt={state.analyzedAt}
+            findingsCount={state.diagnostics.length}
+            isolatedCount={isolatedCount}
+            onOpenAgentTeam={() => setAgentTeamOpen((o) => !o)}
+            agentTeamActive={agentTeamOpen}
+            onOpenArchCo={() => setTeamReviewOpen((o) => !o)}
+            archcoActive={teamReviewOpen}
+            onOpenBrain={() => setBrainOpen(true)}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
+            onOpenKeys={() => setApiKeysOpen(true)}
           />
         )}
 
@@ -314,11 +318,11 @@ export function App() {
           {/* When a sidebar is collapsed, a slim reveal tab sits on the screen
               edge so the user can bring it back. These belong to the edges, not
               the canvas surface. */}
-          {isCanvasTab && !showLeftSidebar && (
+          {!showLeftSidebar && (
             <button
               className="panel-reveal-tab on-left"
               onClick={toggleLeftSidebar}
-              title="Show left sidebar (B)"
+              title="Show navigation (B)"
             >
               ▶
             </button>
@@ -352,8 +356,8 @@ export function App() {
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : (
             <ReactFlowProvider>
-              <div className="canvas-left-overlay">
-                {tab === 'security' && (
+              {tab === 'security' && (
+                <div className="canvas-left-overlay">
                   <div className="security-pipeline-overlay">
                     {/* Single flat row: ghost action buttons then the 7 step pills. */}
                     <div className="security-pipeline-actions">
@@ -403,25 +407,8 @@ export function App() {
                       onSelect={setSecurityStep}
                     />
                   </div>
-                )}
-
-                {/* Status: Findings & Isolated */}
-                <div className="flat-section">
-                  <span className="flat-section-title">Canvas Status</span>
-                  <div className="flat-status-list">
-                    <div className="flat-status-item" title="Diagnostics / architectural issues">
-                      <span className="flat-status-icon">⚠️</span>
-                      <span className="flat-status-label">Findings</span>
-                      <span className="flat-status-count">{state.diagnostics.length}</span>
-                    </div>
-                    <div className="flat-status-item" title="Nodes with no connections">
-                      <span className="flat-status-icon">📦</span>
-                      <span className="flat-status-label">Isolated</span>
-                      <span className="flat-status-count">{isolatedCount}</span>
-                    </div>
-                  </div>
                 </div>
-              </div>
+              )}
 
               {state.projectId && tab === 'security' && !agentTeamOpen && (
                 <button className="agent-team-promo" onClick={() => setAgentTeamOpen(true)}>

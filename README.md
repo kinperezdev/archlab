@@ -16,11 +16,12 @@ Everything runs on `localhost`. No code or intelligence ever leaves your machine
     *   **Visual Mode** — a live React Flow canvas of detected infrastructure nodes with a security overlay, gap-analysis suggestions, and a horizontal request journey.
     *   **Guide Mode** — a narrative architecture document with a scroll-spy table of contents and PDF export.
     *   **Enterprise Audit** — a glowing capability grid across 8 categories (Infrastructure, System Design Principles, API Security, Observability, Resilience, Data Architecture, Security Hardening, Deployment & Scale). Every card lights up live from detected infrastructure and pipeline findings (Detected / Partial / Missing / Critical Gap), with hover tooltips, an aggregated Enterprise Score ring, per-section breakdown bars, and a one-click PDF report.
-*   **Agent Team Integration** — Six specialized local AI agents (Security, Performance, Database, Code Quality, Architecture, and Orchestrator) loaded with project-specific brain context for inline audits. Configure your AI API keys directly from the **🔑 API Keys** button in the TopBar.
-*   **ArchCo Virtual Company** — A living, pixel-art engineering company of 25+ employees across five floors (Leadership, Engineering, Product & Design, Security & QA, Executive Suite) with a real-time day/night cycle that controls lighting and who is present. Open it from the **👥 ArchCo** TopBar button: review-queue items are assigned to employees by specialization, a token monitor (Fran on Floor 1) tracks the session burn rate, the Security floor reflects live threat level, clickable employee profiles show XP/level/specializations, and a Company Wiki on Floor 5 holds institutional memory of past decisions.
+*   **Command Center Shell** — A clean enterprise-dark layout with a permanent left navigation sidebar grouped into **Canvas** (Full Flow, Frontend, Backend, API, Security), **Workspace** (Database, System Design, Blueprint, Docs), **Tools** (Agent Team, ArchCo, Brain), and **Settings** (Shortcuts, API Keys). A 48px top bar shows the project name, a live breadcrumb of the active surface, a backend connection indicator, a findings count, and the API-key status dot.
+*   **Agent Team Integration** — Six specialized local AI agents (Security, Performance, Database, Code Quality, Architecture, and Orchestrator) loaded with project-specific brain context for inline audits. Configure your AI API keys from the **API Keys** item in the sidebar's **Settings** group.
+*   **ArchCo Virtual Company** — A living, pixel-art engineering company of 25+ employees across five floors (Leadership, Engineering, Product & Design, Security & QA, Executive Suite) with a real-time day/night cycle that controls lighting and who is present. Open it from the **ArchCo** item in the sidebar's **Tools** group: review-queue items are assigned to employees by specialization, a token monitor (Fran on Floor 1) tracks the session burn rate, the Security floor reflects live threat level, clickable employee profiles show XP/level/specializations, and a Company Wiki on Floor 5 holds institutional memory of past decisions.
 *   **Engineering Docs Knowledge Base** — A fully offline, searchable reference under the **Docs** tab covering System Design, API Design, Security, Databases, Infrastructure, Observability, Architecture Patterns, Mobile, DevOps, and Code Quality. Every article is written at senior-interview depth with prose sections, real-world company examples, runnable code in multiple languages, and hand-authored SVG diagrams. No network calls.
 *   **Interactive PTY Terminal** — Built-in pseudo-terminal (xterm.js) that persists shell sessions across browser reloads, supporting drag-and-drop file uploads. Terminal sessions automatically start inside the current active project directory displayed on the canvas.
-*   **Local MCP Server** — Exposes your aggregated project brain to external MCP-aware AI code tools (like Claude Code) via a stdio server.
+*   **Local MCP Server** — Exposes your aggregated project brain to external MCP-aware AI code tools (like Claude Code) via a stdio server. Open **Tools → Brain** in the sidebar to inspect it, organized into tabbed categories (Insights, Patterns, Connect & Import, Security) so you can jump straight to what you need.
 
 ---
 
@@ -46,7 +47,7 @@ npm install
 ```
 
 ### 2. Configure AI API Keys
-Click the **🔑 API Keys** button in the top navigation bar of the web app to paste and save your **Anthropic (Claude)**, **OpenAI**, or **Gemini** keys. Keys are saved locally inside `brain/api_keys.json` and loaded into the backend immediately without server restarts.
+Open **Settings → API Keys** in the left sidebar of the web app to paste and save your **Anthropic (Claude)**, **OpenAI**, or **Gemini** keys. Keys are saved locally inside `brain/api_keys.json` and loaded into the backend immediately without server restarts.
 
 ### 3. Start the Stack
 
