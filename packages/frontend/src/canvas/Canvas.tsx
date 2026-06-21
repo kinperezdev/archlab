@@ -631,8 +631,10 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
-            fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
-            minZoom={0.4}
+            /* Allow zooming far out so a wide horizontal graph fits on screen
+               (a high minZoom left big graphs off-screen, looking blank). */
+            fitViewOptions={{ maxZoom: 1, minZoom: 0.05 }}
+            minZoom={0.08}
             /* Drop per-node focus/elevation overhead so panning large graphs
                stays smooth. (onlyRenderVisibleElements is intentionally NOT set:
                our nodes are CSS-measured, and it can hide unmeasured nodes.) */

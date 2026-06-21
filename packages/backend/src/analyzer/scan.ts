@@ -36,8 +36,10 @@ const IGNORED_DIRS = new Set([
   'DerivedData', // Xcode build output
 ]);
 
-/** How many files we map onto the canvas (kept readable on screen). */
-const MAX_FILES = 5000;
+/** How many files we map onto the canvas. Capped so React Flow stays responsive
+ *  and doesn't freeze/crash the tab; the scanner prioritizes the most meaningful
+ *  source files when a project exceeds this. */
+const MAX_FILES = 1500;
 /** Upper bound on paths we'll enumerate before prioritizing (safety valve). */
 const MAX_WALK = 80_000;
 /** Only read content for files smaller than this (bytes) for heuristics. */

@@ -919,7 +919,7 @@ async function handleAnalyze(
   // Large projects are fine: the scanner self-caps (see scanProject's MAX_FILES)
   // and skips oversized files, so analysis stays bounded and never hangs. For
   // very large trees we map the first slice and tell the user — without bailing.
-  const SCAN_CAP = 5000; // keep in sync with scanProject MAX_FILES
+  const SCAN_CAP = 1500; // keep in sync with scanProject MAX_FILES
   const fileCount = countProjectFiles(rootPath, SCAN_CAP + 1);
   if (fileCount > SCAN_CAP) {
     const message = `Large project detected (${fileCount}+ files). Mapping the first ${SCAN_CAP} files; cd into a specific subfolder for a tighter view.`;
