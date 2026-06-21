@@ -88,5 +88,7 @@ export function getPresentEmployees(timeState: TimeState, allEmployees: Employee
 
 /** Format the clock as HH:MM for the office display. */
 export function formatClock(t: TimeState): string {
-  return `${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`;
+  const displayHour = t.hour % 12 || 12;
+  const ampm = t.hour >= 12 ? 'PM' : 'AM';
+  return `${String(displayHour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')} ${ampm}`;
 }
