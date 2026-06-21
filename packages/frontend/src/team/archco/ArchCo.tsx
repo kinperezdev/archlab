@@ -223,7 +223,7 @@ export function ArchCo({
 
         <div className="archco-clock">
           <span className="archco-daynight" aria-hidden="true">
-            {timeState.timeOfDay === 'day' || timeState.timeOfDay === 'dawn' ? '☀️' : '🌙'}
+            {timeState.hour >= 6 && timeState.hour < 18 ? '☀️' : '🌙'}
           </span>
           <span className="archco-time">{formatClock(timeState)}</span>
           <span className="archco-day">{timeState.dayOfWeek.slice(0, 3)}</span>
