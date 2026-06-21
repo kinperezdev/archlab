@@ -50,6 +50,8 @@ export function ArchCo({
   const [activeFloor, setActiveFloor] = useState<Floor>(2);
   const [timeState, setTimeState] = useState(getCurrentTimeState);
   const [isOffDuty, setIsOffDuty] = useState(false);
+  const [payrollTrigger, setPayrollTrigger] = useState(0);
+  const [aiUpgradeTrigger, setAiUpgradeTrigger] = useState(0);
   const [selected, setSelected] = useState<Employee | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedThought, setSelectedThought] = useState<string | null>(null);
@@ -148,6 +150,7 @@ export function ArchCo({
             });
 
             alert('🤖 AI Brain Sync Complete!\nAll employee brains updated with the latest tech news, AI logic trends, and custom specialization stats (+150 XP rewarded).');
+            setAiUpgradeTrigger((prev) => prev + 1);
           }}
         >
           🤖 AI Update
@@ -212,6 +215,7 @@ export function ArchCo({
               saveGrowthState(updated);
             });
             alert('💸 Payroll Sent!\nDistributed salaries and weekend double-pay bonuses to all employees. Team satisfaction +100%! (+50 XP rewarded) 💰');
+            setPayrollTrigger((prev) => prev + 1);
           }}
         >
           💵 Pay Payroll
@@ -244,6 +248,8 @@ export function ArchCo({
               setSelectedStatus(status || null);
               setSelectedThought(thought || null);
             }}
+            payrollTrigger={payrollTrigger}
+            aiUpgradeTrigger={aiUpgradeTrigger}
           />
         </div>
 
