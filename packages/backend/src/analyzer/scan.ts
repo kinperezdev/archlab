@@ -36,8 +36,10 @@ const IGNORED_DIRS = new Set([
   'DerivedData', // Xcode build output
 ]);
 
-/** Hard cap so a pathological repo can never hang the scan. */
+/** How many files we map onto the canvas (kept readable on screen). */
 const MAX_FILES = 5000;
+/** Upper bound on paths we'll enumerate before prioritizing (safety valve). */
+const MAX_WALK = 80_000;
 /** Only read content for files smaller than this (bytes) for heuristics. */
 const MAX_READ_BYTES = 200_000;
 
@@ -97,10 +99,17 @@ export function scanProject(root: string): ScanResult {
     throw new Error(`Not a directory: ${absRoot}`);
   }
 
-  const files: ScannedFile[] = [];
+  // Phase 1: enumerate candidate paths cheaply (no content reads), so a huge
+  // monorepo doesn't blow up memory. Bounded by MAX_WALK as a safety valve.
+  interface Candidate {
+    absPath: string;
+    relPath: string;
+    name: string;
+    ext: string;
+  }
+  const candidates: Candidate[] = [];
   const stack: string[] = [absRoot];
-
-  while (stack.length > 0 && files.length < MAX_FILES) {
+  while (stack.length > 0 && candidates.length < MAX_WALK) {
     const dir = stack.pop()!;
     let entries: fs.Dirent[];
     try {
@@ -108,7 +117,6 @@ export function scanProject(root: string): ScanResult {
     } catch {
       continue; // Unreadable directory: skip rather than crash.
     }
-
     for (const entry of entries) {
       if (entry.isDirectory()) {
         if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
@@ -117,24 +125,36 @@ export function scanProject(root: string): ScanResult {
         continue;
       }
       if (!entry.isFile()) continue;
-
       const absPath = path.join(dir, entry.name);
       const relPath = path.relative(absRoot, absPath).split(path.sep).join('/');
-      const ext = path.extname(entry.name).toLowerCase();
-
-      let content = '';
-      try {
-        const stat = fs.statSync(absPath);
-        if (stat.size <= MAX_READ_BYTES && (isTextExt(ext) || isAlwaysReadFile(entry.name))) {
-          content = fs.readFileSync(absPath, 'utf8');
-        }
-      } catch {
-        // Ignore unreadable file content; keep the node, drop the text.
-      }
-
-      files.push({ absPath, relPath, ext, content });
+      candidates.push({ absPath, relPath, name: entry.name, ext: path.extname(entry.name).toLowerCase() });
     }
   }
+
+  // Phase 2: when over the canvas cap, prioritize the most meaningful files —
+  // source code first, then known config/manifest files, then everything else;
+  // within a tier prefer shallower paths so top-level structure wins.
+  if (candidates.length > MAX_FILES) {
+    const tier = (c: Candidate): number =>
+      isTextExt(c.ext) ? 0 : isAlwaysReadFile(c.name) ? 1 : 2;
+    const depth = (c: Candidate): number => c.relPath.split('/').length;
+    candidates.sort((a, b) => tier(a) - tier(b) || depth(a) - depth(b) || a.relPath.localeCompare(b.relPath));
+    candidates.length = MAX_FILES;
+  }
+
+  // Phase 3: read content only for the selected, reasonably-sized text files.
+  const files: ScannedFile[] = candidates.map((c) => {
+    let content = '';
+    try {
+      const stat = fs.statSync(c.absPath);
+      if (stat.size <= MAX_READ_BYTES && (isTextExt(c.ext) || isAlwaysReadFile(c.name))) {
+        content = fs.readFileSync(c.absPath, 'utf8');
+      }
+    } catch {
+      // Ignore unreadable file content; keep the node, drop the text.
+    }
+    return { absPath: c.absPath, relPath: c.relPath, ext: c.ext, content };
+  });
 
   return { root: absRoot, name: path.basename(absRoot), files };
 }
