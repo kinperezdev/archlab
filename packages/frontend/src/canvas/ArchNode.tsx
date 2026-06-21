@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type CSSProperties } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { NodeKind, NodeAnimationState } from '@archlab/shared';
 
@@ -40,6 +40,8 @@ export interface ArchNodeData {
   isEntry?: boolean;
   /** Depth from the nearest entry point (entry = 0). Undefined if unreachable. */
   depth?: number;
+  /** Mind-map branch color shared by the whole subtree (overrides kind color). */
+  branchColor?: string;
 }
 
 interface DbColumn {
@@ -131,6 +133,7 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
       } ${data.isBottleneck ? 'is-bottleneck' : ''} ${data.isIsolated ? 'is-isolated' : ''} ${
         data.isEntry ? 'is-entry' : ''
       }`}
+      style={data.branchColor ? ({ ['--node-color']: data.branchColor } as CSSProperties) : undefined}
       title={data.isBottleneck ? data.bottleneckHint ?? data.bottleneckType : data.filePath ?? data.label}
     >
       <Handle type="target" position={Position.Left} />
