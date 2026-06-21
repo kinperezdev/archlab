@@ -75,8 +75,8 @@ export function ArchCo({
 
   const presentIds = useMemo(() => {
     if (isOffDuty) {
-      // SREs stay on-call, everyone else takes off
-      return new Set(['jordan-lee', 'sam-rivera']);
+      // Everyone takes time off (empty office)
+      return new Set<string>();
     }
     const base = getPresentEmployees(timeState, EMPLOYEES);
     const assigned = Object.keys(taskBadges);
@@ -174,6 +174,47 @@ export function ArchCo({
           }}
         >
           {isOffDuty ? '🏖️ On Time-Off' : '💼 Go Off-Duty'}
+        </button>
+
+        <button
+          className="archco-ai-update-btn"
+          style={{
+            marginLeft: '8px',
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(16, 185, 129, 0.25) 100%)',
+            borderColor: 'rgba(245, 158, 11, 0.6)',
+            color: '#F59E0B',
+            boxShadow: '0 0 12px rgba(245, 158, 11, 0.2)',
+            textShadow: '0 0 8px rgba(245, 158, 11, 0.3)',
+          }}
+          onClick={() => {
+            EMPLOYEES.forEach((emp) => {
+              emp.xp += 50;
+              const newLvl = levelForXp(emp.xp);
+              if (newLvl > emp.level) {
+                emp.level = newLvl;
+              }
+            });
+            // Persist upgraded growth state
+            loadGrowthState().then((current) => {
+              const updated = { ...current };
+              EMPLOYEES.forEach((emp) => {
+                updated[emp.id] = {
+                  employeeId: emp.id,
+                  level: emp.level,
+                  xp: emp.xp,
+                  xpToNextLevel: emp.xpToNextLevel,
+                  tasksCompleted: emp.tasksCompleted,
+                  specializations: emp.specialization,
+                  unlockedAbilities: [],
+                  recentAchievements: [],
+                };
+              });
+              saveGrowthState(updated);
+            });
+            alert('💸 Payroll Sent!\nDistributed salaries and weekend double-pay bonuses to all employees. Team satisfaction +100%! (+50 XP rewarded) 💰');
+          }}
+        >
+          💵 Pay Payroll
         </button>
 
         <div className="archco-clock">
