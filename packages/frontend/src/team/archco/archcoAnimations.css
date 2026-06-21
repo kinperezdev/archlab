@@ -1,0 +1,598 @@
+/* ArchCo — virtual company styles and animations. */
+
+.archco-root {
+  --archco-accent: #6366f1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  color: #e2e8f0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  background: #0a0a0f;
+}
+
+/* Top bar: floor selector + clock */
+.archco-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1a1a2e;
+}
+.archco-floor-pills {
+  display: flex;
+  gap: 6px;
+}
+.archco-floor-pill {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #26263a;
+  background: #12121c;
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease;
+}
+.archco-floor-pill:hover {
+  transform: translateY(-2px);
+  color: #e2e8f0;
+}
+.archco-floor-pill.active {
+  color: #0a0a0f;
+}
+.archco-clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.archco-time {
+  font-size: 18px;
+  font-weight: 700;
+}
+.archco-day {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.archco-floor-meta {
+  padding: 8px 16px 4px;
+}
+.archco-floor-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--archco-accent);
+}
+.archco-floor-desc {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Stage */
+.archco-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 16px 0;
+}
+.archco-scene-wrap {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #1a1a2e;
+}
+.archco-scene-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.archco-light-overlay {
+  position: absolute;
+  inset: 0;
+  background: #00010a;
+  pointer-events: none;
+  transition: opacity 600ms ease;
+  z-index: 2;
+}
+.archco-threat-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.archco-threat-tint.threat-green {
+  background: transparent;
+}
+.archco-threat-tint.threat-yellow {
+  background: rgba(251, 191, 36, 0.08);
+}
+.archco-threat-tint.threat-red {
+  background: rgba(248, 113, 113, 0.12);
+}
+.archco-threat-tint.threat-flashing {
+  background: rgba(248, 113, 113, 0.18);
+  animation: archco-flash 0.8s steps(2) infinite;
+}
+
+/* Employees */
+.archco-employee-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+.archco-employee {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.archco-employee-name {
+  font-size: 9px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.archco-employee:hover .archco-employee-name {
+  color: #e2e8f0;
+}
+.archco-task-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  border: 1px solid;
+  white-space: nowrap;
+  margin-bottom: 1px;
+}
+.archco-task-badge.pulsing {
+  animation: archco-pulse 1.6s ease-in-out infinite;
+}
+.archco-sprite {
+  image-rendering: pixelated;
+}
+.archco-sprite-working {
+  animation: archco-type 0.9s steps(2) infinite;
+}
+.archco-sprite-absent {
+  opacity: 0.5;
+}
+
+/* Floor slide transition */
+.archco-slide {
+  width: 100%;
+}
+.archco-slide.slide-left {
+  animation: archco-slide-left 280ms ease;
+}
+.archco-slide.slide-right {
+  animation: archco-slide-right 280ms ease;
+}
+
+/* Token bar */
+.archco-token-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #0b0b14;
+  border: 1px solid #1a1a2e;
+}
+.archco-token-fran {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.archco-alert-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.archco-alert-light.slow {
+  animation: archco-blink 1.4s ease-in-out infinite;
+}
+.archco-alert-light.fast {
+  animation: archco-blink 0.5s ease-in-out infinite;
+}
+.archco-alert-light.dead {
+  opacity: 0.3;
+}
+.archco-token-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 700;
+}
+.archco-token-numbers {
+  display: flex;
+  flex-direction: column;
+}
+.archco-token-remaining {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.archco-token-unit {
+  font-size: 10px;
+  color: #64748b;
+}
+.archco-token-graph {
+  border-radius: 4px;
+}
+.archco-token-message {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* Wiki */
+.archco-wiki-panel {
+  margin-top: 10px;
+  max-height: 240px;
+  overflow: auto;
+}
+.archco-wiki-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.archco-wiki-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--archco-accent);
+}
+.archco-wiki-bubble {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+}
+.archco-wiki-search {
+  width: 100%;
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #26263a;
+  background: #12121c;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+.archco-wiki-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.archco-wiki-entry {
+  padding: 10px;
+  border-radius: 8px;
+  background: #0f0f17;
+  border: 1px solid #1a1a2e;
+}
+.archco-wiki-entry-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+.archco-wiki-date {
+  color: #64748b;
+  font-size: 11px;
+}
+.archco-wiki-decision {
+  margin: 4px 0;
+  font-size: 13px;
+}
+.archco-wiki-rationale {
+  margin: 2px 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.archco-wiki-outcome {
+  margin: 2px 0;
+  font-size: 12px;
+  color: #34d399;
+}
+.archco-wiki-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+/* Profile card */
+.archco-profile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  animation: archco-fade 160ms ease;
+}
+.archco-profile-card {
+  position: relative;
+  width: min(680px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  background: #0f0f1a;
+  border: 2px solid;
+  border-radius: 14px;
+  padding: 20px;
+}
+.archco-profile-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.archco-profile-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 18px;
+}
+.archco-profile-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+.archco-profile-sprite {
+  width: 110px;
+  height: 120px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.archco-profile-name {
+  margin: 6px 0 0;
+  font-size: 16px;
+}
+.archco-profile-role {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.archco-profile-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0a0a0f;
+}
+.archco-profile-dept {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: capitalize;
+}
+.archco-xp-row {
+  margin-bottom: 12px;
+}
+.archco-xp-text {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.archco-xp-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #1a1a2e;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.archco-xp-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 400ms ease;
+}
+.archco-profile-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.archco-stat {
+  flex: 1;
+  background: #12121c;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+.archco-stat-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+}
+.archco-stat-label {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+.archco-section {
+  margin-bottom: 12px;
+}
+.archco-section-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.archco-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.archco-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #1a1a2e;
+  color: #cbd5e1;
+}
+.archco-pill-ability {
+  background: #312e81;
+  color: #c7d2fe;
+}
+.archco-pill-achievement {
+  background: #14532d;
+  color: #bbf7d0;
+}
+.archco-pill-tag {
+  background: #1e293b;
+  color: #93c5fd;
+}
+.archco-activity {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.archco-profile-personality {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin: 0 0 6px;
+}
+.archco-catchphrases {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.archco-catchphrase {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+}
+.archco-history-btn {
+  margin-top: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #26263a;
+  background: #12121c;
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.archco-muted {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Team Review overlay (hosts ArchCo) */
+.team-review-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 45;
+  animation: archco-fade 160ms ease;
+}
+.team-review-panel {
+  width: min(900px, 94vw);
+  height: min(720px, 92vh);
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0f;
+  border: 1px solid #1a1a2e;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.team-review-queue {
+  padding: 10px 16px 14px;
+  overflow: auto;
+  border-top: 1px solid #1a1a2e;
+}
+.team-review-queue-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.team-review-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.team-review-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #0f0f17;
+  font-size: 12px;
+}
+.team-review-queue-sev {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  min-width: 64px;
+}
+.team-review-queue-item[data-sev='critical'] .team-review-queue-sev {
+  color: #f87171;
+}
+.team-review-queue-item[data-sev='high'] .team-review-queue-sev {
+  color: #fbbf24;
+}
+.team-review-queue-name {
+  flex: 1;
+  color: #e2e8f0;
+}
+.team-review-queue-type {
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* Keyframes */
+@keyframes archco-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.85; }
+}
+@keyframes archco-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+@keyframes archco-type {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+@keyframes archco-flash {
+  0% { opacity: 0.6; }
+  100% { opacity: 0.15; }
+}
+@keyframes archco-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes archco-slide-left {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes archco-slide-right {
+  from { transform: translateX(-24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}

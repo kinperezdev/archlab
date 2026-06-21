@@ -50,8 +50,10 @@ import { Canvas } from './canvas/Canvas.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
 import { SystemDesign, type TabMode } from './systemdesign/SystemDesign.js';
 import { AgentTeam } from './agents/AgentTeam.js';
+import { TeamReview } from './team/TeamReview.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
+import { Docs } from './docs/Docs.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 import { ApiKeysModal } from './components/ApiKeysModal.js';
 import { ApiKeyContext } from './state/apiKeyContext.js';
@@ -66,7 +68,8 @@ export type ArchTab =
   | 'api'
   | 'security'
   | 'systemdesign'
-  | 'blueprint';
+  | 'blueprint'
+  | 'docs';
 
 /** Tabs that render the architecture canvas (vs. the Database/Blueprint surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
@@ -103,6 +106,7 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
   const [agentTeamOpen, setAgentTeamOpen] = useState(false);
+  const [teamReviewOpen, setTeamReviewOpen] = useState(false);
   // Whether an Anthropic key is configured — drives Agent Team nudges in the
   // Enterprise Audit. Re-checked whenever the API Keys modal closes.
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -180,9 +184,9 @@ export function App() {
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         toggleBottom();
-      } else if (e.key >= '1' && e.key <= '8') {
+      } else if (e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint'];
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint', 'docs'];
         if (targetTabs[index]) {
           e.preventDefault();
           setTab(targetTabs[index]);
@@ -282,7 +286,7 @@ export function App() {
     >
       <TopBar
         connected={state.connected}
-        projectName={state.projectName}
+        projectName={state.projectName ?? ''}
         hasProject={Boolean(state.projectId)}
         brainProjectCount={state.brain.projectCount}
         analyzedAt={state.analyzedAt}
@@ -291,6 +295,8 @@ export function App() {
         onOpenKeys={() => setApiKeysOpen(true)}
         onOpenAgentTeam={() => setAgentTeamOpen((o) => !o)}
         agentTeamActive={agentTeamOpen}
+        onOpenTeamReview={() => setTeamReviewOpen((o) => !o)}
+        teamReviewActive={teamReviewOpen}
         tab={tab}
         onTabChange={setTab}
       />
@@ -340,6 +346,8 @@ export function App() {
             />
           ) : tab === 'blueprint' ? (
             <IdeasCanvas />
+          ) : tab === 'docs' ? (
+            <Docs hasApiKey={hasApiKey} />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : (
@@ -446,6 +454,13 @@ export function App() {
             </ReactFlowProvider>
           )}
         </main>
+
+        {teamReviewOpen && (
+          <TeamReview
+            diagnostics={state.diagnostics}
+            onClose={() => setTeamReviewOpen(false)}
+          />
+        )}
 
         {agentTeamOpen && (
           <AgentTeam

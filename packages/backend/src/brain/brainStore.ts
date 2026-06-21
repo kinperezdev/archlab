@@ -18,6 +18,75 @@ import type {
 } from '@archlab/shared';
 import { BRAIN_DIR, BRAIN_PROJECTS_DIR, BRAIN_STATE_FILE } from './paths.js';
 
+// ---- ArchCo: Company Wiki (institutional memory) ----------------------------
+
+export interface WikiEntry {
+  id: string;
+  projectName: string;
+  decision: string;
+  madeBy: string[]; // employee ids
+  rationale: string;
+  outcome?: string;
+  tags: string[];
+  createdAt: number;
+}
+
+const ARCHCO_WIKI_FILE = path.join(BRAIN_DIR, 'archco-wiki.json');
+const ARCHCO_GROWTH_FILE = path.join(BRAIN_DIR, 'archco-growth.json');
+
+function readJsonFile<T>(file: string, fallback: T): T {
+  try {
+    if (!fs.existsSync(file)) return fallback;
+    return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonFile(file: string, data: unknown): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmp, file);
+}
+
+/** Append a decision to the company wiki. Returns the full updated list. */
+export function addWikiEntry(entry: WikiEntry): WikiEntry[] {
+  const entries = readJsonFile<WikiEntry[]>(ARCHCO_WIKI_FILE, []);
+  const next = [entry, ...entries.filter((e) => e.id !== entry.id)];
+  writeJsonFile(ARCHCO_WIKI_FILE, next);
+  return next;
+}
+
+/** Read wiki entries, optionally filtered to a single project. */
+export function getWikiEntries(projectName?: string): WikiEntry[] {
+  const entries = readJsonFile<WikiEntry[]>(ARCHCO_WIKI_FILE, []);
+  if (!projectName) return entries;
+  return entries.filter((e) => e.projectName === projectName);
+}
+
+/** Full-text search across project, decision, rationale, outcome, and tags. */
+export function searchWiki(query: string): WikiEntry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return getWikiEntries();
+  return getWikiEntries().filter((e) =>
+    [e.projectName, e.decision, e.rationale, e.outcome ?? '', ...e.tags]
+      .join(' ')
+      .toLowerCase()
+      .includes(q),
+  );
+}
+
+/** Load the ArchCo per-employee growth state (XP, levels, achievements). */
+export function loadArchcoGrowth(): Record<string, unknown> {
+  return readJsonFile<Record<string, unknown>>(ARCHCO_GROWTH_FILE, {});
+}
+
+/** Persist the ArchCo per-employee growth state. */
+export function saveArchcoGrowth(growth: Record<string, unknown>): void {
+  writeJsonFile(ARCHCO_GROWTH_FILE, growth ?? {});
+}
+
 /** Create a fresh, empty brain. */
 function emptyBrain(): BrainState {
   return {
