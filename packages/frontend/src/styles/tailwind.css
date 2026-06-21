@@ -1,0 +1,4 @@
+/* Tailwind v4 entry. Imported before the hand-written stylesheets so the
+   class-based ArchLab CSS keeps winning over Tailwind's element-level preflight,
+   while Tailwind utilities remain available for shadcn-style components. */
+@import 'tailwindcss';

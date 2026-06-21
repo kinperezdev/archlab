@@ -85,6 +85,11 @@ function typeLabel(file: StagedFile): string {
 export function Terminal({ id, api }: TerminalProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const writeRef = useRef<((data: string) => void) | null>(null);
+  // Keep the latest api in a ref so the init effect can depend only on `id`.
+  // The api object identity changes whenever app state (e.g. projectPath) does;
+  // re-running the init effect would re-spawn the PTY and "restart" the terminal.
+  const apiRef = useRef(api);
+  apiRef.current = api;
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -93,6 +98,7 @@ export function Terminal({ id, api }: TerminalProps) {
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    const api = apiRef.current;
 
     // Spawn the backend PTY for this tab as soon as it mounts.
     api.createTerminal(id);
@@ -171,7 +177,9 @@ export function Terminal({ id, api }: TerminalProps) {
       term.dispose();
       writeRef.current = null;
     };
-  }, [api, id]);
+    // Mount once per session id; `api` is read through apiRef to avoid re-spawns.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // Type a staged item's path into the shell at the cursor.
   const insertPath = (file: StagedFile) => {
