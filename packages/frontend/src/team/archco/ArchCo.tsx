@@ -21,7 +21,7 @@ import { calculateTokenState, pushBurnSample } from './tokenMonitor.js';
 import { levelForXp, loadGrowthState, saveGrowthState } from './growthSystem.js';
 import { PORTS } from '@archlab/shared';
 import { runAIUpdate } from './aiUpdateRunner.js';
-import { detectAvailableProvider, PROVIDER_LABEL, type ProviderKeys } from './multiProviderAI.js';
+import { detectAvailableProvider, detectAvailableProviders, PROVIDER_LABEL, type ProviderKeys } from './multiProviderAI.js';
 import { initializeLivingData, getAllLivingData } from './employeeLivingStore.js';
 
 interface TaskBadge {
@@ -81,6 +81,7 @@ export function ArchCo({
   const [, setLivingTick] = useState(0);
 
   const providerConfig = useMemo(() => detectAvailableProvider(apiKeys), [apiKeys]);
+  const providerChain = useMemo(() => detectAvailableProviders(apiKeys), [apiKeys]);
 
   // Real-time clock + day/night refresh.
   useEffect(() => {
@@ -114,15 +115,16 @@ export function ArchCo({
     setAiUpdateStatus('updating');
     setAiUpdateProgress({ current: 0, total: EMPLOYEES.length });
     try {
-      await runAIUpdate(providerConfig, brainInsights, projectContext || 'No project loaded', (_id, status) => {
+      await runAIUpdate(providerChain, brainInsights, projectContext || 'No project loaded', (_id, status) => {
         if (status === 'done') setAiUpdateProgress((p) => ({ ...p, current: p.current + 1 }));
       });
       setLivingTick((t) => t + 1);
       setAiUpgradeTrigger((prev) => prev + 1);
       setAiUpdateStatus('complete');
       setTimeout(() => setAiUpdateStatus('idle'), 3000);
-    } catch {
+    } catch (err) {
       setAiUpdateStatus('error');
+      alert(`AI Update failed: ${err instanceof Error ? err.message : 'unknown error'}`);
       setTimeout(() => setAiUpdateStatus('idle'), 5000);
     }
   };
