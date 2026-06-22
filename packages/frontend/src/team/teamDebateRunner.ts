@@ -213,10 +213,38 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * same DebateMessage shape as runItemDebate, sourced from static engineering
  * best-practice guidance instead of a live model.
  */
+/** Primary domain owner for a category. */
+const CATEGORY_OWNER: Record<Category, string> = {
+  security: 'security',
+  database: 'backend',
+  api: 'backend',
+  performance: 'backend',
+  data: 'backend',
+  frontend: 'frontend',
+  accessibility: 'frontend',
+  reliability: 'sre',
+  devops: 'sre',
+  testing: 'sre',
+  general: 'backend',
+};
+
+/**
+ * Who reviews an item in docs mode. Always includes the category owner and the
+ * architect (so even a low-severity item is a real review, not a solo note),
+ * then widens with severity. The architect always speaks last.
+ */
+function docsParticipants(item: DebateItem, category: Category): string[] {
+  const ids = new Set<string>([CATEGORY_OWNER[category], ...participantsFor(item.severity), 'architect']);
+  const order = ['security', 'backend', 'sre', 'frontend', 'designer', 'pm', 'architect'];
+  return order.filter((id) => ids.has(id));
+}
+
 export async function* runItemReviewFromKnowledge(item: DebateItem): AsyncGenerator<DebateMessage> {
   const category = categorize(item);
-  const memberIds = participantsFor(item.severity);
-  const members = TEAM_MEMBERS.filter((m) => memberIds.includes(m.id));
+  const memberIds = docsParticipants(item, category);
+  const members = memberIds
+    .map((id) => TEAM_MEMBERS.find((m) => m.id === id))
+    .filter((m): m is (typeof TEAM_MEMBERS)[number] => Boolean(m));
 
   for (const member of members) {
     await sleep(200); // light pacing so it reads like a streaming discussion
