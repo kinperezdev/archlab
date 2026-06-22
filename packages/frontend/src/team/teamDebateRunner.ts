@@ -30,17 +30,18 @@ export interface DebateItem {
   type: string;
 }
 
-/** Which members join the debate, scaled by severity. */
+/** Which members join the debate, scaled by severity. Compliance always joins —
+ *  every item gets an enterprise-audit pass — and the architect speaks last. */
 function participantsFor(severity: DebateSeverity): string[] {
   switch (severity) {
     case 'critical':
-      return ['backend', 'security', 'sre', 'pm', 'frontend', 'designer', 'architect'];
+      return ['backend', 'security', 'sre', 'pm', 'frontend', 'designer', 'compliance', 'architect'];
     case 'high':
-      return ['backend', 'security', 'sre', 'architect'];
+      return ['backend', 'security', 'sre', 'compliance', 'architect'];
     case 'medium':
-      return ['backend', 'sre', 'architect'];
+      return ['backend', 'sre', 'compliance', 'architect'];
     default:
-      return ['architect'];
+      return ['compliance', 'architect'];
   }
 }
 
@@ -116,11 +117,13 @@ type Category =
   | 'accessibility'
   | 'devops'
   | 'data'
+  | 'compliance'
   | 'general';
 
 /** Map a free-form item type/title to a knowledge category. */
 function categorize(item: DebateItem): Category {
   const s = `${item.type} ${item.title}`.toLowerCase();
+  if (/compliance|audit|soc.?2|gdpr|hipaa|iso.?27001|pii|phi|retention|consent|privacy|data subject|dsar/.test(s)) return 'compliance';
   if (/secur|auth|secret|inject|xss|csrf|permission|access|owasp|vuln/.test(s)) return 'security';
   if (/\bdb\b|database|sql|query|schema|migration|postgres|index|orm/.test(s)) return 'database';
   if (/perf|bottleneck|slow|latency|n\+1|cache|memory|throughput/.test(s)) return 'performance';
@@ -190,6 +193,17 @@ const KNOWLEDGE: Record<string, Partial<Record<Category, string>> & { default: s
     frontend: 'Keep the change consistent with the design system tokens — no one-off spacing, radius, or color we have to maintain forever.',
     default: 'Keep it visually consistent with the system and make the affordances obvious.',
   },
+  // Nadia Hassan — Compliance & Governance Lead (audits every item)
+  compliance: {
+    compliance: 'Map this to the control it touches: SOC 2 (security/availability/confidentiality), GDPR (lawful basis, retention, DSAR), HIPAA (PHI safeguards), ISO 27001 (Annex A). Make sure the evidence is collectable for an auditor.',
+    security: 'For the audit trail: log who accessed what to an immutable, time-stamped store, tie it to an access-control policy (SOC 2 CC6 / ISO A.9), and confirm we can produce that evidence on request.',
+    database: 'Classify the data first. If it holds PII/PHI, confirm encryption at rest, a documented retention/deletion schedule, and support for data-subject export/erasure (GDPR Art.15/17, HIPAA).',
+    data: 'Document lawful basis and minimization for this data, gate PII/PHI behind access policy, and keep lineage so we can answer a DSAR or a HIPAA access request.',
+    api: 'Every state-changing endpoint needs an audit log entry (actor, action, timestamp) and least-privilege scopes — that is what SOC 2 and ISO 27001 evidence is built from.',
+    devops: 'Tie this to change management: approval, traceable deploy, and an audit log of who shipped what (SOC 2 CC8). Keep secrets in a vault with access logging.',
+    reliability: 'Availability is a SOC 2 criterion — make sure the SLO, backups, and incident records are documented as evidence, not just implemented.',
+    default: 'Capture this in change-management records and confirm it does not weaken any control we attest to (SOC 2 CC-series); keep an audit trail an auditor could follow.',
+  },
 };
 
 const ARCHITECT_DECISION: Record<Category, { action: string; prompt: (t: string) => string }> = {
@@ -203,6 +217,7 @@ const ARCHITECT_DECISION: Record<Category, { action: string; prompt: (t: string)
   devops: { action: 'Ship behind a flag with a progressive rollout and an automated rollback trigger.', prompt: (t) => `Fix "${t}" with a canary rollout behind a flag and an automated rollback on error spikes.` },
   data: { action: 'Validate the data/model contract, add drift checks, and gate on an offline eval.', prompt: (t) => `Fix "${t}" by validating the data contract and adding a drift/eval check before rollout.` },
   reliability: { action: 'Add retry/backoff + idempotency, an SLO-based alert, and a one-step rollback.', prompt: (t) => `Make "${t}" resilient with retry/backoff, an idempotency key, and an SLO alert.` },
+  compliance: { action: 'Map to the affected control (SOC 2 / GDPR / HIPAA / ISO 27001), add the audit log + retention policy, and make the evidence collectable.', prompt: (t) => `Fix "${t}" by adding an immutable audit trail, documenting data retention, and mapping it to the relevant SOC 2 / GDPR / HIPAA / ISO 27001 control.` },
   general: { action: 'Implement the targeted fix with input validation, tests, and a metric.', prompt: (t) => `Fix "${t}" with input validation, error handling, and a regression test.` },
 };
 
@@ -225,6 +240,7 @@ const CATEGORY_OWNER: Record<Category, string> = {
   reliability: 'sre',
   devops: 'sre',
   testing: 'sre',
+  compliance: 'compliance',
   general: 'backend',
 };
 
@@ -234,8 +250,9 @@ const CATEGORY_OWNER: Record<Category, string> = {
  * then widens with severity. The architect always speaks last.
  */
 function docsParticipants(item: DebateItem, category: Category): string[] {
-  const ids = new Set<string>([CATEGORY_OWNER[category], ...participantsFor(item.severity), 'architect']);
-  const order = ['security', 'backend', 'sre', 'frontend', 'designer', 'pm', 'architect'];
+  // Compliance always joins — everything gets an enterprise-audit pass.
+  const ids = new Set<string>([CATEGORY_OWNER[category], ...participantsFor(item.severity), 'compliance', 'architect']);
+  const order = ['security', 'backend', 'sre', 'frontend', 'designer', 'pm', 'compliance', 'architect'];
   return order.filter((id) => ids.has(id));
 }
 

@@ -62,6 +62,14 @@ export const TEAM_MEMBERS: TeamMember[] = [
     focusAreas: ['usability', 'information architecture', 'visual consistency'],
   },
   {
+    id: 'compliance',
+    name: 'Nadia Hassan',
+    role: 'Compliance & Governance Lead',
+    color: '#f59e0b',
+    personality: 'Thinks in controls and evidence; asks what an auditor would need to see.',
+    focusAreas: ['SOC 2', 'GDPR', 'HIPAA', 'ISO 27001', 'audit trails', 'data retention'],
+  },
+  {
     id: 'architect',
     name: 'Alex Chen',
     role: 'CTO / Architect',
