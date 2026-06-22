@@ -277,46 +277,29 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     return { layoutNodes: laid, isolatedIds: new Set(isolated.map((n) => n.id)) };
   }, [filteredNodes, graph.edges]);
 
-  // Mind-map branch coloring: every top-level subtree (a direct child of a root
-  // and all its descendants) shares one color, so each whole branch reads as a
-  // single colored limb — like the reference mental-model diagram.
+  // Mind-map branch coloring: every node in the same top-level folder shares one
+  // color, so each folder branch reads as a single colored limb — matching the
+  // folder-based left-to-right layout (like the reference mental-model diagram).
   const branchColorById = useMemo(() => {
-    const childrenOf = new Map<string, string[]>();
-    const indeg = new Map<string, number>();
-    for (const n of graph.nodes) {
-      childrenOf.set(n.id, []);
-      indeg.set(n.id, 0);
-    }
-    for (const e of graph.edges) {
-      if (e.source === e.target || !childrenOf.has(e.source) || !indeg.has(e.target)) continue;
-      childrenOf.get(e.source)!.push(e.target);
-      indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
-    }
-    const roots = graph.nodes.filter((n) => (indeg.get(n.id) ?? 0) === 0).map((n) => n.id);
     const PALETTE = [
       '#34d399', '#60a5fa', '#fbbf24', '#c084fc', '#fb923c',
       '#2dd4bf', '#f472b6', '#f87171', '#a3e635', '#818cf8',
     ];
-    const color = new Map<string, string>();
-    const rootSet = new Set(roots);
-    let idx = 0;
-    const paint = (start: string, col: string) => {
-      const stack = [start];
-      while (stack.length) {
-        const id = stack.pop()!;
-        if (color.has(id)) continue;
-        color.set(id, col);
-        for (const c of childrenOf.get(id) ?? []) if (!rootSet.has(c) && !color.has(c)) stack.push(c);
-      }
+    const topFolder = (n: { filePath?: string; label?: string; id: string }): string => {
+      const rel = (n.filePath ?? n.label ?? n.id).replace(/^\.?\//, '');
+      const segs = rel.split('/').filter(Boolean);
+      return segs.length > 1 ? segs[0] : '·root'; // top-level files share one group
     };
-    for (const r of roots) {
-      for (const child of childrenOf.get(r) ?? []) {
-        if (color.has(child)) continue;
-        paint(child, PALETTE[idx++ % PALETTE.length]);
-      }
+    const colorOfFolder = new Map<string, string>();
+    const color = new Map<string, string>();
+    let idx = 0;
+    for (const n of graph.nodes) {
+      const folder = topFolder(n);
+      if (!colorOfFolder.has(folder)) colorOfFolder.set(folder, PALETTE[idx++ % PALETTE.length]);
+      color.set(n.id, colorOfFolder.get(folder)!);
     }
     return color;
-  }, [graph.nodes, graph.edges]);
+  }, [graph.nodes]);
 
   // Detect each lane's entry point and every node's depth from it. Entry points
   // are matched by conventional filename first (main/index/app/server), with a

@@ -1,104 +1,96 @@
 /**
- * Layout pass — a left-to-right "mind map" tree.
+ * Layout pass — a left-to-right "mind map" built from the project's folder tree.
  *
- * The root(s) sit on the left and the graph branches rightward by depth, with
- * each node's children stacked vertically and the parent centered against them
- * (a tidy Reingold-Tilford-style layout). Large projects therefore grow to the
- * RIGHT as a readable tree instead of a dense grid you scroll through.
+ * The project root sits on the left and each folder level steps one column to the
+ * right (project -> folders -> files), with sibling files stacked vertically and
+ * each branch centered against its children. Using the directory hierarchy (not
+ * the dependency edges) guarantees a single, well-formed tree that reads cleanly
+ * left-to-right, instead of dozens of entry files stacking into one tall column.
  */
 
 import type { CanvasNode, CanvasEdge } from '@archlab/shared';
 
-const COL_WIDTH = 168; // horizontal gap between depth levels (compact)
-const ROW_GAP = 42; // vertical gap between sibling leaves (compact, mind-map style)
+const COL_WIDTH = 200; // horizontal gap between folder depth levels
+const ROW_GAP = 44; // vertical gap between sibling files
+const GROUP_GAP = 22; // extra gap between distinct folders
 const LEFT = 80;
 const TOP = 80;
 
-/** Mutate-free layout: returns new nodes positioned as a left-to-right tree. */
-export function layout(nodes: CanvasNode[], edges: CanvasEdge[] = []): CanvasNode[] {
+interface TrieNode {
+  children: Map<string, TrieNode>;
+  /** Set when an actual file node lives exactly at this path. */
+  nodeId?: string;
+  /** Computed vertical center. */
+  y?: number;
+}
+
+/** Mutate-free layout: positions nodes as a left-to-right folder tree. */
+export function layout(nodes: CanvasNode[], _edges: CanvasEdge[] = []): CanvasNode[] {
   if (nodes.length === 0) return nodes;
 
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const childrenOf = new Map<string, string[]>();
-  const indegree = new Map<string, number>();
-  for (const n of nodes) {
-    childrenOf.set(n.id, []);
-    indegree.set(n.id, 0);
-  }
-  for (const e of edges) {
-    if (e.source === e.target) continue;
-    if (!byId.has(e.source) || !byId.has(e.target)) continue;
-    childrenOf.get(e.source)!.push(e.target);
-    indegree.set(e.target, (indegree.get(e.target) ?? 0) + 1);
-  }
-
-  // Roots = nodes nothing points to. (Cyclic graph with no source falls back to
-  // the first node so we always have at least one tree to lay out.)
-  const roots = nodes.filter((n) => (indegree.get(n.id) ?? 0) === 0).map((n) => n.id);
-  if (roots.length === 0) roots.push(nodes[0].id);
-
-  // Build a spanning tree via BFS so each node has a single parent (graphs can
-  // have multiple parents and cycles; this keeps the tree well-formed).
-  const visited = new Set<string>();
-  const depth = new Map<string, number>();
-  const treeChildren = new Map<string, string[]>();
-  for (const n of nodes) treeChildren.set(n.id, []);
-  const queue: string[] = [];
-  const seedRoot = (id: string) => {
-    if (visited.has(id)) return;
-    visited.add(id);
-    depth.set(id, 0);
-    queue.push(id);
-  };
-  roots.forEach(seedRoot);
-  // Any node not reached from a real root becomes its own root (disconnected).
-  for (const n of nodes) if (!visited.has(n.id)) { roots.push(n.id); seedRoot(n.id); }
-
-  let head = 0;
-  while (head < queue.length) {
-    const id = queue[head++];
-    for (const c of childrenOf.get(id) ?? []) {
-      if (visited.has(c)) continue;
-      visited.add(c);
-      depth.set(c, (depth.get(id) ?? 0) + 1);
-      treeChildren.get(id)!.push(c);
-      queue.push(c);
-    }
+  // Build a trie keyed by path segments (folders), with files as leaves.
+  const root: TrieNode = { children: new Map() };
+  const depthOf = new Map<string, number>();
+  for (const node of nodes) {
+    const rel = (node.filePath ?? node.label ?? node.id).replace(/^\.?\//, '');
+    const segments = rel.split('/').filter(Boolean);
+    let cur = root;
+    segments.forEach((seg, i) => {
+      let next = cur.children.get(seg);
+      if (!next) {
+        next = { children: new Map() };
+        cur.children.set(seg, next);
+      }
+      cur = next;
+      if (i === segments.length - 1) cur.nodeId = node.id;
+    });
+    depthOf.set(node.id, Math.max(0, segments.length - 1));
   }
 
-  // Assign vertical slots: leaves get sequential rows; a parent centers on its
+  // Tidy vertical layout: leaves get sequential rows; a folder centers on its
   // children. Iterative post-order so deep trees can't overflow the stack.
-  const yPos = new Map<string, number>();
-  let leafCursor = 0;
-  for (const rootId of roots) {
-    const stack: Array<{ id: string; phase: 0 | 1 }> = [{ id: rootId, phase: 0 }];
+  const yById = new Map<string, number>();
+  let cursor = 0;
+  const place = (start: TrieNode) => {
+    const stack: Array<{ node: TrieNode; phase: 0 | 1 }> = [{ node: start, phase: 0 }];
     while (stack.length) {
       const frame = stack[stack.length - 1];
-      const kids = treeChildren.get(frame.id) ?? [];
+      const kids = [...frame.node.children.values()];
       if (frame.phase === 0) {
         frame.phase = 1;
-        if (kids.length === 0) {
-          yPos.set(frame.id, leafCursor * ROW_GAP);
-          leafCursor++;
+        // A file sitting directly at this path occupies its own row.
+        if (frame.node.nodeId !== undefined && kids.length === 0) {
+          frame.node.y = cursor * ROW_GAP;
+          yById.set(frame.node.nodeId, frame.node.y);
+          cursor++;
           stack.pop();
-        } else {
-          for (let i = kids.length - 1; i >= 0; i--) stack.push({ id: kids[i], phase: 0 });
+          continue;
         }
+        for (let i = kids.length - 1; i >= 0; i--) stack.push({ node: kids[i], phase: 0 });
       } else {
-        const first = yPos.get(kids[0])!;
-        const last = yPos.get(kids[kids.length - 1])!;
-        yPos.set(frame.id, (first + last) / 2);
+        if (kids.length > 0) {
+          const first = kids[0].y ?? cursor * ROW_GAP;
+          const last = kids[kids.length - 1].y ?? first;
+          frame.node.y = (first + last) / 2;
+          // A folder that ALSO has a file node at its path shares that center.
+          if (frame.node.nodeId !== undefined) yById.set(frame.node.nodeId, frame.node.y);
+        }
         stack.pop();
       }
     }
-    leafCursor++; // a blank row between separate root trees
+  };
+
+  // Lay out each top-level folder/file as its own group with a gap between them.
+  for (const child of root.children.values()) {
+    place(child);
+    cursor += GROUP_GAP / ROW_GAP + 1; // blank space between top-level branches
   }
 
   return nodes.map((n) => ({
     ...n,
     position: {
-      x: LEFT + (depth.get(n.id) ?? 0) * COL_WIDTH,
-      y: TOP + (yPos.get(n.id) ?? 0),
+      x: LEFT + (depthOf.get(n.id) ?? 0) * COL_WIDTH,
+      y: TOP + (yById.get(n.id) ?? 0),
     },
   }));
 }
