@@ -1,12 +1,20 @@
 /**
- * Pixel-art employee sprite, rendered as an inline SVG built from rects.
+ * Pixel-art employee sprite.
  *
- * One sprite = head + hair + body + optional accessory, all driven by the
- * employee's palette fields. Scales cleanly because everything is vector rects
- * on an integer grid. Status drives a subtle CSS animation class.
+ * Render priority:
+ *   1. If the employee has a dedicated sprite sheet, load the first extracted SVG
+ *      from the registry (pixel-perfect art, transparent bg).
+ *   2. Otherwise, fall back to the procedural rect-based SVG (palette-driven).
+ *
+ * Props are identical in both modes; the sheet path is resolved automatically.
  */
 
 import type { Employee, HairStyle, Accessory } from './companyData.js';
+import {
+  getEmployeeSprites,
+  spriteUrl,
+  type SpriteEntry,
+} from './sprites/registry/spriteCoordinates.js';
 
 interface EmployeeSpriteProps {
   employee: Employee;
@@ -112,6 +120,35 @@ export function EmployeeSprite({
       </svg>
     );
   }
+
+  // ── Sheet-based render: use the real pixel-art sprite if available ──────────
+  const sheetSprites = getEmployeeSprites(employee.id);
+  if (sheetSprites) {
+    // Pick the idle/base sprite (index 0 = standing pose)
+    const entries = Object.values(sheetSprites) as SpriteEntry[];
+    const base = entries.find((e) => e.index === 0) ?? entries[0];
+    if (base) {
+      const url = spriteUrl(base);
+      // Scale to match the requested height while preserving aspect ratio
+      const aspectH = h * 2; // sprites are taller than the 16x20 grid; double for legibility
+      const aspectW = Math.round((base.size.w / base.size.h) * aspectH);
+      return (
+        <img
+          src={url}
+          width={aspectW}
+          height={aspectH}
+          alt={`${employee.name}, ${employee.role}`}
+          className={`archco-sprite archco-sprite-${anim}`}
+          style={{
+            imageRendering: 'pixelated',
+            transform: flip ? 'scaleX(-1)' : undefined,
+          }}
+        />
+      );
+    }
+  }
+
+  // ── Procedural rect-based fallback ─────────────────────────────────────────
 
   const skin = employee.skinTone;
   const body = employee.color;

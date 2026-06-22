@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { EMPLOYEES } from './companyData.js';
 import { EmployeeSprite } from './EmployeeSprite.js';
 import { getWeather, type TimeState } from './timeSystem.js';
+import buildingExteriorUrl from './sprites/svgs/building_exterior.svg?url';
 
 const SCENE_W = 720;
 const SCENE_H = 320;
@@ -78,7 +79,6 @@ export function OutsideScene({
   const h = timeState.hour;
   const isNight = h < 6 || h >= 19;
   const isEvening = !isNight && (h < 8 || h >= 17);
-  const litWindows = isNight || isEvening;
 
   // Direction depends on duty/time: people arrive in the morning/day and leave
   // in the evening, at night, or when the office goes off-duty.
@@ -246,30 +246,18 @@ export function OutsideScene({
 
         {/* Building facade */}
         <g>
-          <rect x="40" y="60" width="244" height="146" fill={isNight ? '#1e293b' : '#334155'} stroke="#0f172a" strokeWidth="2" />
-          <rect x="98" y="48" width="128" height="16" rx="3" fill="#0f172a" stroke="#6366f1" strokeWidth="1" />
-          <text x="162" y="60" textAnchor="middle" fill="#818cf8" fontSize="11" fontWeight="800" letterSpacing="2">
-            ARCHCO
-          </text>
-          {[...Array(3)].map((_, row) =>
-            [...Array(6)].map((_, col) => {
-              const lit = litWindows && (row + col) % 2 === 0;
-              return (
-                <rect
-                  key={`${row}-${col}`}
-                  x={54 + col * 37}
-                  y={74 + row * 32}
-                  width="25"
-                  height="21"
-                  rx="1.5"
-                  fill={lit ? '#fde68a' : isNight ? '#0f172a' : '#7dd3fc'}
-                  stroke="#0f172a"
-                  strokeWidth="1"
-                  opacity={lit ? 0.95 : 0.8}
-                />
-              );
-            }),
-          )}
+          {/* ArchCo HQ exterior sprite (1086×1448), anchored to the sidewalk. */}
+          <image
+            href={buildingExteriorUrl}
+            x="96"
+            y="30"
+            width="132"
+            height="176"
+            preserveAspectRatio="xMidYMax meet"
+            style={{ imageRendering: 'pixelated' }}
+          />
+          {/* Dim the daylit sprite at night so it reads with the night sky. */}
+          {isNight && <rect x="96" y="30" width="132" height="176" fill="#0b1026" opacity="0.5" />}
           {/* Entrance + single EXIT door */}
           <rect x="124" y="174" width="78" height="32" fill="#0f172a" />
           <rect x="124" y="168" width="78" height="8" rx="2" fill="#6366f1" />
