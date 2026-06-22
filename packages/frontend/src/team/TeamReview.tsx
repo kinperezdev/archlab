@@ -11,7 +11,7 @@ import type { Diagnostic, Severity } from '@archlab/shared';
 import { ArchCo } from './archco/ArchCo.js';
 import type { ThreatLevel } from './archco/FloorScene.js';
 import { EMPLOYEES } from './archco/companyData.js';
-import { detectAvailableProvider, type ProviderKeys } from './archco/multiProviderAI.js';
+import { detectAvailableProvider, completeWithProvider, type ProviderKeys } from './archco/multiProviderAI.js';
 import { runItemDebate, runItemReviewFromKnowledge, type DebateMessage, type DebateSeverity } from './teamDebateRunner.js';
 
 export interface ReviewQueueItem {
@@ -206,12 +206,18 @@ export function TeamReview({
     setLocalQueue(items);
 
     const provider = detectAvailableProvider(apiKeys);
-    const useAI = provider.available;
-
     setIsDebating(true);
     setTokensUsed(0);
     let runningTokens = 0;
     try {
+      // Pre-flight: a key may exist but be over quota / unreachable. One tiny
+      // call decides whether to run the live debate or the docs review.
+      let useAI = provider.available;
+      if (useAI) {
+        const probe = await completeWithProvider(provider, 'ping', 'Reply ok', 1);
+        if (probe.error) useAI = false;
+      }
+
       for (const item of items.slice(0, 5)) {
         const debateItem = {
           id: item.id,
