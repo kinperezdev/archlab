@@ -5720,8 +5720,8 @@
     }
   },
   "Alex Chen only": {
-    "alex-chen-only_000": {
-      "file": "individual/alex-chen-only/alex-chen-only_000.svg",
+    "alex-chen-only_base": {
+      "file": "individual/alex-chen-only/alex-chen-only_base.svg",
       "sheet": "Alex Chen only",
       "index": 0,
       "size": {
@@ -5729,8 +5729,8 @@
         "h": 135
       }
     },
-    "alex-chen-only_001": {
-      "file": "individual/alex-chen-only/alex-chen-only_001.svg",
+    "alex-chen-only_emotion-neutral": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-neutral.svg",
       "sheet": "Alex Chen only",
       "index": 1,
       "size": {
@@ -5738,8 +5738,8 @@
         "h": 68
       }
     },
-    "alex-chen-only_002": {
-      "file": "individual/alex-chen-only/alex-chen-only_002.svg",
+    "alex-chen-only_emotion-happy": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-happy.svg",
       "sheet": "Alex Chen only",
       "index": 2,
       "size": {
@@ -5747,8 +5747,8 @@
         "h": 68
       }
     },
-    "alex-chen-only_003": {
-      "file": "individual/alex-chen-only/alex-chen-only_003.svg",
+    "alex-chen-only_emotion-talking": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-talking.svg",
       "sheet": "Alex Chen only",
       "index": 3,
       "size": {
@@ -5756,8 +5756,8 @@
         "h": 68
       }
     },
-    "alex-chen-only_004": {
-      "file": "individual/alex-chen-only/alex-chen-only_004.svg",
+    "alex-chen-only_emotion-thinking": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-thinking.svg",
       "sheet": "Alex Chen only",
       "index": 4,
       "size": {
@@ -5765,8 +5765,8 @@
         "h": 68
       }
     },
-    "alex-chen-only_005": {
-      "file": "individual/alex-chen-only/alex-chen-only_005.svg",
+    "alex-chen-only_emotion-stressed": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-stressed.svg",
       "sheet": "Alex Chen only",
       "index": 5,
       "size": {
@@ -5774,8 +5774,8 @@
         "h": 68
       }
     },
-    "alex-chen-only_006": {
-      "file": "individual/alex-chen-only/alex-chen-only_006.svg",
+    "alex-chen-only_emotion-excited": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-excited.svg",
       "sheet": "Alex Chen only",
       "index": 6,
       "size": {
@@ -5783,8 +5783,8 @@
         "h": 69
       }
     },
-    "alex-chen-only_007": {
-      "file": "individual/alex-chen-only/alex-chen-only_007.svg",
+    "alex-chen-only_emotion-concerned": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-concerned.svg",
       "sheet": "Alex Chen only",
       "index": 7,
       "size": {
@@ -5792,8 +5792,8 @@
         "h": 68
       }
     },
-    "alex-chen-only_008": {
-      "file": "individual/alex-chen-only/alex-chen-only_008.svg",
+    "alex-chen-only_emotion-frustrated": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-frustrated.svg",
       "sheet": "Alex Chen only",
       "index": 8,
       "size": {
@@ -5801,8 +5801,8 @@
         "h": 69
       }
     },
-    "alex-chen-only_009": {
-      "file": "individual/alex-chen-only/alex-chen-only_009.svg",
+    "alex-chen-only_emotion-satisfied": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-satisfied.svg",
       "sheet": "Alex Chen only",
       "index": 9,
       "size": {
@@ -5810,8 +5810,8 @@
         "h": 69
       }
     },
-    "alex-chen-only_010": {
-      "file": "individual/alex-chen-only/alex-chen-only_010.svg",
+    "alex-chen-only_emotion-curious": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-curious.svg",
       "sheet": "Alex Chen only",
       "index": 10,
       "size": {
@@ -5819,8 +5819,8 @@
         "h": 71
       }
     },
-    "alex-chen-only_011": {
-      "file": "individual/alex-chen-only/alex-chen-only_011.svg",
+    "alex-chen-only_emotion-celebrating": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-celebrating.svg",
       "sheet": "Alex Chen only",
       "index": 11,
       "size": {
@@ -5828,8 +5828,8 @@
         "h": 69
       }
     },
-    "alex-chen-only_012": {
-      "file": "individual/alex-chen-only/alex-chen-only_012.svg",
+    "alex-chen-only_emotion-sleeping": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-sleeping.svg",
       "sheet": "Alex Chen only",
       "index": 12,
       "size": {
@@ -5837,8 +5837,8 @@
         "h": 83
       }
     },
-    "alex-chen-only_013": {
-      "file": "individual/alex-chen-only/alex-chen-only_013.svg",
+    "alex-chen-only_emotion-panicking": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-panicking.svg",
       "sheet": "Alex Chen only",
       "index": 13,
       "size": {
@@ -5846,8 +5846,8 @@
         "h": 76
       }
     },
-    "alex-chen-only_014": {
-      "file": "individual/alex-chen-only/alex-chen-only_014.svg",
+    "alex-chen-only_emotion-rushing": {
+      "file": "individual/alex-chen-only/alex-chen-only_emotion-rushing.svg",
       "sheet": "Alex Chen only",
       "index": 14,
       "size": {
@@ -5855,8 +5855,8 @@
         "h": 71
       }
     },
-    "alex-chen-only_015": {
-      "file": "individual/alex-chen-only/alex-chen-only_015.svg",
+    "alex-chen-only_idle-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_idle-1.svg",
       "sheet": "Alex Chen only",
       "index": 15,
       "size": {
@@ -5864,8 +5864,8 @@
         "h": 106
       }
     },
-    "alex-chen-only_016": {
-      "file": "individual/alex-chen-only/alex-chen-only_016.svg",
+    "alex-chen-only_idle-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_idle-2.svg",
       "sheet": "Alex Chen only",
       "index": 16,
       "size": {
@@ -5873,8 +5873,8 @@
         "h": 106
       }
     },
-    "alex-chen-only_017": {
-      "file": "individual/alex-chen-only/alex-chen-only_017.svg",
+    "alex-chen-only_idle-3": {
+      "file": "individual/alex-chen-only/alex-chen-only_idle-3.svg",
       "sheet": "Alex Chen only",
       "index": 17,
       "size": {
@@ -5882,8 +5882,8 @@
         "h": 105
       }
     },
-    "alex-chen-only_018": {
-      "file": "individual/alex-chen-only/alex-chen-only_018.svg",
+    "alex-chen-only_idle-4": {
+      "file": "individual/alex-chen-only/alex-chen-only_idle-4.svg",
       "sheet": "Alex Chen only",
       "index": 18,
       "size": {
@@ -5891,8 +5891,8 @@
         "h": 107
       }
     },
-    "alex-chen-only_019": {
-      "file": "individual/alex-chen-only/alex-chen-only_019.svg",
+    "alex-chen-only_typing-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_typing-1.svg",
       "sheet": "Alex Chen only",
       "index": 19,
       "size": {
@@ -5900,8 +5900,8 @@
         "h": 107
       }
     },
-    "alex-chen-only_020": {
-      "file": "individual/alex-chen-only/alex-chen-only_020.svg",
+    "alex-chen-only_typing-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_typing-2.svg",
       "sheet": "Alex Chen only",
       "index": 20,
       "size": {
@@ -5909,8 +5909,8 @@
         "h": 107
       }
     },
-    "alex-chen-only_021": {
-      "file": "individual/alex-chen-only/alex-chen-only_021.svg",
+    "alex-chen-only_walk-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_walk-1.svg",
       "sheet": "Alex Chen only",
       "index": 21,
       "size": {
@@ -5918,8 +5918,8 @@
         "h": 106
       }
     },
-    "alex-chen-only_022": {
-      "file": "individual/alex-chen-only/alex-chen-only_022.svg",
+    "alex-chen-only_walk-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_walk-2.svg",
       "sheet": "Alex Chen only",
       "index": 22,
       "size": {
@@ -5927,8 +5927,8 @@
         "h": 106
       }
     },
-    "alex-chen-only_023": {
-      "file": "individual/alex-chen-only/alex-chen-only_023.svg",
+    "alex-chen-only_walk-3": {
+      "file": "individual/alex-chen-only/alex-chen-only_walk-3.svg",
       "sheet": "Alex Chen only",
       "index": 23,
       "size": {
@@ -5936,8 +5936,8 @@
         "h": 105
       }
     },
-    "alex-chen-only_024": {
-      "file": "individual/alex-chen-only/alex-chen-only_024.svg",
+    "alex-chen-only_walk-4": {
+      "file": "individual/alex-chen-only/alex-chen-only_walk-4.svg",
       "sheet": "Alex Chen only",
       "index": 24,
       "size": {
@@ -5945,8 +5945,8 @@
         "h": 105
       }
     },
-    "alex-chen-only_025": {
-      "file": "individual/alex-chen-only/alex-chen-only_025.svg",
+    "alex-chen-only_panic-run-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_panic-run-1.svg",
       "sheet": "Alex Chen only",
       "index": 25,
       "size": {
@@ -5954,8 +5954,8 @@
         "h": 102
       }
     },
-    "alex-chen-only_026": {
-      "file": "individual/alex-chen-only/alex-chen-only_026.svg",
+    "alex-chen-only_panic-run-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_panic-run-2.svg",
       "sheet": "Alex Chen only",
       "index": 26,
       "size": {
@@ -5963,8 +5963,8 @@
         "h": 102
       }
     },
-    "alex-chen-only_027": {
-      "file": "individual/alex-chen-only/alex-chen-only_027.svg",
+    "alex-chen-only_panic-run-3": {
+      "file": "individual/alex-chen-only/alex-chen-only_panic-run-3.svg",
       "sheet": "Alex Chen only",
       "index": 27,
       "size": {
@@ -5972,8 +5972,8 @@
         "h": 104
       }
     },
-    "alex-chen-only_028": {
-      "file": "individual/alex-chen-only/alex-chen-only_028.svg",
+    "alex-chen-only_panic-run-4": {
+      "file": "individual/alex-chen-only/alex-chen-only_panic-run-4.svg",
       "sheet": "Alex Chen only",
       "index": 28,
       "size": {
@@ -5981,8 +5981,8 @@
         "h": 102
       }
     },
-    "alex-chen-only_029": {
-      "file": "individual/alex-chen-only/alex-chen-only_029.svg",
+    "alex-chen-only_sitting": {
+      "file": "individual/alex-chen-only/alex-chen-only_sitting.svg",
       "sheet": "Alex Chen only",
       "index": 29,
       "size": {
@@ -5990,8 +5990,8 @@
         "h": 106
       }
     },
-    "alex-chen-only_030": {
-      "file": "individual/alex-chen-only/alex-chen-only_030.svg",
+    "alex-chen-only_standup-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_standup-1.svg",
       "sheet": "Alex Chen only",
       "index": 30,
       "size": {
@@ -5999,8 +5999,8 @@
         "h": 95
       }
     },
-    "alex-chen-only_031": {
-      "file": "individual/alex-chen-only/alex-chen-only_031.svg",
+    "alex-chen-only_standup-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_standup-2.svg",
       "sheet": "Alex Chen only",
       "index": 31,
       "size": {
@@ -6008,8 +6008,8 @@
         "h": 89
       }
     },
-    "alex-chen-only_032": {
-      "file": "individual/alex-chen-only/alex-chen-only_032.svg",
+    "alex-chen-only_standup-3": {
+      "file": "individual/alex-chen-only/alex-chen-only_standup-3.svg",
       "sheet": "Alex Chen only",
       "index": 32,
       "size": {
@@ -6017,8 +6017,8 @@
         "h": 101
       }
     },
-    "alex-chen-only_033": {
-      "file": "individual/alex-chen-only/alex-chen-only_033.svg",
+    "alex-chen-only_celebrate-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_celebrate-1.svg",
       "sheet": "Alex Chen only",
       "index": 33,
       "size": {
@@ -6026,8 +6026,8 @@
         "h": 108
       }
     },
-    "alex-chen-only_034": {
-      "file": "individual/alex-chen-only/alex-chen-only_034.svg",
+    "alex-chen-only_celebrate-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_celebrate-2.svg",
       "sheet": "Alex Chen only",
       "index": 34,
       "size": {
@@ -6035,8 +6035,8 @@
         "h": 101
       }
     },
-    "alex-chen-only_035": {
-      "file": "individual/alex-chen-only/alex-chen-only_035.svg",
+    "alex-chen-only_celebrate-3": {
+      "file": "individual/alex-chen-only/alex-chen-only_celebrate-3.svg",
       "sheet": "Alex Chen only",
       "index": 35,
       "size": {
@@ -6044,8 +6044,8 @@
         "h": 105
       }
     },
-    "alex-chen-only_036": {
-      "file": "individual/alex-chen-only/alex-chen-only_036.svg",
+    "alex-chen-only_celebrate-4": {
+      "file": "individual/alex-chen-only/alex-chen-only_celebrate-4.svg",
       "sheet": "Alex Chen only",
       "index": 36,
       "size": {
@@ -6053,8 +6053,8 @@
         "h": 94
       }
     },
-    "alex-chen-only_037": {
-      "file": "individual/alex-chen-only/alex-chen-only_037.svg",
+    "alex-chen-only_talk-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_talk-1.svg",
       "sheet": "Alex Chen only",
       "index": 37,
       "size": {
@@ -6062,8 +6062,8 @@
         "h": 102
       }
     },
-    "alex-chen-only_038": {
-      "file": "individual/alex-chen-only/alex-chen-only_038.svg",
+    "alex-chen-only_talk-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_talk-2.svg",
       "sheet": "Alex Chen only",
       "index": 38,
       "size": {
@@ -6071,8 +6071,8 @@
         "h": 101
       }
     },
-    "alex-chen-only_039": {
-      "file": "individual/alex-chen-only/alex-chen-only_039.svg",
+    "alex-chen-only_wave": {
+      "file": "individual/alex-chen-only/alex-chen-only_wave.svg",
       "sheet": "Alex Chen only",
       "index": 39,
       "size": {
@@ -6080,8 +6080,8 @@
         "h": 97
       }
     },
-    "alex-chen-only_040": {
-      "file": "individual/alex-chen-only/alex-chen-only_040.svg",
+    "alex-chen-only_walk-home": {
+      "file": "individual/alex-chen-only/alex-chen-only_walk-home.svg",
       "sheet": "Alex Chen only",
       "index": 40,
       "size": {
@@ -6089,8 +6089,8 @@
         "h": 111
       }
     },
-    "alex-chen-only_041": {
-      "file": "individual/alex-chen-only/alex-chen-only_041.svg",
+    "alex-chen-only_levelup-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_levelup-1.svg",
       "sheet": "Alex Chen only",
       "index": 41,
       "size": {
@@ -6098,8 +6098,8 @@
         "h": 121
       }
     },
-    "alex-chen-only_042": {
-      "file": "individual/alex-chen-only/alex-chen-only_042.svg",
+    "alex-chen-only_levelup-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_levelup-2.svg",
       "sheet": "Alex Chen only",
       "index": 42,
       "size": {
@@ -6107,8 +6107,8 @@
         "h": 125
       }
     },
-    "alex-chen-only_043": {
-      "file": "individual/alex-chen-only/alex-chen-only_043.svg",
+    "alex-chen-only_levelup-3": {
+      "file": "individual/alex-chen-only/alex-chen-only_levelup-3.svg",
       "sheet": "Alex Chen only",
       "index": 43,
       "size": {
@@ -6116,8 +6116,8 @@
         "h": 90
       }
     },
-    "alex-chen-only_044": {
-      "file": "individual/alex-chen-only/alex-chen-only_044.svg",
+    "alex-chen-only_levelup-4": {
+      "file": "individual/alex-chen-only/alex-chen-only_levelup-4.svg",
       "sheet": "Alex Chen only",
       "index": 44,
       "size": {
@@ -6125,8 +6125,8 @@
         "h": 121
       }
     },
-    "alex-chen-only_045": {
-      "file": "individual/alex-chen-only/alex-chen-only_045.svg",
+    "alex-chen-only_levelup-5": {
+      "file": "individual/alex-chen-only/alex-chen-only_levelup-5.svg",
       "sheet": "Alex Chen only",
       "index": 45,
       "size": {
@@ -6134,8 +6134,8 @@
         "h": 88
       }
     },
-    "alex-chen-only_046": {
-      "file": "individual/alex-chen-only/alex-chen-only_046.svg",
+    "alex-chen-only_coffee-walk-1": {
+      "file": "individual/alex-chen-only/alex-chen-only_coffee-walk-1.svg",
       "sheet": "Alex Chen only",
       "index": 46,
       "size": {
@@ -6143,8 +6143,8 @@
         "h": 97
       }
     },
-    "alex-chen-only_047": {
-      "file": "individual/alex-chen-only/alex-chen-only_047.svg",
+    "alex-chen-only_coffee-walk-2": {
+      "file": "individual/alex-chen-only/alex-chen-only_coffee-walk-2.svg",
       "sheet": "Alex Chen only",
       "index": 47,
       "size": {
@@ -6152,8 +6152,8 @@
         "h": 97
       }
     },
-    "alex-chen-only_048": {
-      "file": "individual/alex-chen-only/alex-chen-only_048.svg",
+    "alex-chen-only_late-mild": {
+      "file": "individual/alex-chen-only/alex-chen-only_late-mild.svg",
       "sheet": "Alex Chen only",
       "index": 48,
       "size": {
@@ -6161,8 +6161,8 @@
         "h": 98
       }
     },
-    "alex-chen-only_049": {
-      "file": "individual/alex-chen-only/alex-chen-only_049.svg",
+    "alex-chen-only_late-panic": {
+      "file": "individual/alex-chen-only/alex-chen-only_late-panic.svg",
       "sheet": "Alex Chen only",
       "index": 49,
       "size": {
@@ -6183,8 +6183,8 @@
     }
   },
   "Casey Kim only": {
-    "casey-kim-only_000": {
-      "file": "individual/casey-kim-only/casey-kim-only_000.svg",
+    "casey-kim-only_base": {
+      "file": "individual/casey-kim-only/casey-kim-only_base.svg",
       "sheet": "Casey Kim only",
       "index": 0,
       "size": {
@@ -6192,8 +6192,8 @@
         "h": 154
       }
     },
-    "casey-kim-only_001": {
-      "file": "individual/casey-kim-only/casey-kim-only_001.svg",
+    "casey-kim-only_emotion-neutral": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-neutral.svg",
       "sheet": "Casey Kim only",
       "index": 1,
       "size": {
@@ -6201,8 +6201,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_002": {
-      "file": "individual/casey-kim-only/casey-kim-only_002.svg",
+    "casey-kim-only_emotion-happy": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-happy.svg",
       "sheet": "Casey Kim only",
       "index": 2,
       "size": {
@@ -6210,8 +6210,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_003": {
-      "file": "individual/casey-kim-only/casey-kim-only_003.svg",
+    "casey-kim-only_emotion-talking": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-talking.svg",
       "sheet": "Casey Kim only",
       "index": 3,
       "size": {
@@ -6219,8 +6219,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_004": {
-      "file": "individual/casey-kim-only/casey-kim-only_004.svg",
+    "casey-kim-only_emotion-thinking": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-thinking.svg",
       "sheet": "Casey Kim only",
       "index": 4,
       "size": {
@@ -6228,8 +6228,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_005": {
-      "file": "individual/casey-kim-only/casey-kim-only_005.svg",
+    "casey-kim-only_emotion-stressed": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-stressed.svg",
       "sheet": "Casey Kim only",
       "index": 5,
       "size": {
@@ -6237,8 +6237,8 @@
         "h": 97
       }
     },
-    "casey-kim-only_006": {
-      "file": "individual/casey-kim-only/casey-kim-only_006.svg",
+    "casey-kim-only_emotion-excited": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-excited.svg",
       "sheet": "Casey Kim only",
       "index": 6,
       "size": {
@@ -6246,8 +6246,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_007": {
-      "file": "individual/casey-kim-only/casey-kim-only_007.svg",
+    "casey-kim-only_emotion-concerned": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-concerned.svg",
       "sheet": "Casey Kim only",
       "index": 7,
       "size": {
@@ -6255,8 +6255,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_008": {
-      "file": "individual/casey-kim-only/casey-kim-only_008.svg",
+    "casey-kim-only_emotion-frustrated": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-frustrated.svg",
       "sheet": "Casey Kim only",
       "index": 8,
       "size": {
@@ -6264,8 +6264,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_009": {
-      "file": "individual/casey-kim-only/casey-kim-only_009.svg",
+    "casey-kim-only_emotion-satisfied": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-satisfied.svg",
       "sheet": "Casey Kim only",
       "index": 9,
       "size": {
@@ -6273,8 +6273,8 @@
         "h": 96
       }
     },
-    "casey-kim-only_010": {
-      "file": "individual/casey-kim-only/casey-kim-only_010.svg",
+    "casey-kim-only_emotion-curious": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-curious.svg",
       "sheet": "Casey Kim only",
       "index": 10,
       "size": {
@@ -6282,8 +6282,8 @@
         "h": 102
       }
     },
-    "casey-kim-only_011": {
-      "file": "individual/casey-kim-only/casey-kim-only_011.svg",
+    "casey-kim-only_emotion-celebrating": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-celebrating.svg",
       "sheet": "Casey Kim only",
       "index": 11,
       "size": {
@@ -6291,8 +6291,8 @@
         "h": 98
       }
     },
-    "casey-kim-only_012": {
-      "file": "individual/casey-kim-only/casey-kim-only_012.svg",
+    "casey-kim-only_emotion-sleeping": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-sleeping.svg",
       "sheet": "Casey Kim only",
       "index": 12,
       "size": {
@@ -6300,8 +6300,8 @@
         "h": 107
       }
     },
-    "casey-kim-only_013": {
-      "file": "individual/casey-kim-only/casey-kim-only_013.svg",
+    "casey-kim-only_emotion-panicking": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-panicking.svg",
       "sheet": "Casey Kim only",
       "index": 13,
       "size": {
@@ -6309,8 +6309,8 @@
         "h": 98
       }
     },
-    "casey-kim-only_014": {
-      "file": "individual/casey-kim-only/casey-kim-only_014.svg",
+    "casey-kim-only_emotion-rushing": {
+      "file": "individual/casey-kim-only/casey-kim-only_emotion-rushing.svg",
       "sheet": "Casey Kim only",
       "index": 14,
       "size": {
@@ -6318,8 +6318,8 @@
         "h": 99
       }
     },
-    "casey-kim-only_015": {
-      "file": "individual/casey-kim-only/casey-kim-only_015.svg",
+    "casey-kim-only_idle-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_idle-1.svg",
       "sheet": "Casey Kim only",
       "index": 15,
       "size": {
@@ -6327,8 +6327,8 @@
         "h": 122
       }
     },
-    "casey-kim-only_016": {
-      "file": "individual/casey-kim-only/casey-kim-only_016.svg",
+    "casey-kim-only_idle-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_idle-2.svg",
       "sheet": "Casey Kim only",
       "index": 16,
       "size": {
@@ -6336,8 +6336,8 @@
         "h": 122
       }
     },
-    "casey-kim-only_017": {
-      "file": "individual/casey-kim-only/casey-kim-only_017.svg",
+    "casey-kim-only_idle-3": {
+      "file": "individual/casey-kim-only/casey-kim-only_idle-3.svg",
       "sheet": "Casey Kim only",
       "index": 17,
       "size": {
@@ -6345,8 +6345,8 @@
         "h": 121
       }
     },
-    "casey-kim-only_018": {
-      "file": "individual/casey-kim-only/casey-kim-only_018.svg",
+    "casey-kim-only_idle-4": {
+      "file": "individual/casey-kim-only/casey-kim-only_idle-4.svg",
       "sheet": "Casey Kim only",
       "index": 18,
       "size": {
@@ -6354,8 +6354,8 @@
         "h": 121
       }
     },
-    "casey-kim-only_019": {
-      "file": "individual/casey-kim-only/casey-kim-only_019.svg",
+    "casey-kim-only_typing-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_typing-1.svg",
       "sheet": "Casey Kim only",
       "index": 19,
       "size": {
@@ -6363,8 +6363,8 @@
         "h": 122
       }
     },
-    "casey-kim-only_020": {
-      "file": "individual/casey-kim-only/casey-kim-only_020.svg",
+    "casey-kim-only_typing-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_typing-2.svg",
       "sheet": "Casey Kim only",
       "index": 20,
       "size": {
@@ -6372,8 +6372,8 @@
         "h": 122
       }
     },
-    "casey-kim-only_021": {
-      "file": "individual/casey-kim-only/casey-kim-only_021.svg",
+    "casey-kim-only_walk-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_walk-1.svg",
       "sheet": "Casey Kim only",
       "index": 21,
       "size": {
@@ -6381,8 +6381,8 @@
         "h": 120
       }
     },
-    "casey-kim-only_022": {
-      "file": "individual/casey-kim-only/casey-kim-only_022.svg",
+    "casey-kim-only_walk-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_walk-2.svg",
       "sheet": "Casey Kim only",
       "index": 22,
       "size": {
@@ -6390,8 +6390,8 @@
         "h": 120
       }
     },
-    "casey-kim-only_023": {
-      "file": "individual/casey-kim-only/casey-kim-only_023.svg",
+    "casey-kim-only_walk-3": {
+      "file": "individual/casey-kim-only/casey-kim-only_walk-3.svg",
       "sheet": "Casey Kim only",
       "index": 23,
       "size": {
@@ -6399,8 +6399,8 @@
         "h": 120
       }
     },
-    "casey-kim-only_024": {
-      "file": "individual/casey-kim-only/casey-kim-only_024.svg",
+    "casey-kim-only_walk-4": {
+      "file": "individual/casey-kim-only/casey-kim-only_walk-4.svg",
       "sheet": "Casey Kim only",
       "index": 24,
       "size": {
@@ -6408,8 +6408,8 @@
         "h": 121
       }
     },
-    "casey-kim-only_025": {
-      "file": "individual/casey-kim-only/casey-kim-only_025.svg",
+    "casey-kim-only_panic-run-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_panic-run-1.svg",
       "sheet": "Casey Kim only",
       "index": 25,
       "size": {
@@ -6417,8 +6417,8 @@
         "h": 109
       }
     },
-    "casey-kim-only_026": {
-      "file": "individual/casey-kim-only/casey-kim-only_026.svg",
+    "casey-kim-only_panic-run-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_panic-run-2.svg",
       "sheet": "Casey Kim only",
       "index": 26,
       "size": {
@@ -6426,8 +6426,8 @@
         "h": 108
       }
     },
-    "casey-kim-only_027": {
-      "file": "individual/casey-kim-only/casey-kim-only_027.svg",
+    "casey-kim-only_panic-run-3": {
+      "file": "individual/casey-kim-only/casey-kim-only_panic-run-3.svg",
       "sheet": "Casey Kim only",
       "index": 27,
       "size": {
@@ -6435,8 +6435,8 @@
         "h": 109
       }
     },
-    "casey-kim-only_028": {
-      "file": "individual/casey-kim-only/casey-kim-only_028.svg",
+    "casey-kim-only_panic-run-4": {
+      "file": "individual/casey-kim-only/casey-kim-only_panic-run-4.svg",
       "sheet": "Casey Kim only",
       "index": 28,
       "size": {
@@ -6444,8 +6444,8 @@
         "h": 109
       }
     },
-    "casey-kim-only_029": {
-      "file": "individual/casey-kim-only/casey-kim-only_029.svg",
+    "casey-kim-only_sitting": {
+      "file": "individual/casey-kim-only/casey-kim-only_sitting.svg",
       "sheet": "Casey Kim only",
       "index": 29,
       "size": {
@@ -6453,8 +6453,8 @@
         "h": 110
       }
     },
-    "casey-kim-only_030": {
-      "file": "individual/casey-kim-only/casey-kim-only_030.svg",
+    "casey-kim-only_standup-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_standup-1.svg",
       "sheet": "Casey Kim only",
       "index": 30,
       "size": {
@@ -6462,8 +6462,8 @@
         "h": 108
       }
     },
-    "casey-kim-only_031": {
-      "file": "individual/casey-kim-only/casey-kim-only_031.svg",
+    "casey-kim-only_standup-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_standup-2.svg",
       "sheet": "Casey Kim only",
       "index": 31,
       "size": {
@@ -6471,8 +6471,8 @@
         "h": 109
       }
     },
-    "casey-kim-only_032": {
-      "file": "individual/casey-kim-only/casey-kim-only_032.svg",
+    "casey-kim-only_standup-3": {
+      "file": "individual/casey-kim-only/casey-kim-only_standup-3.svg",
       "sheet": "Casey Kim only",
       "index": 32,
       "size": {
@@ -6480,8 +6480,8 @@
         "h": 112
       }
     },
-    "casey-kim-only_033": {
-      "file": "individual/casey-kim-only/casey-kim-only_033.svg",
+    "casey-kim-only_celebrate-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_celebrate-1.svg",
       "sheet": "Casey Kim only",
       "index": 33,
       "size": {
@@ -6489,8 +6489,8 @@
         "h": 115
       }
     },
-    "casey-kim-only_034": {
-      "file": "individual/casey-kim-only/casey-kim-only_034.svg",
+    "casey-kim-only_celebrate-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_celebrate-2.svg",
       "sheet": "Casey Kim only",
       "index": 34,
       "size": {
@@ -6498,8 +6498,8 @@
         "h": 115
       }
     },
-    "casey-kim-only_035": {
-      "file": "individual/casey-kim-only/casey-kim-only_035.svg",
+    "casey-kim-only_celebrate-3": {
+      "file": "individual/casey-kim-only/casey-kim-only_celebrate-3.svg",
       "sheet": "Casey Kim only",
       "index": 35,
       "size": {
@@ -6507,8 +6507,8 @@
         "h": 115
       }
     },
-    "casey-kim-only_036": {
-      "file": "individual/casey-kim-only/casey-kim-only_036.svg",
+    "casey-kim-only_celebrate-4": {
+      "file": "individual/casey-kim-only/casey-kim-only_celebrate-4.svg",
       "sheet": "Casey Kim only",
       "index": 36,
       "size": {
@@ -6516,8 +6516,8 @@
         "h": 112
       }
     },
-    "casey-kim-only_037": {
-      "file": "individual/casey-kim-only/casey-kim-only_037.svg",
+    "casey-kim-only_talk-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_talk-1.svg",
       "sheet": "Casey Kim only",
       "index": 37,
       "size": {
@@ -6525,8 +6525,8 @@
         "h": 113
       }
     },
-    "casey-kim-only_038": {
-      "file": "individual/casey-kim-only/casey-kim-only_038.svg",
+    "casey-kim-only_talk-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_talk-2.svg",
       "sheet": "Casey Kim only",
       "index": 38,
       "size": {
@@ -6534,8 +6534,8 @@
         "h": 112
       }
     },
-    "casey-kim-only_039": {
-      "file": "individual/casey-kim-only/casey-kim-only_039.svg",
+    "casey-kim-only_wave": {
+      "file": "individual/casey-kim-only/casey-kim-only_wave.svg",
       "sheet": "Casey Kim only",
       "index": 39,
       "size": {
@@ -6543,8 +6543,8 @@
         "h": 112
       }
     },
-    "casey-kim-only_040": {
-      "file": "individual/casey-kim-only/casey-kim-only_040.svg",
+    "casey-kim-only_walk-home": {
+      "file": "individual/casey-kim-only/casey-kim-only_walk-home.svg",
       "sheet": "Casey Kim only",
       "index": 40,
       "size": {
@@ -6552,8 +6552,8 @@
         "h": 112
       }
     },
-    "casey-kim-only_041": {
-      "file": "individual/casey-kim-only/casey-kim-only_041.svg",
+    "casey-kim-only_elevator": {
+      "file": "individual/casey-kim-only/casey-kim-only_elevator.svg",
       "sheet": "Casey Kim only",
       "index": 41,
       "size": {
@@ -6561,8 +6561,8 @@
         "h": 119
       }
     },
-    "casey-kim-only_042": {
-      "file": "individual/casey-kim-only/casey-kim-only_042.svg",
+    "casey-kim-only_levelup-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_levelup-1.svg",
       "sheet": "Casey Kim only",
       "index": 42,
       "size": {
@@ -6570,8 +6570,8 @@
         "h": 145
       }
     },
-    "casey-kim-only_043": {
-      "file": "individual/casey-kim-only/casey-kim-only_043.svg",
+    "casey-kim-only_levelup-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_levelup-2.svg",
       "sheet": "Casey Kim only",
       "index": 43,
       "size": {
@@ -6579,8 +6579,8 @@
         "h": 144
       }
     },
-    "casey-kim-only_044": {
-      "file": "individual/casey-kim-only/casey-kim-only_044.svg",
+    "casey-kim-only_levelup-3": {
+      "file": "individual/casey-kim-only/casey-kim-only_levelup-3.svg",
       "sheet": "Casey Kim only",
       "index": 44,
       "size": {
@@ -6588,8 +6588,8 @@
         "h": 152
       }
     },
-    "casey-kim-only_045": {
-      "file": "individual/casey-kim-only/casey-kim-only_045.svg",
+    "casey-kim-only_levelup-4": {
+      "file": "individual/casey-kim-only/casey-kim-only_levelup-4.svg",
       "sheet": "Casey Kim only",
       "index": 45,
       "size": {
@@ -6597,8 +6597,8 @@
         "h": 121
       }
     },
-    "casey-kim-only_046": {
-      "file": "individual/casey-kim-only/casey-kim-only_046.svg",
+    "casey-kim-only_levelup-5": {
+      "file": "individual/casey-kim-only/casey-kim-only_levelup-5.svg",
       "sheet": "Casey Kim only",
       "index": 46,
       "size": {
@@ -6606,8 +6606,8 @@
         "h": 153
       }
     },
-    "casey-kim-only_047": {
-      "file": "individual/casey-kim-only/casey-kim-only_047.svg",
+    "casey-kim-only_coffee-walk-1": {
+      "file": "individual/casey-kim-only/casey-kim-only_coffee-walk-1.svg",
       "sheet": "Casey Kim only",
       "index": 47,
       "size": {
@@ -6615,8 +6615,8 @@
         "h": 122
       }
     },
-    "casey-kim-only_048": {
-      "file": "individual/casey-kim-only/casey-kim-only_048.svg",
+    "casey-kim-only_coffee-walk-2": {
+      "file": "individual/casey-kim-only/casey-kim-only_coffee-walk-2.svg",
       "sheet": "Casey Kim only",
       "index": 48,
       "size": {
@@ -6624,8 +6624,8 @@
         "h": 121
       }
     },
-    "casey-kim-only_049": {
-      "file": "individual/casey-kim-only/casey-kim-only_049.svg",
+    "casey-kim-only_late-mild": {
+      "file": "individual/casey-kim-only/casey-kim-only_late-mild.svg",
       "sheet": "Casey Kim only",
       "index": 49,
       "size": {
@@ -6633,8 +6633,8 @@
         "h": 121
       }
     },
-    "casey-kim-only_050": {
-      "file": "individual/casey-kim-only/casey-kim-only_050.svg",
+    "casey-kim-only_late-panic": {
+      "file": "individual/casey-kim-only/casey-kim-only_late-panic.svg",
       "sheet": "Casey Kim only",
       "index": 50,
       "size": {
@@ -8637,8 +8637,8 @@
     }
   },
   "Jordan Lee only": {
-    "jordan-lee-only_000": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_000.svg",
+    "jordan-lee-only_base": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_base.svg",
       "sheet": "Jordan Lee only",
       "index": 0,
       "size": {
@@ -8646,8 +8646,8 @@
         "h": 149
       }
     },
-    "jordan-lee-only_001": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_001.svg",
+    "jordan-lee-only_emotion-neutral": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-neutral.svg",
       "sheet": "Jordan Lee only",
       "index": 1,
       "size": {
@@ -8655,8 +8655,8 @@
         "h": 96
       }
     },
-    "jordan-lee-only_002": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_002.svg",
+    "jordan-lee-only_emotion-happy": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-happy.svg",
       "sheet": "Jordan Lee only",
       "index": 2,
       "size": {
@@ -8664,8 +8664,8 @@
         "h": 97
       }
     },
-    "jordan-lee-only_003": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_003.svg",
+    "jordan-lee-only_emotion-talking": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-talking.svg",
       "sheet": "Jordan Lee only",
       "index": 3,
       "size": {
@@ -8673,8 +8673,8 @@
         "h": 95
       }
     },
-    "jordan-lee-only_004": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_004.svg",
+    "jordan-lee-only_emotion-thinking": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-thinking.svg",
       "sheet": "Jordan Lee only",
       "index": 4,
       "size": {
@@ -8682,8 +8682,8 @@
         "h": 97
       }
     },
-    "jordan-lee-only_005": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_005.svg",
+    "jordan-lee-only_emotion-stressed": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-stressed.svg",
       "sheet": "Jordan Lee only",
       "index": 5,
       "size": {
@@ -8691,8 +8691,8 @@
         "h": 97
       }
     },
-    "jordan-lee-only_006": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_006.svg",
+    "jordan-lee-only_emotion-excited": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-excited.svg",
       "sheet": "Jordan Lee only",
       "index": 6,
       "size": {
@@ -8700,8 +8700,8 @@
         "h": 95
       }
     },
-    "jordan-lee-only_007": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_007.svg",
+    "jordan-lee-only_emotion-concerned": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-concerned.svg",
       "sheet": "Jordan Lee only",
       "index": 7,
       "size": {
@@ -8709,8 +8709,8 @@
         "h": 95
       }
     },
-    "jordan-lee-only_008": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_008.svg",
+    "jordan-lee-only_emotion-frustrated": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-frustrated.svg",
       "sheet": "Jordan Lee only",
       "index": 8,
       "size": {
@@ -8718,8 +8718,8 @@
         "h": 95
       }
     },
-    "jordan-lee-only_009": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_009.svg",
+    "jordan-lee-only_emotion-satisfied": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-satisfied.svg",
       "sheet": "Jordan Lee only",
       "index": 9,
       "size": {
@@ -8727,8 +8727,8 @@
         "h": 95
       }
     },
-    "jordan-lee-only_010": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_010.svg",
+    "jordan-lee-only_emotion-curious": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-curious.svg",
       "sheet": "Jordan Lee only",
       "index": 10,
       "size": {
@@ -8736,8 +8736,8 @@
         "h": 96
       }
     },
-    "jordan-lee-only_011": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_011.svg",
+    "jordan-lee-only_emotion-celebrating": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-celebrating.svg",
       "sheet": "Jordan Lee only",
       "index": 11,
       "size": {
@@ -8745,8 +8745,8 @@
         "h": 93
       }
     },
-    "jordan-lee-only_012": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_012.svg",
+    "jordan-lee-only_emotion-sleeping": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-sleeping.svg",
       "sheet": "Jordan Lee only",
       "index": 12,
       "size": {
@@ -8754,8 +8754,8 @@
         "h": 95
       }
     },
-    "jordan-lee-only_013": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_013.svg",
+    "jordan-lee-only_emotion-panicking": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-panicking.svg",
       "sheet": "Jordan Lee only",
       "index": 13,
       "size": {
@@ -8763,8 +8763,8 @@
         "h": 93
       }
     },
-    "jordan-lee-only_014": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_014.svg",
+    "jordan-lee-only_emotion-rushing": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_emotion-rushing.svg",
       "sheet": "Jordan Lee only",
       "index": 14,
       "size": {
@@ -8772,8 +8772,8 @@
         "h": 93
       }
     },
-    "jordan-lee-only_015": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_015.svg",
+    "jordan-lee-only_idle-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_idle-1.svg",
       "sheet": "Jordan Lee only",
       "index": 15,
       "size": {
@@ -8781,8 +8781,8 @@
         "h": 119
       }
     },
-    "jordan-lee-only_016": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_016.svg",
+    "jordan-lee-only_idle-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_idle-2.svg",
       "sheet": "Jordan Lee only",
       "index": 16,
       "size": {
@@ -8790,8 +8790,8 @@
         "h": 120
       }
     },
-    "jordan-lee-only_017": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_017.svg",
+    "jordan-lee-only_idle-3": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_idle-3.svg",
       "sheet": "Jordan Lee only",
       "index": 17,
       "size": {
@@ -8799,8 +8799,8 @@
         "h": 120
       }
     },
-    "jordan-lee-only_018": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_018.svg",
+    "jordan-lee-only_idle-4": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_idle-4.svg",
       "sheet": "Jordan Lee only",
       "index": 18,
       "size": {
@@ -8808,8 +8808,8 @@
         "h": 120
       }
     },
-    "jordan-lee-only_019": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_019.svg",
+    "jordan-lee-only_typing-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_typing-1.svg",
       "sheet": "Jordan Lee only",
       "index": 19,
       "size": {
@@ -8817,8 +8817,8 @@
         "h": 120
       }
     },
-    "jordan-lee-only_020": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_020.svg",
+    "jordan-lee-only_typing-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_typing-2.svg",
       "sheet": "Jordan Lee only",
       "index": 20,
       "size": {
@@ -8826,8 +8826,8 @@
         "h": 120
       }
     },
-    "jordan-lee-only_021": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_021.svg",
+    "jordan-lee-only_walk-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_walk-1.svg",
       "sheet": "Jordan Lee only",
       "index": 21,
       "size": {
@@ -8835,8 +8835,8 @@
         "h": 119
       }
     },
-    "jordan-lee-only_022": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_022.svg",
+    "jordan-lee-only_walk-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_walk-2.svg",
       "sheet": "Jordan Lee only",
       "index": 22,
       "size": {
@@ -8844,8 +8844,8 @@
         "h": 120
       }
     },
-    "jordan-lee-only_023": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_023.svg",
+    "jordan-lee-only_walk-3": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_walk-3.svg",
       "sheet": "Jordan Lee only",
       "index": 23,
       "size": {
@@ -8853,8 +8853,8 @@
         "h": 119
       }
     },
-    "jordan-lee-only_024": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_024.svg",
+    "jordan-lee-only_walk-4": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_walk-4.svg",
       "sheet": "Jordan Lee only",
       "index": 24,
       "size": {
@@ -8862,8 +8862,8 @@
         "h": 120
       }
     },
-    "jordan-lee-only_025": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_025.svg",
+    "jordan-lee-only_panic-run-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_panic-run-1.svg",
       "sheet": "Jordan Lee only",
       "index": 25,
       "size": {
@@ -8871,8 +8871,8 @@
         "h": 109
       }
     },
-    "jordan-lee-only_026": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_026.svg",
+    "jordan-lee-only_panic-run-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_panic-run-2.svg",
       "sheet": "Jordan Lee only",
       "index": 26,
       "size": {
@@ -8880,8 +8880,8 @@
         "h": 109
       }
     },
-    "jordan-lee-only_027": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_027.svg",
+    "jordan-lee-only_panic-run-3": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_panic-run-3.svg",
       "sheet": "Jordan Lee only",
       "index": 27,
       "size": {
@@ -8889,8 +8889,8 @@
         "h": 109
       }
     },
-    "jordan-lee-only_028": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_028.svg",
+    "jordan-lee-only_panic-run-4": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_panic-run-4.svg",
       "sheet": "Jordan Lee only",
       "index": 28,
       "size": {
@@ -8898,8 +8898,8 @@
         "h": 109
       }
     },
-    "jordan-lee-only_029": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_029.svg",
+    "jordan-lee-only_sitting": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_sitting.svg",
       "sheet": "Jordan Lee only",
       "index": 29,
       "size": {
@@ -8907,8 +8907,8 @@
         "h": 110
       }
     },
-    "jordan-lee-only_030": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_030.svg",
+    "jordan-lee-only_standup-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_standup-1.svg",
       "sheet": "Jordan Lee only",
       "index": 30,
       "size": {
@@ -8916,8 +8916,8 @@
         "h": 105
       }
     },
-    "jordan-lee-only_031": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_031.svg",
+    "jordan-lee-only_standup-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_standup-2.svg",
       "sheet": "Jordan Lee only",
       "index": 31,
       "size": {
@@ -8925,8 +8925,8 @@
         "h": 110
       }
     },
-    "jordan-lee-only_032": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_032.svg",
+    "jordan-lee-only_standup-3": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_standup-3.svg",
       "sheet": "Jordan Lee only",
       "index": 32,
       "size": {
@@ -8934,8 +8934,8 @@
         "h": 110
       }
     },
-    "jordan-lee-only_033": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_033.svg",
+    "jordan-lee-only_celebrate-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_celebrate-1.svg",
       "sheet": "Jordan Lee only",
       "index": 33,
       "size": {
@@ -8943,8 +8943,8 @@
         "h": 114
       }
     },
-    "jordan-lee-only_034": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_034.svg",
+    "jordan-lee-only_celebrate-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_celebrate-2.svg",
       "sheet": "Jordan Lee only",
       "index": 34,
       "size": {
@@ -8952,8 +8952,8 @@
         "h": 114
       }
     },
-    "jordan-lee-only_035": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_035.svg",
+    "jordan-lee-only_celebrate-3": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_celebrate-3.svg",
       "sheet": "Jordan Lee only",
       "index": 35,
       "size": {
@@ -8961,8 +8961,8 @@
         "h": 114
       }
     },
-    "jordan-lee-only_036": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_036.svg",
+    "jordan-lee-only_celebrate-4": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_celebrate-4.svg",
       "sheet": "Jordan Lee only",
       "index": 36,
       "size": {
@@ -8970,8 +8970,8 @@
         "h": 121
       }
     },
-    "jordan-lee-only_037": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_037.svg",
+    "jordan-lee-only_talk-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_talk-1.svg",
       "sheet": "Jordan Lee only",
       "index": 37,
       "size": {
@@ -8979,8 +8979,8 @@
         "h": 112
       }
     },
-    "jordan-lee-only_038": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_038.svg",
+    "jordan-lee-only_talk-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_talk-2.svg",
       "sheet": "Jordan Lee only",
       "index": 38,
       "size": {
@@ -8988,8 +8988,8 @@
         "h": 112
       }
     },
-    "jordan-lee-only_039": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_039.svg",
+    "jordan-lee-only_wave": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_wave.svg",
       "sheet": "Jordan Lee only",
       "index": 39,
       "size": {
@@ -8997,8 +8997,8 @@
         "h": 114
       }
     },
-    "jordan-lee-only_040": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_040.svg",
+    "jordan-lee-only_walk-home": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_walk-home.svg",
       "sheet": "Jordan Lee only",
       "index": 40,
       "size": {
@@ -9006,8 +9006,8 @@
         "h": 112
       }
     },
-    "jordan-lee-only_041": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_041.svg",
+    "jordan-lee-only_elevator": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_elevator.svg",
       "sheet": "Jordan Lee only",
       "index": 41,
       "size": {
@@ -9015,8 +9015,8 @@
         "h": 115
       }
     },
-    "jordan-lee-only_042": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_042.svg",
+    "jordan-lee-only_levelup-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_levelup-1.svg",
       "sheet": "Jordan Lee only",
       "index": 42,
       "size": {
@@ -9024,8 +9024,8 @@
         "h": 133
       }
     },
-    "jordan-lee-only_043": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_043.svg",
+    "jordan-lee-only_levelup-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_levelup-2.svg",
       "sheet": "Jordan Lee only",
       "index": 43,
       "size": {
@@ -9033,8 +9033,8 @@
         "h": 133
       }
     },
-    "jordan-lee-only_044": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_044.svg",
+    "jordan-lee-only_levelup-3": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_levelup-3.svg",
       "sheet": "Jordan Lee only",
       "index": 44,
       "size": {
@@ -9042,8 +9042,8 @@
         "h": 135
       }
     },
-    "jordan-lee-only_045": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_045.svg",
+    "jordan-lee-only_levelup-4": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_levelup-4.svg",
       "sheet": "Jordan Lee only",
       "index": 45,
       "size": {
@@ -9051,8 +9051,8 @@
         "h": 129
       }
     },
-    "jordan-lee-only_046": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_046.svg",
+    "jordan-lee-only_levelup-5": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_levelup-5.svg",
       "sheet": "Jordan Lee only",
       "index": 46,
       "size": {
@@ -9060,8 +9060,8 @@
         "h": 131
       }
     },
-    "jordan-lee-only_047": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_047.svg",
+    "jordan-lee-only_coffee-walk-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_coffee-walk-1.svg",
       "sheet": "Jordan Lee only",
       "index": 47,
       "size": {
@@ -9069,8 +9069,8 @@
         "h": 115
       }
     },
-    "jordan-lee-only_048": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_048.svg",
+    "jordan-lee-only_coffee-walk-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_coffee-walk-2.svg",
       "sheet": "Jordan Lee only",
       "index": 48,
       "size": {
@@ -9078,8 +9078,8 @@
         "h": 115
       }
     },
-    "jordan-lee-only_049": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_049.svg",
+    "jordan-lee-only_late-mild": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_late-mild.svg",
       "sheet": "Jordan Lee only",
       "index": 49,
       "size": {
@@ -9087,8 +9087,8 @@
         "h": 116
       }
     },
-    "jordan-lee-only_050": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_050.svg",
+    "jordan-lee-only_late-panic": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_late-panic.svg",
       "sheet": "Jordan Lee only",
       "index": 50,
       "size": {
@@ -9096,8 +9096,8 @@
         "h": 118
       }
     },
-    "jordan-lee-only_051": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_051.svg",
+    "jordan-lee-only_desk-1": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_desk-1.svg",
       "sheet": "Jordan Lee only",
       "index": 51,
       "size": {
@@ -9105,8 +9105,8 @@
         "h": 76
       }
     },
-    "jordan-lee-only_052": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_052.svg",
+    "jordan-lee-only_desk-2": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_desk-2.svg",
       "sheet": "Jordan Lee only",
       "index": 52,
       "size": {
@@ -9114,8 +9114,8 @@
         "h": 78
       }
     },
-    "jordan-lee-only_053": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_053.svg",
+    "jordan-lee-only_desk-3": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_desk-3.svg",
       "sheet": "Jordan Lee only",
       "index": 53,
       "size": {
@@ -9123,8 +9123,8 @@
         "h": 77
       }
     },
-    "jordan-lee-only_054": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_054.svg",
+    "jordan-lee-only_desk-4": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_desk-4.svg",
       "sheet": "Jordan Lee only",
       "index": 54,
       "size": {
@@ -9132,8 +9132,8 @@
         "h": 75
       }
     },
-    "jordan-lee-only_055": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_055.svg",
+    "jordan-lee-only_desk-5": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_desk-5.svg",
       "sheet": "Jordan Lee only",
       "index": 55,
       "size": {
@@ -9141,8 +9141,8 @@
         "h": 76
       }
     },
-    "jordan-lee-only_056": {
-      "file": "individual/jordan-lee-only/jordan-lee-only_056.svg",
+    "jordan-lee-only_desk-6": {
+      "file": "individual/jordan-lee-only/jordan-lee-only_desk-6.svg",
       "sheet": "Jordan Lee only",
       "index": 56,
       "size": {
@@ -10216,8 +10216,8 @@
     }
   },
   "Marcus Webb only": {
-    "marcus-webb-only_000": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_000.svg",
+    "marcus-webb-only_base": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_base.svg",
       "sheet": "Marcus Webb only",
       "index": 0,
       "size": {
@@ -10225,8 +10225,8 @@
         "h": 154
       }
     },
-    "marcus-webb-only_001": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_001.svg",
+    "marcus-webb-only_emotion-neutral": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-neutral.svg",
       "sheet": "Marcus Webb only",
       "index": 1,
       "size": {
@@ -10234,8 +10234,8 @@
         "h": 99
       }
     },
-    "marcus-webb-only_002": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_002.svg",
+    "marcus-webb-only_emotion-happy": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-happy.svg",
       "sheet": "Marcus Webb only",
       "index": 2,
       "size": {
@@ -10243,8 +10243,8 @@
         "h": 99
       }
     },
-    "marcus-webb-only_003": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_003.svg",
+    "marcus-webb-only_emotion-talking": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-talking.svg",
       "sheet": "Marcus Webb only",
       "index": 3,
       "size": {
@@ -10252,8 +10252,8 @@
         "h": 98
       }
     },
-    "marcus-webb-only_004": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_004.svg",
+    "marcus-webb-only_emotion-thinking": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-thinking.svg",
       "sheet": "Marcus Webb only",
       "index": 4,
       "size": {
@@ -10261,8 +10261,8 @@
         "h": 98
       }
     },
-    "marcus-webb-only_005": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_005.svg",
+    "marcus-webb-only_emotion-stressed": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-stressed.svg",
       "sheet": "Marcus Webb only",
       "index": 5,
       "size": {
@@ -10270,8 +10270,8 @@
         "h": 99
       }
     },
-    "marcus-webb-only_006": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_006.svg",
+    "marcus-webb-only_emotion-excited": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-excited.svg",
       "sheet": "Marcus Webb only",
       "index": 6,
       "size": {
@@ -10279,8 +10279,8 @@
         "h": 99
       }
     },
-    "marcus-webb-only_007": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_007.svg",
+    "marcus-webb-only_emotion-concerned": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-concerned.svg",
       "sheet": "Marcus Webb only",
       "index": 7,
       "size": {
@@ -10288,8 +10288,8 @@
         "h": 99
       }
     },
-    "marcus-webb-only_008": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_008.svg",
+    "marcus-webb-only_emotion-frustrated": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-frustrated.svg",
       "sheet": "Marcus Webb only",
       "index": 8,
       "size": {
@@ -10297,8 +10297,8 @@
         "h": 98
       }
     },
-    "marcus-webb-only_009": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_009.svg",
+    "marcus-webb-only_emotion-satisfied": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-satisfied.svg",
       "sheet": "Marcus Webb only",
       "index": 9,
       "size": {
@@ -10306,8 +10306,8 @@
         "h": 98
       }
     },
-    "marcus-webb-only_010": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_010.svg",
+    "marcus-webb-only_emotion-curious": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-curious.svg",
       "sheet": "Marcus Webb only",
       "index": 10,
       "size": {
@@ -10315,8 +10315,8 @@
         "h": 91
       }
     },
-    "marcus-webb-only_011": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_011.svg",
+    "marcus-webb-only_emotion-celebrating": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-celebrating.svg",
       "sheet": "Marcus Webb only",
       "index": 11,
       "size": {
@@ -10324,8 +10324,8 @@
         "h": 92
       }
     },
-    "marcus-webb-only_012": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_012.svg",
+    "marcus-webb-only_emotion-sleeping": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-sleeping.svg",
       "sheet": "Marcus Webb only",
       "index": 12,
       "size": {
@@ -10333,8 +10333,8 @@
         "h": 103
       }
     },
-    "marcus-webb-only_013": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_013.svg",
+    "marcus-webb-only_emotion-panicking": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-panicking.svg",
       "sheet": "Marcus Webb only",
       "index": 13,
       "size": {
@@ -10342,8 +10342,8 @@
         "h": 93
       }
     },
-    "marcus-webb-only_014": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_014.svg",
+    "marcus-webb-only_emotion-rushing": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_emotion-rushing.svg",
       "sheet": "Marcus Webb only",
       "index": 14,
       "size": {
@@ -10351,8 +10351,8 @@
         "h": 92
       }
     },
-    "marcus-webb-only_015": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_015.svg",
+    "marcus-webb-only_idle-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_idle-1.svg",
       "sheet": "Marcus Webb only",
       "index": 15,
       "size": {
@@ -10360,8 +10360,8 @@
         "h": 132
       }
     },
-    "marcus-webb-only_016": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_016.svg",
+    "marcus-webb-only_idle-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_idle-2.svg",
       "sheet": "Marcus Webb only",
       "index": 16,
       "size": {
@@ -10369,8 +10369,8 @@
         "h": 132
       }
     },
-    "marcus-webb-only_017": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_017.svg",
+    "marcus-webb-only_idle-3": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_idle-3.svg",
       "sheet": "Marcus Webb only",
       "index": 17,
       "size": {
@@ -10378,8 +10378,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_018": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_018.svg",
+    "marcus-webb-only_idle-4": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_idle-4.svg",
       "sheet": "Marcus Webb only",
       "index": 18,
       "size": {
@@ -10387,8 +10387,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_019": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_019.svg",
+    "marcus-webb-only_typing-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_typing-1.svg",
       "sheet": "Marcus Webb only",
       "index": 19,
       "size": {
@@ -10396,8 +10396,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_020": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_020.svg",
+    "marcus-webb-only_typing-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_typing-2.svg",
       "sheet": "Marcus Webb only",
       "index": 20,
       "size": {
@@ -10405,8 +10405,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_021": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_021.svg",
+    "marcus-webb-only_walk-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_walk-1.svg",
       "sheet": "Marcus Webb only",
       "index": 21,
       "size": {
@@ -10414,8 +10414,8 @@
         "h": 132
       }
     },
-    "marcus-webb-only_022": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_022.svg",
+    "marcus-webb-only_walk-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_walk-2.svg",
       "sheet": "Marcus Webb only",
       "index": 22,
       "size": {
@@ -10423,8 +10423,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_023": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_023.svg",
+    "marcus-webb-only_walk-3": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_walk-3.svg",
       "sheet": "Marcus Webb only",
       "index": 23,
       "size": {
@@ -10432,8 +10432,8 @@
         "h": 132
       }
     },
-    "marcus-webb-only_024": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_024.svg",
+    "marcus-webb-only_walk-4": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_walk-4.svg",
       "sheet": "Marcus Webb only",
       "index": 24,
       "size": {
@@ -10441,8 +10441,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_025": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_025.svg",
+    "marcus-webb-only_panic-run-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_panic-run-1.svg",
       "sheet": "Marcus Webb only",
       "index": 25,
       "size": {
@@ -10450,8 +10450,8 @@
         "h": 114
       }
     },
-    "marcus-webb-only_026": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_026.svg",
+    "marcus-webb-only_panic-run-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_panic-run-2.svg",
       "sheet": "Marcus Webb only",
       "index": 26,
       "size": {
@@ -10459,8 +10459,8 @@
         "h": 113
       }
     },
-    "marcus-webb-only_027": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_027.svg",
+    "marcus-webb-only_panic-run-3": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_panic-run-3.svg",
       "sheet": "Marcus Webb only",
       "index": 27,
       "size": {
@@ -10468,8 +10468,8 @@
         "h": 112
       }
     },
-    "marcus-webb-only_028": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_028.svg",
+    "marcus-webb-only_panic-run-4": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_panic-run-4.svg",
       "sheet": "Marcus Webb only",
       "index": 28,
       "size": {
@@ -10477,8 +10477,8 @@
         "h": 113
       }
     },
-    "marcus-webb-only_029": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_029.svg",
+    "marcus-webb-only_sitting": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_sitting.svg",
       "sheet": "Marcus Webb only",
       "index": 29,
       "size": {
@@ -10486,8 +10486,8 @@
         "h": 117
       }
     },
-    "marcus-webb-only_030": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_030.svg",
+    "marcus-webb-only_standup-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_standup-1.svg",
       "sheet": "Marcus Webb only",
       "index": 30,
       "size": {
@@ -10495,8 +10495,8 @@
         "h": 103
       }
     },
-    "marcus-webb-only_031": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_031.svg",
+    "marcus-webb-only_standup-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_standup-2.svg",
       "sheet": "Marcus Webb only",
       "index": 31,
       "size": {
@@ -10504,8 +10504,8 @@
         "h": 112
       }
     },
-    "marcus-webb-only_032": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_032.svg",
+    "marcus-webb-only_standup-3": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_standup-3.svg",
       "sheet": "Marcus Webb only",
       "index": 32,
       "size": {
@@ -10513,8 +10513,8 @@
         "h": 115
       }
     },
-    "marcus-webb-only_033": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_033.svg",
+    "marcus-webb-only_celebrate-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_celebrate-1.svg",
       "sheet": "Marcus Webb only",
       "index": 33,
       "size": {
@@ -10522,8 +10522,8 @@
         "h": 122
       }
     },
-    "marcus-webb-only_034": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_034.svg",
+    "marcus-webb-only_celebrate-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_celebrate-2.svg",
       "sheet": "Marcus Webb only",
       "index": 34,
       "size": {
@@ -10531,8 +10531,8 @@
         "h": 122
       }
     },
-    "marcus-webb-only_035": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_035.svg",
+    "marcus-webb-only_celebrate-3": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_celebrate-3.svg",
       "sheet": "Marcus Webb only",
       "index": 35,
       "size": {
@@ -10540,8 +10540,8 @@
         "h": 122
       }
     },
-    "marcus-webb-only_036": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_036.svg",
+    "marcus-webb-only_celebrate-4": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_celebrate-4.svg",
       "sheet": "Marcus Webb only",
       "index": 36,
       "size": {
@@ -10549,8 +10549,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_037": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_037.svg",
+    "marcus-webb-only_talk-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_talk-1.svg",
       "sheet": "Marcus Webb only",
       "index": 37,
       "size": {
@@ -10558,8 +10558,8 @@
         "h": 122
       }
     },
-    "marcus-webb-only_038": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_038.svg",
+    "marcus-webb-only_talk-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_talk-2.svg",
       "sheet": "Marcus Webb only",
       "index": 38,
       "size": {
@@ -10567,8 +10567,8 @@
         "h": 121
       }
     },
-    "marcus-webb-only_039": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_039.svg",
+    "marcus-webb-only_wave": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_wave.svg",
       "sheet": "Marcus Webb only",
       "index": 39,
       "size": {
@@ -10576,8 +10576,8 @@
         "h": 122
       }
     },
-    "marcus-webb-only_040": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_040.svg",
+    "marcus-webb-only_walk-home": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_walk-home.svg",
       "sheet": "Marcus Webb only",
       "index": 40,
       "size": {
@@ -10585,8 +10585,8 @@
         "h": 120
       }
     },
-    "marcus-webb-only_041": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_041.svg",
+    "marcus-webb-only_elevator": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_elevator.svg",
       "sheet": "Marcus Webb only",
       "index": 41,
       "size": {
@@ -10594,8 +10594,8 @@
         "h": 119
       }
     },
-    "marcus-webb-only_042": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_042.svg",
+    "marcus-webb-only_levelup-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_levelup-1.svg",
       "sheet": "Marcus Webb only",
       "index": 42,
       "size": {
@@ -10603,8 +10603,8 @@
         "h": 139
       }
     },
-    "marcus-webb-only_043": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_043.svg",
+    "marcus-webb-only_levelup-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_levelup-2.svg",
       "sheet": "Marcus Webb only",
       "index": 43,
       "size": {
@@ -10612,8 +10612,8 @@
         "h": 139
       }
     },
-    "marcus-webb-only_044": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_044.svg",
+    "marcus-webb-only_levelup-3": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_levelup-3.svg",
       "sheet": "Marcus Webb only",
       "index": 44,
       "size": {
@@ -10621,8 +10621,8 @@
         "h": 144
       }
     },
-    "marcus-webb-only_045": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_045.svg",
+    "marcus-webb-only_levelup-4": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_levelup-4.svg",
       "sheet": "Marcus Webb only",
       "index": 45,
       "size": {
@@ -10630,8 +10630,8 @@
         "h": 118
       }
     },
-    "marcus-webb-only_046": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_046.svg",
+    "marcus-webb-only_levelup-5": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_levelup-5.svg",
       "sheet": "Marcus Webb only",
       "index": 46,
       "size": {
@@ -10639,8 +10639,8 @@
         "h": 148
       }
     },
-    "marcus-webb-only_047": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_047.svg",
+    "marcus-webb-only_coffee-walk-1": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_coffee-walk-1.svg",
       "sheet": "Marcus Webb only",
       "index": 47,
       "size": {
@@ -10648,8 +10648,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_048": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_048.svg",
+    "marcus-webb-only_coffee-walk-2": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_coffee-walk-2.svg",
       "sheet": "Marcus Webb only",
       "index": 48,
       "size": {
@@ -10657,8 +10657,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_049": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_049.svg",
+    "marcus-webb-only_late-mild": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_late-mild.svg",
       "sheet": "Marcus Webb only",
       "index": 49,
       "size": {
@@ -10666,8 +10666,8 @@
         "h": 131
       }
     },
-    "marcus-webb-only_050": {
-      "file": "individual/marcus-webb-only/marcus-webb-only_050.svg",
+    "marcus-webb-only_late-panic": {
+      "file": "individual/marcus-webb-only/marcus-webb-only_late-panic.svg",
       "sheet": "Marcus Webb only",
       "index": 50,
       "size": {
@@ -11318,8 +11318,8 @@
     }
   },
   "Rio Tanaka only": {
-    "rio-tanaka-only_000": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_000.svg",
+    "rio-tanaka-only_base": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_base.svg",
       "sheet": "Rio Tanaka only",
       "index": 0,
       "size": {
@@ -11327,8 +11327,8 @@
         "h": 130
       }
     },
-    "rio-tanaka-only_001": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_001.svg",
+    "rio-tanaka-only_emotion-neutral": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-neutral.svg",
       "sheet": "Rio Tanaka only",
       "index": 1,
       "size": {
@@ -11336,8 +11336,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_002": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_002.svg",
+    "rio-tanaka-only_emotion-happy": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-happy.svg",
       "sheet": "Rio Tanaka only",
       "index": 2,
       "size": {
@@ -11345,8 +11345,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_003": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_003.svg",
+    "rio-tanaka-only_emotion-talking": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-talking.svg",
       "sheet": "Rio Tanaka only",
       "index": 3,
       "size": {
@@ -11354,8 +11354,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_004": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_004.svg",
+    "rio-tanaka-only_emotion-thinking": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-thinking.svg",
       "sheet": "Rio Tanaka only",
       "index": 4,
       "size": {
@@ -11363,8 +11363,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_005": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_005.svg",
+    "rio-tanaka-only_emotion-stressed": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-stressed.svg",
       "sheet": "Rio Tanaka only",
       "index": 5,
       "size": {
@@ -11372,8 +11372,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_006": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_006.svg",
+    "rio-tanaka-only_emotion-excited": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-excited.svg",
       "sheet": "Rio Tanaka only",
       "index": 6,
       "size": {
@@ -11381,8 +11381,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_007": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_007.svg",
+    "rio-tanaka-only_emotion-concerned": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-concerned.svg",
       "sheet": "Rio Tanaka only",
       "index": 7,
       "size": {
@@ -11390,8 +11390,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_008": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_008.svg",
+    "rio-tanaka-only_emotion-frustrated": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-frustrated.svg",
       "sheet": "Rio Tanaka only",
       "index": 8,
       "size": {
@@ -11399,8 +11399,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_009": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_009.svg",
+    "rio-tanaka-only_emotion-satisfied": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-satisfied.svg",
       "sheet": "Rio Tanaka only",
       "index": 9,
       "size": {
@@ -11408,8 +11408,8 @@
         "h": 85
       }
     },
-    "rio-tanaka-only_010": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_010.svg",
+    "rio-tanaka-only_emotion-curious": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-curious.svg",
       "sheet": "Rio Tanaka only",
       "index": 10,
       "size": {
@@ -11417,8 +11417,8 @@
         "h": 87
       }
     },
-    "rio-tanaka-only_011": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_011.svg",
+    "rio-tanaka-only_emotion-celebrating": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-celebrating.svg",
       "sheet": "Rio Tanaka only",
       "index": 11,
       "size": {
@@ -11426,8 +11426,8 @@
         "h": 91
       }
     },
-    "rio-tanaka-only_012": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_012.svg",
+    "rio-tanaka-only_emotion-sleeping": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-sleeping.svg",
       "sheet": "Rio Tanaka only",
       "index": 12,
       "size": {
@@ -11435,8 +11435,8 @@
         "h": 92
       }
     },
-    "rio-tanaka-only_013": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_013.svg",
+    "rio-tanaka-only_emotion-panicking": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-panicking.svg",
       "sheet": "Rio Tanaka only",
       "index": 13,
       "size": {
@@ -11444,8 +11444,8 @@
         "h": 64
       }
     },
-    "rio-tanaka-only_014": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_014.svg",
+    "rio-tanaka-only_emotion-rushing": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_emotion-rushing.svg",
       "sheet": "Rio Tanaka only",
       "index": 14,
       "size": {
@@ -11453,8 +11453,8 @@
         "h": 92
       }
     },
-    "rio-tanaka-only_015": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_015.svg",
+    "rio-tanaka-only_idle-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_idle-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 15,
       "size": {
@@ -11462,8 +11462,8 @@
         "h": 92
       }
     },
-    "rio-tanaka-only_016": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_016.svg",
+    "rio-tanaka-only_idle-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_idle-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 16,
       "size": {
@@ -11471,8 +11471,8 @@
         "h": 120
       }
     },
-    "rio-tanaka-only_017": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_017.svg",
+    "rio-tanaka-only_idle-3": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_idle-3.svg",
       "sheet": "Rio Tanaka only",
       "index": 17,
       "size": {
@@ -11480,8 +11480,8 @@
         "h": 119
       }
     },
-    "rio-tanaka-only_018": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_018.svg",
+    "rio-tanaka-only_idle-4": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_idle-4.svg",
       "sheet": "Rio Tanaka only",
       "index": 18,
       "size": {
@@ -11489,8 +11489,8 @@
         "h": 119
       }
     },
-    "rio-tanaka-only_019": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_019.svg",
+    "rio-tanaka-only_typing-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_typing-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 19,
       "size": {
@@ -11498,8 +11498,8 @@
         "h": 120
       }
     },
-    "rio-tanaka-only_020": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_020.svg",
+    "rio-tanaka-only_typing-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_typing-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 20,
       "size": {
@@ -11507,8 +11507,8 @@
         "h": 121
       }
     },
-    "rio-tanaka-only_021": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_021.svg",
+    "rio-tanaka-only_walk-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_walk-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 21,
       "size": {
@@ -11516,8 +11516,8 @@
         "h": 121
       }
     },
-    "rio-tanaka-only_022": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_022.svg",
+    "rio-tanaka-only_walk-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_walk-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 22,
       "size": {
@@ -11525,8 +11525,8 @@
         "h": 120
       }
     },
-    "rio-tanaka-only_023": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_023.svg",
+    "rio-tanaka-only_walk-3": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_walk-3.svg",
       "sheet": "Rio Tanaka only",
       "index": 23,
       "size": {
@@ -11534,8 +11534,8 @@
         "h": 120
       }
     },
-    "rio-tanaka-only_024": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_024.svg",
+    "rio-tanaka-only_walk-4": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_walk-4.svg",
       "sheet": "Rio Tanaka only",
       "index": 24,
       "size": {
@@ -11543,8 +11543,8 @@
         "h": 120
       }
     },
-    "rio-tanaka-only_025": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_025.svg",
+    "rio-tanaka-only_panic-run-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_panic-run-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 25,
       "size": {
@@ -11552,8 +11552,8 @@
         "h": 121
       }
     },
-    "rio-tanaka-only_026": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_026.svg",
+    "rio-tanaka-only_panic-run-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_panic-run-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 26,
       "size": {
@@ -11561,8 +11561,8 @@
         "h": 109
       }
     },
-    "rio-tanaka-only_027": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_027.svg",
+    "rio-tanaka-only_panic-run-3": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_panic-run-3.svg",
       "sheet": "Rio Tanaka only",
       "index": 27,
       "size": {
@@ -11570,8 +11570,8 @@
         "h": 109
       }
     },
-    "rio-tanaka-only_028": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_028.svg",
+    "rio-tanaka-only_panic-run-4": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_panic-run-4.svg",
       "sheet": "Rio Tanaka only",
       "index": 28,
       "size": {
@@ -11579,8 +11579,8 @@
         "h": 112
       }
     },
-    "rio-tanaka-only_029": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_029.svg",
+    "rio-tanaka-only_sitting": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_sitting.svg",
       "sheet": "Rio Tanaka only",
       "index": 29,
       "size": {
@@ -11588,8 +11588,8 @@
         "h": 117
       }
     },
-    "rio-tanaka-only_030": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_030.svg",
+    "rio-tanaka-only_standup-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_standup-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 30,
       "size": {
@@ -11597,8 +11597,8 @@
         "h": 115
       }
     },
-    "rio-tanaka-only_031": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_031.svg",
+    "rio-tanaka-only_standup-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_standup-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 31,
       "size": {
@@ -11606,8 +11606,8 @@
         "h": 109
       }
     },
-    "rio-tanaka-only_032": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_032.svg",
+    "rio-tanaka-only_standup-3": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_standup-3.svg",
       "sheet": "Rio Tanaka only",
       "index": 32,
       "size": {
@@ -11615,8 +11615,8 @@
         "h": 111
       }
     },
-    "rio-tanaka-only_033": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_033.svg",
+    "rio-tanaka-only_celebrate-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_celebrate-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 33,
       "size": {
@@ -11624,8 +11624,8 @@
         "h": 114
       }
     },
-    "rio-tanaka-only_034": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_034.svg",
+    "rio-tanaka-only_celebrate-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_celebrate-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 34,
       "size": {
@@ -11633,8 +11633,8 @@
         "h": 113
       }
     },
-    "rio-tanaka-only_035": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_035.svg",
+    "rio-tanaka-only_celebrate-3": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_celebrate-3.svg",
       "sheet": "Rio Tanaka only",
       "index": 35,
       "size": {
@@ -11642,8 +11642,8 @@
         "h": 113
       }
     },
-    "rio-tanaka-only_036": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_036.svg",
+    "rio-tanaka-only_celebrate-4": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_celebrate-4.svg",
       "sheet": "Rio Tanaka only",
       "index": 36,
       "size": {
@@ -11651,8 +11651,8 @@
         "h": 115
       }
     },
-    "rio-tanaka-only_037": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_037.svg",
+    "rio-tanaka-only_talk-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_talk-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 37,
       "size": {
@@ -11660,8 +11660,8 @@
         "h": 124
       }
     },
-    "rio-tanaka-only_038": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_038.svg",
+    "rio-tanaka-only_talk-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_talk-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 38,
       "size": {
@@ -11669,8 +11669,8 @@
         "h": 111
       }
     },
-    "rio-tanaka-only_039": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_039.svg",
+    "rio-tanaka-only_wave": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_wave.svg",
       "sheet": "Rio Tanaka only",
       "index": 39,
       "size": {
@@ -11678,8 +11678,8 @@
         "h": 111
       }
     },
-    "rio-tanaka-only_040": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_040.svg",
+    "rio-tanaka-only_walk-home": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_walk-home.svg",
       "sheet": "Rio Tanaka only",
       "index": 40,
       "size": {
@@ -11687,8 +11687,8 @@
         "h": 111
       }
     },
-    "rio-tanaka-only_041": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_041.svg",
+    "rio-tanaka-only_elevator": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_elevator.svg",
       "sheet": "Rio Tanaka only",
       "index": 41,
       "size": {
@@ -11696,8 +11696,8 @@
         "h": 110
       }
     },
-    "rio-tanaka-only_042": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_042.svg",
+    "rio-tanaka-only_levelup-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_levelup-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 42,
       "size": {
@@ -11705,8 +11705,8 @@
         "h": 112
       }
     },
-    "rio-tanaka-only_043": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_043.svg",
+    "rio-tanaka-only_levelup-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_levelup-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 43,
       "size": {
@@ -11714,8 +11714,8 @@
         "h": 129
       }
     },
-    "rio-tanaka-only_044": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_044.svg",
+    "rio-tanaka-only_levelup-3": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_levelup-3.svg",
       "sheet": "Rio Tanaka only",
       "index": 44,
       "size": {
@@ -11723,8 +11723,8 @@
         "h": 128
       }
     },
-    "rio-tanaka-only_045": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_045.svg",
+    "rio-tanaka-only_levelup-4": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_levelup-4.svg",
       "sheet": "Rio Tanaka only",
       "index": 45,
       "size": {
@@ -11732,8 +11732,8 @@
         "h": 132
       }
     },
-    "rio-tanaka-only_046": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_046.svg",
+    "rio-tanaka-only_levelup-5": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_levelup-5.svg",
       "sheet": "Rio Tanaka only",
       "index": 46,
       "size": {
@@ -11741,8 +11741,8 @@
         "h": 126
       }
     },
-    "rio-tanaka-only_047": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_047.svg",
+    "rio-tanaka-only_coffee-walk-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_coffee-walk-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 47,
       "size": {
@@ -11750,8 +11750,8 @@
         "h": 133
       }
     },
-    "rio-tanaka-only_048": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_048.svg",
+    "rio-tanaka-only_coffee-walk-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_coffee-walk-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 48,
       "size": {
@@ -11759,8 +11759,8 @@
         "h": 116
       }
     },
-    "rio-tanaka-only_049": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_049.svg",
+    "rio-tanaka-only_late-mild": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_late-mild.svg",
       "sheet": "Rio Tanaka only",
       "index": 49,
       "size": {
@@ -11768,8 +11768,8 @@
         "h": 115
       }
     },
-    "rio-tanaka-only_050": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_050.svg",
+    "rio-tanaka-only_late-panic": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_late-panic.svg",
       "sheet": "Rio Tanaka only",
       "index": 50,
       "size": {
@@ -11777,8 +11777,8 @@
         "h": 117
       }
     },
-    "rio-tanaka-only_051": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_051.svg",
+    "rio-tanaka-only_desk-1": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_desk-1.svg",
       "sheet": "Rio Tanaka only",
       "index": 51,
       "size": {
@@ -11786,8 +11786,8 @@
         "h": 118
       }
     },
-    "rio-tanaka-only_052": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_052.svg",
+    "rio-tanaka-only_desk-2": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_desk-2.svg",
       "sheet": "Rio Tanaka only",
       "index": 52,
       "size": {
@@ -11795,8 +11795,8 @@
         "h": 78
       }
     },
-    "rio-tanaka-only_053": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_053.svg",
+    "rio-tanaka-only_desk-3": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_desk-3.svg",
       "sheet": "Rio Tanaka only",
       "index": 53,
       "size": {
@@ -11804,8 +11804,8 @@
         "h": 78
       }
     },
-    "rio-tanaka-only_054": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_054.svg",
+    "rio-tanaka-only_desk-4": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_desk-4.svg",
       "sheet": "Rio Tanaka only",
       "index": 54,
       "size": {
@@ -11813,8 +11813,8 @@
         "h": 81
       }
     },
-    "rio-tanaka-only_055": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_055.svg",
+    "rio-tanaka-only_desk-5": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_desk-5.svg",
       "sheet": "Rio Tanaka only",
       "index": 55,
       "size": {
@@ -11822,8 +11822,8 @@
         "h": 81
       }
     },
-    "rio-tanaka-only_056": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_056.svg",
+    "rio-tanaka-only_desk-6": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_desk-6.svg",
       "sheet": "Rio Tanaka only",
       "index": 56,
       "size": {
@@ -11831,8 +11831,8 @@
         "h": 80
       }
     },
-    "rio-tanaka-only_057": {
-      "file": "individual/rio-tanaka-only/rio-tanaka-only_057.svg",
+    "rio-tanaka-only_desk-7": {
+      "file": "individual/rio-tanaka-only/rio-tanaka-only_desk-7.svg",
       "sheet": "Rio Tanaka only",
       "index": 57,
       "size": {
@@ -11842,8 +11842,8 @@
     }
   },
   "Sarah Chen only": {
-    "sarah-chen-only_000": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_000.svg",
+    "sarah-chen-only_base": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_base.svg",
       "sheet": "Sarah Chen only",
       "index": 0,
       "size": {
@@ -11851,8 +11851,8 @@
         "h": 142
       }
     },
-    "sarah-chen-only_001": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_001.svg",
+    "sarah-chen-only_emotion-neutral": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-neutral.svg",
       "sheet": "Sarah Chen only",
       "index": 1,
       "size": {
@@ -11860,8 +11860,8 @@
         "h": 84
       }
     },
-    "sarah-chen-only_002": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_002.svg",
+    "sarah-chen-only_emotion-happy": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-happy.svg",
       "sheet": "Sarah Chen only",
       "index": 2,
       "size": {
@@ -11869,8 +11869,8 @@
         "h": 83
       }
     },
-    "sarah-chen-only_003": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_003.svg",
+    "sarah-chen-only_emotion-talking": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-talking.svg",
       "sheet": "Sarah Chen only",
       "index": 3,
       "size": {
@@ -11878,8 +11878,8 @@
         "h": 84
       }
     },
-    "sarah-chen-only_004": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_004.svg",
+    "sarah-chen-only_emotion-thinking": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-thinking.svg",
       "sheet": "Sarah Chen only",
       "index": 4,
       "size": {
@@ -11887,8 +11887,8 @@
         "h": 84
       }
     },
-    "sarah-chen-only_005": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_005.svg",
+    "sarah-chen-only_emotion-stressed": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-stressed.svg",
       "sheet": "Sarah Chen only",
       "index": 5,
       "size": {
@@ -11896,8 +11896,8 @@
         "h": 84
       }
     },
-    "sarah-chen-only_006": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_006.svg",
+    "sarah-chen-only_emotion-excited": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-excited.svg",
       "sheet": "Sarah Chen only",
       "index": 6,
       "size": {
@@ -11905,8 +11905,8 @@
         "h": 83
       }
     },
-    "sarah-chen-only_007": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_007.svg",
+    "sarah-chen-only_emotion-concerned": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-concerned.svg",
       "sheet": "Sarah Chen only",
       "index": 7,
       "size": {
@@ -11914,8 +11914,8 @@
         "h": 84
       }
     },
-    "sarah-chen-only_008": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_008.svg",
+    "sarah-chen-only_emotion-frustrated": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-frustrated.svg",
       "sheet": "Sarah Chen only",
       "index": 8,
       "size": {
@@ -11923,8 +11923,8 @@
         "h": 84
       }
     },
-    "sarah-chen-only_009": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_009.svg",
+    "sarah-chen-only_emotion-satisfied": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-satisfied.svg",
       "sheet": "Sarah Chen only",
       "index": 9,
       "size": {
@@ -11932,8 +11932,8 @@
         "h": 84
       }
     },
-    "sarah-chen-only_010": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_010.svg",
+    "sarah-chen-only_emotion-curious": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-curious.svg",
       "sheet": "Sarah Chen only",
       "index": 10,
       "size": {
@@ -11941,8 +11941,8 @@
         "h": 87
       }
     },
-    "sarah-chen-only_011": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_011.svg",
+    "sarah-chen-only_emotion-celebrating": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-celebrating.svg",
       "sheet": "Sarah Chen only",
       "index": 11,
       "size": {
@@ -11950,8 +11950,8 @@
         "h": 87
       }
     },
-    "sarah-chen-only_012": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_012.svg",
+    "sarah-chen-only_emotion-sleeping": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-sleeping.svg",
       "sheet": "Sarah Chen only",
       "index": 12,
       "size": {
@@ -11959,8 +11959,8 @@
         "h": 91
       }
     },
-    "sarah-chen-only_013": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_013.svg",
+    "sarah-chen-only_emotion-panicking": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-panicking.svg",
       "sheet": "Sarah Chen only",
       "index": 13,
       "size": {
@@ -11968,8 +11968,8 @@
         "h": 88
       }
     },
-    "sarah-chen-only_014": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_014.svg",
+    "sarah-chen-only_emotion-rushing": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_emotion-rushing.svg",
       "sheet": "Sarah Chen only",
       "index": 14,
       "size": {
@@ -11977,8 +11977,8 @@
         "h": 86
       }
     },
-    "sarah-chen-only_015": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_015.svg",
+    "sarah-chen-only_idle-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_idle-1.svg",
       "sheet": "Sarah Chen only",
       "index": 15,
       "size": {
@@ -11986,8 +11986,8 @@
         "h": 121
       }
     },
-    "sarah-chen-only_016": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_016.svg",
+    "sarah-chen-only_idle-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_idle-2.svg",
       "sheet": "Sarah Chen only",
       "index": 16,
       "size": {
@@ -11995,8 +11995,8 @@
         "h": 122
       }
     },
-    "sarah-chen-only_017": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_017.svg",
+    "sarah-chen-only_idle-3": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_idle-3.svg",
       "sheet": "Sarah Chen only",
       "index": 17,
       "size": {
@@ -12004,8 +12004,8 @@
         "h": 122
       }
     },
-    "sarah-chen-only_018": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_018.svg",
+    "sarah-chen-only_idle-4": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_idle-4.svg",
       "sheet": "Sarah Chen only",
       "index": 18,
       "size": {
@@ -12013,8 +12013,8 @@
         "h": 121
       }
     },
-    "sarah-chen-only_019": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_019.svg",
+    "sarah-chen-only_typing-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_typing-1.svg",
       "sheet": "Sarah Chen only",
       "index": 19,
       "size": {
@@ -12022,8 +12022,8 @@
         "h": 121
       }
     },
-    "sarah-chen-only_020": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_020.svg",
+    "sarah-chen-only_typing-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_typing-2.svg",
       "sheet": "Sarah Chen only",
       "index": 20,
       "size": {
@@ -12031,8 +12031,8 @@
         "h": 121
       }
     },
-    "sarah-chen-only_021": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_021.svg",
+    "sarah-chen-only_walk-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_walk-1.svg",
       "sheet": "Sarah Chen only",
       "index": 21,
       "size": {
@@ -12040,8 +12040,8 @@
         "h": 122
       }
     },
-    "sarah-chen-only_022": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_022.svg",
+    "sarah-chen-only_walk-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_walk-2.svg",
       "sheet": "Sarah Chen only",
       "index": 22,
       "size": {
@@ -12049,8 +12049,8 @@
         "h": 121
       }
     },
-    "sarah-chen-only_023": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_023.svg",
+    "sarah-chen-only_walk-3": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_walk-3.svg",
       "sheet": "Sarah Chen only",
       "index": 23,
       "size": {
@@ -12058,8 +12058,8 @@
         "h": 121
       }
     },
-    "sarah-chen-only_024": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_024.svg",
+    "sarah-chen-only_walk-4": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_walk-4.svg",
       "sheet": "Sarah Chen only",
       "index": 24,
       "size": {
@@ -12067,8 +12067,8 @@
         "h": 121
       }
     },
-    "sarah-chen-only_025": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_025.svg",
+    "sarah-chen-only_panic-run-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_panic-run-1.svg",
       "sheet": "Sarah Chen only",
       "index": 25,
       "size": {
@@ -12076,8 +12076,8 @@
         "h": 104
       }
     },
-    "sarah-chen-only_026": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_026.svg",
+    "sarah-chen-only_panic-run-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_panic-run-2.svg",
       "sheet": "Sarah Chen only",
       "index": 26,
       "size": {
@@ -12085,8 +12085,8 @@
         "h": 107
       }
     },
-    "sarah-chen-only_027": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_027.svg",
+    "sarah-chen-only_panic-run-3": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_panic-run-3.svg",
       "sheet": "Sarah Chen only",
       "index": 27,
       "size": {
@@ -12094,8 +12094,8 @@
         "h": 106
       }
     },
-    "sarah-chen-only_028": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_028.svg",
+    "sarah-chen-only_panic-run-4": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_panic-run-4.svg",
       "sheet": "Sarah Chen only",
       "index": 28,
       "size": {
@@ -12103,8 +12103,8 @@
         "h": 107
       }
     },
-    "sarah-chen-only_029": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_029.svg",
+    "sarah-chen-only_sitting": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_sitting.svg",
       "sheet": "Sarah Chen only",
       "index": 29,
       "size": {
@@ -12112,8 +12112,8 @@
         "h": 111
       }
     },
-    "sarah-chen-only_030": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_030.svg",
+    "sarah-chen-only_standup-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_standup-1.svg",
       "sheet": "Sarah Chen only",
       "index": 30,
       "size": {
@@ -12121,8 +12121,8 @@
         "h": 106
       }
     },
-    "sarah-chen-only_031": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_031.svg",
+    "sarah-chen-only_standup-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_standup-2.svg",
       "sheet": "Sarah Chen only",
       "index": 31,
       "size": {
@@ -12130,8 +12130,8 @@
         "h": 105
       }
     },
-    "sarah-chen-only_032": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_032.svg",
+    "sarah-chen-only_standup-3": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_standup-3.svg",
       "sheet": "Sarah Chen only",
       "index": 32,
       "size": {
@@ -12139,8 +12139,8 @@
         "h": 109
       }
     },
-    "sarah-chen-only_033": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_033.svg",
+    "sarah-chen-only_celebrate-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_celebrate-1.svg",
       "sheet": "Sarah Chen only",
       "index": 33,
       "size": {
@@ -12148,8 +12148,8 @@
         "h": 115
       }
     },
-    "sarah-chen-only_034": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_034.svg",
+    "sarah-chen-only_celebrate-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_celebrate-2.svg",
       "sheet": "Sarah Chen only",
       "index": 34,
       "size": {
@@ -12157,8 +12157,8 @@
         "h": 115
       }
     },
-    "sarah-chen-only_035": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_035.svg",
+    "sarah-chen-only_celebrate-3": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_celebrate-3.svg",
       "sheet": "Sarah Chen only",
       "index": 35,
       "size": {
@@ -12166,8 +12166,8 @@
         "h": 115
       }
     },
-    "sarah-chen-only_036": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_036.svg",
+    "sarah-chen-only_celebrate-4": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_celebrate-4.svg",
       "sheet": "Sarah Chen only",
       "index": 36,
       "size": {
@@ -12175,8 +12175,8 @@
         "h": 122
       }
     },
-    "sarah-chen-only_037": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_037.svg",
+    "sarah-chen-only_talk-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_talk-1.svg",
       "sheet": "Sarah Chen only",
       "index": 37,
       "size": {
@@ -12184,8 +12184,8 @@
         "h": 112
       }
     },
-    "sarah-chen-only_038": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_038.svg",
+    "sarah-chen-only_talk-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_talk-2.svg",
       "sheet": "Sarah Chen only",
       "index": 38,
       "size": {
@@ -12193,8 +12193,8 @@
         "h": 112
       }
     },
-    "sarah-chen-only_039": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_039.svg",
+    "sarah-chen-only_wave": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_wave.svg",
       "sheet": "Sarah Chen only",
       "index": 39,
       "size": {
@@ -12202,8 +12202,8 @@
         "h": 111
       }
     },
-    "sarah-chen-only_040": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_040.svg",
+    "sarah-chen-only_walk-home": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_walk-home.svg",
       "sheet": "Sarah Chen only",
       "index": 40,
       "size": {
@@ -12211,8 +12211,8 @@
         "h": 110
       }
     },
-    "sarah-chen-only_041": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_041.svg",
+    "sarah-chen-only_elevator": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_elevator.svg",
       "sheet": "Sarah Chen only",
       "index": 41,
       "size": {
@@ -12220,8 +12220,8 @@
         "h": 116
       }
     },
-    "sarah-chen-only_042": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_042.svg",
+    "sarah-chen-only_levelup-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_levelup-1.svg",
       "sheet": "Sarah Chen only",
       "index": 42,
       "size": {
@@ -12229,8 +12229,8 @@
         "h": 134
       }
     },
-    "sarah-chen-only_043": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_043.svg",
+    "sarah-chen-only_levelup-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_levelup-2.svg",
       "sheet": "Sarah Chen only",
       "index": 43,
       "size": {
@@ -12238,8 +12238,8 @@
         "h": 134
       }
     },
-    "sarah-chen-only_044": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_044.svg",
+    "sarah-chen-only_levelup-3": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_levelup-3.svg",
       "sheet": "Sarah Chen only",
       "index": 44,
       "size": {
@@ -12247,8 +12247,8 @@
         "h": 137
       }
     },
-    "sarah-chen-only_045": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_045.svg",
+    "sarah-chen-only_levelup-4": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_levelup-4.svg",
       "sheet": "Sarah Chen only",
       "index": 45,
       "size": {
@@ -12256,8 +12256,8 @@
         "h": 133
       }
     },
-    "sarah-chen-only_046": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_046.svg",
+    "sarah-chen-only_levelup-5": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_levelup-5.svg",
       "sheet": "Sarah Chen only",
       "index": 46,
       "size": {
@@ -12265,8 +12265,8 @@
         "h": 135
       }
     },
-    "sarah-chen-only_047": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_047.svg",
+    "sarah-chen-only_coffee-walk-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_coffee-walk-1.svg",
       "sheet": "Sarah Chen only",
       "index": 47,
       "size": {
@@ -12274,8 +12274,8 @@
         "h": 116
       }
     },
-    "sarah-chen-only_048": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_048.svg",
+    "sarah-chen-only_coffee-walk-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_coffee-walk-2.svg",
       "sheet": "Sarah Chen only",
       "index": 48,
       "size": {
@@ -12283,8 +12283,8 @@
         "h": 116
       }
     },
-    "sarah-chen-only_049": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_049.svg",
+    "sarah-chen-only_late-mild": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_late-mild.svg",
       "sheet": "Sarah Chen only",
       "index": 49,
       "size": {
@@ -12292,8 +12292,8 @@
         "h": 116
       }
     },
-    "sarah-chen-only_050": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_050.svg",
+    "sarah-chen-only_late-panic": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_late-panic.svg",
       "sheet": "Sarah Chen only",
       "index": 50,
       "size": {
@@ -12301,8 +12301,8 @@
         "h": 118
       }
     },
-    "sarah-chen-only_051": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_051.svg",
+    "sarah-chen-only_desk-1": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_desk-1.svg",
       "sheet": "Sarah Chen only",
       "index": 51,
       "size": {
@@ -12310,8 +12310,8 @@
         "h": 75
       }
     },
-    "sarah-chen-only_052": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_052.svg",
+    "sarah-chen-only_desk-2": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_desk-2.svg",
       "sheet": "Sarah Chen only",
       "index": 52,
       "size": {
@@ -12319,8 +12319,8 @@
         "h": 74
       }
     },
-    "sarah-chen-only_053": {
-      "file": "individual/sarah-chen-only/sarah-chen-only_053.svg",
+    "sarah-chen-only_desk-3": {
+      "file": "individual/sarah-chen-only/sarah-chen-only_desk-3.svg",
       "sheet": "Sarah Chen only",
       "index": 53,
       "size": {
