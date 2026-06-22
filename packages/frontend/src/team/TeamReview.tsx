@@ -11,6 +11,8 @@ import type { Diagnostic, Severity } from '@archlab/shared';
 import { ArchCo } from './archco/ArchCo.js';
 import type { ThreatLevel } from './archco/FloorScene.js';
 import { EMPLOYEES } from './archco/companyData.js';
+import { detectAvailableProvider, type ProviderKeys } from './archco/multiProviderAI.js';
+import { runItemDebate, type DebateMessage, type DebateSeverity } from './teamDebateRunner.js';
 
 export interface ReviewQueueItem {
   id: string;
@@ -32,6 +34,12 @@ interface TeamReviewProps {
   onClose?: () => void;
   /** Render as a full-surface tab (no modal backdrop) instead of an overlay. */
   embedded?: boolean;
+  /** Provider keys for the AI debate + AI Update. */
+  apiKeys?: ProviderKeys;
+  /** Short project description for AI prompts. */
+  projectContext?: string;
+  /** Cross-project brain insights passed to ArchCo's AI Update. */
+  brainInsights?: string[];
 }
 
 type BadgeSeverity = 'critical' | 'high' | 'medium' | 'low';
@@ -141,9 +149,23 @@ function buildCompanyMasterPrompt(queue: ReviewQueueItem[]): string {
   return lines.join('\n');
 }
 
-export function TeamReview({ session, diagnostics = [], onClose, embedded = false }: TeamReviewProps) {
+export function TeamReview({
+  session,
+  diagnostics = [],
+  onClose,
+  embedded = false,
+  apiKeys = {},
+  projectContext = '',
+  brainInsights = [],
+}: TeamReviewProps) {
   const [localQueue, setLocalQueue] = useState<ReviewQueueItem[]>(session?.queue ?? []);
   const [copiedMaster, setCopiedMaster] = useState(false);
+  // Live AI debate state.
+  const [debateMessages, setDebateMessages] = useState<DebateMessage[]>([]);
+  const [debateTitle, setDebateTitle] = useState<string | null>(null);
+  const [isDebating, setIsDebating] = useState(false);
+  const [tokensUsed, setTokensUsed] = useState(0);
+  const [tokenBudget, setTokenBudget] = useState(5000);
 
   useEffect(() => {
     if (session?.queue) {
@@ -154,24 +176,60 @@ export function TeamReview({ session, diagnostics = [], onClose, embedded = fals
   // Build the queue from the live diagnostics. `allowMocks` only applies to the
   // empty-state "Run Team Review" demo; Sync Diagnostics always mirrors reality,
   // so syncing with zero diagnostics clears the queue instead of injecting fakes.
-  const populateQueue = (allowMocks: boolean) => {
+  const computeQueueItems = (allowMocks: boolean): ReviewQueueItem[] => {
     if (diagnostics.length > 0) {
-      const mapped = diagnostics.map((d) => ({
+      return diagnostics.map((d) => ({
         id: d.id,
         type: d.step || 'General',
         severity: d.severity,
         title: d.title,
       }));
-      setLocalQueue(mapped);
-    } else if (allowMocks) {
-      setLocalQueue([
+    }
+    if (allowMocks) {
+      return [
         { id: 'mock-1', type: 'security', severity: 'critical', title: 'Verify public S3 write permissions' },
         { id: 'mock-2', type: 'performance', severity: 'bottleneck', title: 'Optimize database connection pool' },
         { id: 'mock-3', type: 'api', severity: 'medium', title: 'Audit auth middleware token validation' },
         { id: 'mock-4', type: 'frontend', severity: 'low', title: 'Refactor layout bundle chunk size' },
-      ]);
-    } else {
-      setLocalQueue([]);
+      ];
+    }
+    return [];
+  };
+
+  const populateQueue = (allowMocks: boolean) => setLocalQueue(computeQueueItems(allowMocks));
+
+  // Run Team Review: populate the queue, then (if a provider is configured)
+  // stream a real AI debate for each item while tracking token spend.
+  const handleRunReview = async () => {
+    if (isDebating) return;
+    const items = queue.length > 0 ? queue : computeQueueItems(true);
+    setLocalQueue(items);
+
+    const provider = detectAvailableProvider(apiKeys);
+    if (!provider.available) return; // no key — queue populated, employees at work
+
+    setIsDebating(true);
+    setTokensUsed(0);
+    let runningTokens = 0;
+    try {
+      for (const item of items.slice(0, 5)) {
+        setDebateTitle(item.title);
+        setDebateMessages([]);
+        for await (const msg of runItemDebate(
+          { id: item.id, title: item.title, description: item.title, severity: toBadgeSeverity(item.severity) as DebateSeverity, type: item.type },
+          projectContext,
+          provider,
+          (tokens) => {
+            runningTokens += tokens;
+            setTokensUsed(runningTokens);
+          },
+        )) {
+          setDebateMessages((prev) => [...prev, msg]);
+        }
+        if (runningTokens >= tokenBudget * 0.9) break; // respect Fran's budget
+      }
+    } finally {
+      setIsDebating(false);
     }
   };
 
@@ -203,23 +261,38 @@ export function TeamReview({ session, diagnostics = [], onClose, embedded = fals
   const body = (
     <>
         <ArchCo
-          tokenBudget={session?.tokenBudget ?? 5000}
-          tokensUsed={session?.tokensUsed ?? 0}
+          tokenBudget={tokenBudget}
+          tokensUsed={tokensUsed}
           taskBadges={taskBadges}
           threatLevel={threatLevel}
           recentTasksByEmployee={recentTasksByEmployee}
+          apiKeys={apiKeys}
+          brainInsights={brainInsights}
+          projectContext={projectContext}
         />
 
         <section className="team-review-queue">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-3)' }}>
             <h3 className="team-review-queue-title" style={{ margin: 0 }}>Review Queue · {queue.length}</h3>
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <label style={{ fontSize: '11px', color: 'var(--color-text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Budget
+                <input
+                  type="number"
+                  value={tokenBudget}
+                  min={500}
+                  step={500}
+                  onChange={(e) => setTokenBudget(Math.max(500, Number(e.target.value) || 0))}
+                  style={{ width: '72px', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: '4px', color: 'var(--color-text)', padding: '2px 6px', fontSize: '11px' }}
+                />
+              </label>
               <button
                 className="btn btn-sm btn-primary"
-                onClick={() => populateQueue(true)}
+                onClick={handleRunReview}
+                disabled={isDebating}
                 title="Run the team review and put the company to work"
               >
-                ▶ Run Team Review
+                {isDebating ? '… Debating' : '▶ Run Team Review'}
               </button>
               {queue.length > 0 && (
                 <>
@@ -257,6 +330,27 @@ export function TeamReview({ session, diagnostics = [], onClose, embedded = fals
                 </li>
               ))}
             </ul>
+          )}
+
+          {(debateMessages.length > 0 || isDebating) && (
+            <div className="team-debate-thread">
+              <div className="team-debate-head">
+                <span className="team-debate-title">
+                  {debateTitle ? `Debating: ${debateTitle}` : 'Team debate'}
+                </span>
+                <span className="team-debate-tokens">{tokensUsed.toLocaleString()} / {tokenBudget.toLocaleString()} tokens</span>
+              </div>
+              {debateMessages.map((m, i) => (
+                <div key={i} className="team-debate-msg" style={{ borderLeftColor: m.color }}>
+                  <div className="team-debate-msg-head">
+                    <strong style={{ color: m.color }}>{m.memberName}</strong>
+                    <span className="team-debate-role">{m.role}</span>
+                  </div>
+                  <p className="team-debate-text">{m.message}</p>
+                </div>
+              ))}
+              {isDebating && <div className="team-debate-typing">…</div>}
+            </div>
           )}
         </section>
     </>

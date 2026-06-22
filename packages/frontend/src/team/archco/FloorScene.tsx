@@ -3,8 +3,10 @@ import type { Employee, Floor, HairStyle, Accessory } from './companyData.js';
 import { employeesOnFloor, EMPLOYEES } from './companyData.js';
 import { FLOOR_CONFIGS } from './floorLayouts.js';
 import type { TimeState } from './timeSystem.js';
+import type { FranState } from './tokenMonitor.js';
 import { EmployeeSprite } from './EmployeeSprite.js';
 import { levelForXp, loadGrowthState, saveGrowthState } from './growthSystem.js';
+import { getLivingData, addConversationRecord } from './employeeLivingStore.js';
 import { PORTS } from '@archlab/shared';
 
 interface WikiEntry {
@@ -31,6 +33,8 @@ interface FloorSceneProps {
   aiUpgradeTrigger?: number;
   /** When true, present employees walk out the exit door and the office empties. */
   isOffDuty?: boolean;
+  /** Fran's token-budget state, drives her sprite + bubble on Floor 1. */
+  franState?: FranState;
 }
 
 const SCENE_W = 720;
@@ -232,6 +236,7 @@ export function FloorScene({
   payrollTrigger = 0,
   aiUpgradeTrigger = 0,
   isOffDuty = false,
+  franState = 'relaxed',
 }: FloorSceneProps) {
   const config = FLOOR_CONFIGS[floor];
   // Stable per floor: employeesOnFloor() filters a fresh array each call, so we
@@ -960,6 +965,14 @@ export function FloorScene({
                   return next;
                 });
 
+                // Persist the conversation into both employees' living history.
+                const convoMessages = [
+                  { speakerId: sender.id, text: 'synced on current work' },
+                  { speakerId: receiver.id, text: 'agreed on next steps' },
+                ];
+                addConversationRecord(sender.id, receiver.id, convoMessages, 'colleague sync');
+                addConversationRecord(receiver.id, sender.id, convoMessages, 'colleague sync');
+
                 // 6. Clear thought bubble
                 setTimeout(() => {
                   setEmpStates((prev) => {
@@ -1152,6 +1165,11 @@ export function FloorScene({
             ];
           }
 
+          // Prefer AI-evolved catchphrases for everyday ambient chatter.
+          const evolved = getLivingData(randId)?.evolvedCatchphrases ?? [];
+          if (!hasBadge && !timeState.isWeekend && evolved.length > 0 && Math.random() < 0.6) {
+            potentialEmotions = evolved;
+          }
           const emotion = potentialEmotions[Math.floor(Math.random() * potentialEmotions.length)];
 
           setEmpStates((prev) => {
@@ -1606,6 +1624,23 @@ export function FloorScene({
           const state = empStates[emp.id];
           const x = state ? state.x : Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
           const y = state ? state.y : emp.deskPosition.y + 40;
+          // Pick the sprite's emotional animation by priority. Fran also reacts
+          // to the token budget (alert/panicking = stressed).
+          const isFranStressed =
+            emp.id === 'fran-torres' && (franState === 'alert' || franState === 'panicking');
+          const badgeStressed =
+            badge?.severity === 'critical' ||
+            badge?.severity === 'high' ||
+            /security|critical/i.test(badge?.label ?? '');
+          const animState: 'talk' | 'think' | 'stressed' | undefined = !present
+            ? undefined
+            : isFranStressed || badgeStressed
+              ? 'stressed'
+              : state?.emotion
+                ? state.emotion.includes('💭')
+                  ? 'think'
+                  : 'talk'
+                : undefined;
           return (
             <button
               key={emp.id}
@@ -1647,6 +1682,7 @@ export function FloorScene({
                 working={present && !timeState.isWeekend && emp.status === 'working' && !state?.isWalking}
                 isWalking={present && state?.isWalking}
                 flip={present && state?.flip}
+                animState={animState}
               />
               <span className="archco-employee-name">{emp.name.split(' ')[0]}</span>
             </button>

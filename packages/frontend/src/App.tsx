@@ -111,13 +111,18 @@ export function App() {
   // Whether an Anthropic key is configured — drives Agent Team nudges in the
   // Enterprise Audit. Re-checked whenever the API Keys modal closes.
   const [hasApiKey, setHasApiKey] = useState(false);
+  // Full key set (Anthropic/OpenAI/Gemini) for ArchCo's multi-provider AI.
+  const [apiKeys, setApiKeys] = useState<{ anthropic?: string; openai?: string; gemini?: string }>({});
   useEffect(() => {
     if (apiKeysOpen) return; // re-check after the modal closes (key may have changed)
     let cancelled = false;
     fetch(`http://127.0.0.1:${PORTS.backend}/api/keys`)
       .then((r) => r.json())
       .then((data) => {
-        if (!cancelled && data?.ok) setHasApiKey(Boolean(data.keys?.anthropic));
+        if (!cancelled && data?.ok) {
+          setHasApiKey(Boolean(data.keys?.anthropic || data.keys?.openai || data.keys?.gemini));
+          setApiKeys(data.keys ?? {});
+        }
       })
       .catch(() => {
         /* backend not ready; treat as no key */
@@ -377,7 +382,13 @@ export function App() {
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : tab === 'archco' ? (
-            <TeamReview embedded diagnostics={state.diagnostics} />
+            <TeamReview
+              embedded
+              diagnostics={state.diagnostics}
+              apiKeys={apiKeys}
+              projectContext={state.projectName ?? ''}
+              brainInsights={state.brain.insights.map((i) => i.message)}
+            />
           ) : tab === 'agentteam' ? (
             <AgentTeam
               embedded

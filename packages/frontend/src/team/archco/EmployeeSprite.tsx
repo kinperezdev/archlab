@@ -16,6 +16,8 @@ interface EmployeeSpriteProps {
   working?: boolean;
   isWalking?: boolean;
   flip?: boolean;
+  /** Emotional/activity state that overrides the default idle/working anim. */
+  animState?: 'talk' | 'think' | 'celebrate' | 'stressed';
 }
 
 // Base sprite grid is 16x20 "pixels"; rects are sized in that space and the
@@ -79,9 +81,18 @@ export function EmployeeSprite({
   working = false,
   isWalking = false,
   flip = false,
+  animState,
 }: EmployeeSpriteProps) {
   const w = GRID_W * scale;
   const h = GRID_H * scale;
+  // Exactly one animation drives the sprite, by priority.
+  const anim = isWalking
+    ? 'walking'
+    : animState
+      ? animState
+      : working
+        ? 'working'
+        : 'idle';
 
   if (absent) {
     return (
@@ -139,7 +150,7 @@ export function EmployeeSprite({
       width={w}
       height={h}
       viewBox={`0 0 ${GRID_W} ${GRID_H}`}
-      className={`archco-sprite${working ? ' archco-sprite-working' : ''}${isWalking ? ' archco-sprite-walking' : ''}`}
+      className={`archco-sprite archco-sprite-${anim}`}
       style={flip ? { transform: 'scaleX(-1)' } : undefined}
       shapeRendering="crispEdges"
       aria-label={`${employee.name}, ${employee.role}`}
