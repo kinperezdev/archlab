@@ -149,6 +149,32 @@ function buildCompanyMasterPrompt(queue: ReviewQueueItem[]): string {
   return lines.join('\n');
 }
 
+/** Render a debate message, lifting any ACTION:/PROMPT: lines into clean,
+ *  labeled blocks instead of showing them as raw text. */
+function DebateBody({ text }: { text: string }) {
+  const action = text.match(/ACTION:\s*(.+)/i)?.[1]?.trim();
+  const prompt = text.match(/PROMPT:\s*(.+)/i)?.[1]?.trim();
+  const prose = text.replace(/\n?\s*ACTION:[\s\S]*/i, '').trim();
+  if (!action && !prompt) return <p className="team-debate-text">{text}</p>;
+  return (
+    <>
+      {prose && <p className="team-debate-text">{prose}</p>}
+      {action && (
+        <p className="team-debate-decision">
+          <span className="team-debate-tag">Decision</span>
+          {action}
+        </p>
+      )}
+      {prompt && (
+        <p className="team-debate-decision">
+          <span className="team-debate-tag team-debate-tag-prompt">Fix prompt</span>
+          {prompt}
+        </p>
+      )}
+    </>
+  );
+}
+
 export function TeamReview({
   session,
   diagnostics = [],
@@ -358,7 +384,7 @@ export function TeamReview({
                     <strong style={{ color: m.color }}>{m.memberName}</strong>
                     <span className="team-debate-role">{m.role}</span>
                   </div>
-                  <p className="team-debate-text">{m.message}</p>
+                  <DebateBody text={m.message} />
                 </div>
               ))}
               {isDebating && <div className="team-debate-typing">…</div>}

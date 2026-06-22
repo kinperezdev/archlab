@@ -343,6 +343,30 @@
 .team-debate-msg-head { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
 .team-debate-role { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
 .team-debate-text { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: #cbd5e1; }
+.team-debate-decision {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e2e8f0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.team-debate-tag {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(52, 211, 153, 0.16);
+  color: #6ee7b7;
+}
+.team-debate-tag-prompt {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+}
 .team-debate-typing {
   font-size: 18px;
   color: #6366f1;
