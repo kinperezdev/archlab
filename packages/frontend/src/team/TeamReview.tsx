@@ -380,7 +380,11 @@ export function TeamReview({
                     ? `${reviewMode === 'docs' ? 'Reviewing' : 'Debating'}: ${debateTitle}${reviewMode === 'docs' ? ' · docs review' : ''}`
                     : 'Team review'}
                 </span>
-                <span className="team-debate-tokens">{tokensUsed.toLocaleString()} / {tokenBudget.toLocaleString()} tokens</span>
+                <span className="team-debate-tokens">
+                  {reviewMode === 'docs'
+                    ? '📚 docs knowledge · no tokens'
+                    : `${tokensUsed.toLocaleString()} / ${tokenBudget.toLocaleString()} tokens`}
+                </span>
               </div>
               {debateMessages.map((m, i) => (
                 <div key={i} className="team-debate-msg" style={{ borderLeftColor: m.color }}>
