@@ -7,9 +7,11 @@
  */
 
 import { EMPLOYEES, type Employee } from './companyData.js';
-import { completeWithProvider, type AIProviderConfig } from './multiProviderAI.js';
-import { getLivingData, updateLivingData } from './employeeLivingStore.js';
+import { completeWithFallback, type AIProviderConfig } from './multiProviderAI.js';
+import { getLivingData, updateLivingData, addConversationTopic } from './employeeLivingStore.js';
 import type { ConversationTopic, EmployeeMood } from './employeeLivingStore.js';
+
+const VALID_EMPLOYEE_IDS = new Set(EMPLOYEES.map((e) => e.id));
 
 export interface AIUpdateResult {
   employeeId: string;
@@ -27,12 +29,14 @@ export interface AIUpdateResult {
 type ProgressStatus = 'updating' | 'done' | 'error';
 
 export async function runAIUpdate(
-  providerConfig: AIProviderConfig,
+  providers: AIProviderConfig[],
   brainInsights: string[],
   projectContext: string,
   onProgress: (employeeId: string, status: ProgressStatus) => void,
 ): Promise<AIUpdateResult[]> {
+  if (providers.length === 0) throw new Error('No AI provider configured. Add an API key in Settings.');
   const results: AIUpdateResult[] = [];
+  const failures: string[] = [];
 
   const batches: Employee[][] = [];
   for (let i = 0; i < EMPLOYEES.length; i += 3) {
@@ -53,8 +57,19 @@ Tasks completed: ${living?.tasksCompleted ?? employee.tasksCompleted}
 Previous catchphrases: ${(living?.evolvedCatchphrases ?? employee.catchphrases ?? []).join(', ')}
 Return ONLY valid JSON, no markdown, no explanation.`;
 
+        // Real colleagues so generated topics wire to varied teammates,
+        // not a single hardcoded id.
+        const colleagues = EMPLOYEES.filter((e) => e.id !== employee.id);
+        const colleagueList = colleagues
+          .map((c) => `${c.id} (${c.name}, ${c.role})`)
+          .join('; ');
+        const sampleColleague = colleagues[0]?.id ?? employee.id;
+
         const userPrompt = `Project context: ${projectContext}
 Brain insights: ${brainInsights.slice(0, 3).join('. ')}
+
+Colleagues (pick 1-2 RELEVANT, DIFFERENT teammates for conversation topics — use their exact id from this list):
+${colleagueList}
 
 Generate a personality upgrade. Return this exact JSON shape:
 {
@@ -66,19 +81,28 @@ Generate a personality upgrade. Return this exact JSON shape:
   "moodReason": "one sentence",
   "specialInsights": ["insight 1", "insight 2"],
   "newConversationTopics": [
-    { "withEmployeeId": "marcus-webb", "topic": "topic", "messages": [ {"speakerId": "${employee.id}", "text": "message"}, {"speakerId": "marcus-webb", "text": "reply"} ], "priority": "normal", "generatedAt": ${Date.now()} }
+    { "withEmployeeId": "${sampleColleague}", "topic": "topic", "messages": [ {"speakerId": "${employee.id}", "text": "message"}, {"speakerId": "${sampleColleague}", "text": "reply"} ], "priority": "normal", "generatedAt": ${Date.now()} }
   ]
 }`;
 
         try {
-          const { text, tokensUsed, error } = await completeWithProvider(
-            providerConfig,
+          const { text, tokensUsed, error, provider } = await completeWithFallback(
+            providers,
             systemPrompt,
             userPrompt,
             500,
           );
-          if (error) throw new Error(error);
+          if (error) throw new Error(text || error);
           const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+
+          // Keep only topics aimed at a real, different colleague.
+          const validTopics: ConversationTopic[] = (parsed.newConversationTopics ?? []).filter(
+            (t: ConversationTopic) =>
+              t?.withEmployeeId &&
+              t.withEmployeeId !== employee.id &&
+              VALID_EMPLOYEE_IDS.has(t.withEmployeeId),
+          );
+          parsed.newConversationTopics = validTopics;
 
           results.push({
             employeeId: employee.id,
@@ -109,7 +133,7 @@ Generate a personality upgrade. Return this exact JSON shape:
               ...(living?.aiUpdateHistory ?? []),
               {
                 updatedAt: Date.now(),
-                provider: providerConfig.provider,
+                provider,
                 previousPersonality: living?.evolvedPersonality ?? employee.personality,
                 newPersonality: parsed.evolvedPersonality ?? '',
                 moodBefore: living?.currentMood ?? 'focused',
@@ -120,11 +144,30 @@ Generate a personality upgrade. Return this exact JSON shape:
           });
 
           onProgress(employee.id, 'done');
-        } catch {
+        } catch (err) {
+          failures.push(err instanceof Error ? err.message : String(err));
           onProgress(employee.id, 'error');
         }
       }),
     );
+  }
+
+  // If every employee failed, surface the real reason instead of pretending
+  // the update succeeded (e.g. provider quota exhausted, bad key).
+  if (results.length === 0) {
+    throw new Error(failures[0] ?? 'AI update failed for every employee.');
+  }
+
+  // Wire each topic into the *other* employee too, so both sides have the
+  // conversation queued (the floor can then trigger it from either desk).
+  // Done after all batches to avoid clobbering concurrent living-data writes.
+  for (const r of results) {
+    for (const topic of r.newConversationTopics) {
+      addConversationTopic(topic.withEmployeeId, {
+        ...topic,
+        withEmployeeId: r.employeeId,
+      });
+    }
   }
 
   return results;

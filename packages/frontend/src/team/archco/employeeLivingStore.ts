@@ -168,6 +168,43 @@ export async function updateLivingData(
   if (existing) await saveLivingData(employeeId, { ...existing, ...updates });
 }
 
+/**
+ * Pull a pending AI-generated conversation topic between two employees (in
+ * either direction) and remove it so it isn't replayed. Returns null when none
+ * is queued — the caller then falls back to a generic exchange.
+ */
+export function takeConversationTopic(
+  aId: string,
+  bId: string,
+): ConversationTopic | null {
+  for (const [ownerId, otherId] of [
+    [aId, bId],
+    [bId, aId],
+  ] as const) {
+    const data = store[ownerId];
+    if (!data) continue;
+    const idx = data.conversationTopics.findIndex((t) => t.withEmployeeId === otherId);
+    if (idx >= 0) {
+      const [topic] = data.conversationTopics.splice(idx, 1);
+      void saveLivingData(ownerId, data);
+      return topic;
+    }
+  }
+  return null;
+}
+
+/** Queue an AI-generated topic for an employee (merged, capped, deduped by partner+topic). */
+export function addConversationTopic(employeeId: string, topic: ConversationTopic): void {
+  const data = store[employeeId];
+  if (!data) return;
+  const exists = data.conversationTopics.some(
+    (t) => t.withEmployeeId === topic.withEmployeeId && t.topic === topic.topic,
+  );
+  if (exists) return;
+  data.conversationTopics = [...data.conversationTopics, topic].slice(-12);
+  void saveLivingData(employeeId, data);
+}
+
 /** Record a finished conversation and promote frequent partners to "closest". */
 export function addConversationRecord(
   employeeId: string,
