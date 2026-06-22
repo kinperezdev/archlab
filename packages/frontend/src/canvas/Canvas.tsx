@@ -179,7 +179,17 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
   // node (if any) keeps its connections lit.
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
   const [selectedEdges, setSelectedEdges] = useState<Record<string, EdgeRef>>({});
-  const { setCenter } = useReactFlow();
+  const { setCenter, fitView } = useReactFlow();
+
+  // Auto-fit the view when the graph goes from empty to populated, after a short
+  // delay so React Flow has finished measuring/rendering the nodes.
+  const hasNodes = nodes.length > 0;
+  useEffect(() => {
+    if (hasNodes) {
+      const id = setTimeout(() => fitView({ padding: 0.08 }), 100);
+      return () => clearTimeout(id);
+    }
+  }, [hasNodes, fitView]);
 
   // Escape releases the locked node highlight.
   useEffect(() => {
@@ -256,18 +266,15 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     // Drop the Isolated zone well below the Connected graph, with room for its label.
     const zoneTop = maxY + 280;
 
-    // Grow the Isolated zone HORIZONTALLY: fill a fixed number of rows top-to-
-    // bottom, then add columns to the right. With thousands of nodes you slide
-    // right instead of scrolling down forever. Row count scales a little with
-    // volume so small projects stay compact and huge ones don't get too tall.
-    const CELL_W = 300;
-    const CELL_H = 170;
-    const ROWS = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(isolated.length) / 1.5)));
+    // Compact isolated grid: 10 per row, tight cells, wrapping downward.
+    const COLS = 10;
+    const CELL_W = 140;
+    const CELL_H = 50;
     const isoPos = new Map<string, { x: number; y: number }>();
     isolated.forEach((n, i) => {
       isoPos.set(n.id, {
-        x: baseX + Math.floor(i / ROWS) * CELL_W,
-        y: zoneTop + (i % ROWS) * CELL_H,
+        x: baseX + (i % COLS) * CELL_W,
+        y: zoneTop + Math.floor(i / COLS) * CELL_H,
       });
     });
 
@@ -663,10 +670,12 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
-            /* Allow zooming far out so a wide horizontal graph fits on screen
-               (a high minZoom left big graphs off-screen, looking blank). */
-            fitViewOptions={{ maxZoom: 1, minZoom: 0.05 }}
-            minZoom={0.08}
+            /* Tight padding so nodes fill the viewport; wide zoom range so large
+               projects fit and you can still zoom in to read. */
+            fitViewOptions={{ padding: 0.08 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
+            minZoom={0.03}
+            maxZoom={2}
             /* Drop per-node focus/elevation overhead so panning large graphs
                stays smooth. (onlyRenderVisibleElements is intentionally NOT set:
                our nodes are CSS-measured, and it can hide unmeasured nodes.) */
