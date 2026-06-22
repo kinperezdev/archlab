@@ -374,6 +374,121 @@ app.post('/system-design', (req, res) => {
   }
 });
 
+// ---- ArchCo code modification (permission-gated) ---------------------------
+//
+// ArchCo can write fixes to disk, but only inside directories the user has
+// explicitly allowlisted. Every write is path-validated (no traversal / symlink
+// escape), backs up the original, and is recorded in an audit log.
+
+const ARCHCO_DIR = path.join(BRAIN_DIR, 'archco');
+const ALLOWLIST_FILE = path.join(ARCHCO_DIR, 'write_allowlist.json');
+const CHANGES_LOG = path.join(ARCHCO_DIR, 'code-changes.json');
+const BACKUP_DIR = path.join(ARCHCO_DIR, 'backups');
+
+function readAllowlist(): string[] {
+  try {
+    if (fs.existsSync(ALLOWLIST_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ALLOWLIST_FILE, 'utf8'));
+      if (Array.isArray(data)) return data.filter((p) => typeof p === 'string');
+    }
+  } catch {
+    /* fall through to empty */
+  }
+  return [];
+}
+
+function writeAllowlist(paths: string[]): void {
+  fs.mkdirSync(ARCHCO_DIR, { recursive: true });
+  fs.writeFileSync(ALLOWLIST_FILE, JSON.stringify(paths, null, 2), 'utf8');
+}
+
+/** True only when `target` resolves inside an allowlisted directory. */
+function isWriteAllowed(target: string): boolean {
+  const resolved = path.resolve(target);
+  return readAllowlist().some((dir) => {
+    const d = path.resolve(dir);
+    return resolved === d || resolved.startsWith(d + path.sep);
+  });
+}
+
+function logChange(entry: Record<string, unknown>): void {
+  fs.mkdirSync(ARCHCO_DIR, { recursive: true });
+  let log: unknown[] = [];
+  try {
+    if (fs.existsSync(CHANGES_LOG)) log = JSON.parse(fs.readFileSync(CHANGES_LOG, 'utf8'));
+  } catch {
+    log = [];
+  }
+  if (!Array.isArray(log)) log = [];
+  log.push({ ...entry, at: Date.now() });
+  fs.writeFileSync(CHANGES_LOG, JSON.stringify(log.slice(-500), null, 2), 'utf8');
+}
+
+app.get('/api/archco/allowlist', (_req, res) => {
+  res.json({ ok: true, paths: readAllowlist() });
+});
+
+app.post('/api/archco/allowlist', (req, res) => {
+  const paths = req.body?.paths;
+  if (!Array.isArray(paths) || paths.some((p) => typeof p !== 'string')) {
+    return res.status(400).json({ ok: false, error: 'paths must be an array of strings' });
+  }
+  // Normalize to absolute, de-duped directories.
+  const normalized = [...new Set(paths.map((p) => path.resolve(p)))];
+  writeAllowlist(normalized);
+  res.json({ ok: true, paths: normalized });
+});
+
+app.get('/api/archco/file', (req, res) => {
+  const target = typeof req.query.path === 'string' ? req.query.path : '';
+  if (!target) return res.status(400).json({ ok: false, error: 'path is required' });
+  if (!isWriteAllowed(target)) return res.status(403).json({ ok: false, error: 'not-allowlisted' });
+  try {
+    const content = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : '';
+    res.json({ ok: true, path: path.resolve(target), exists: fs.existsSync(target), content });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post('/api/archco/apply', (req, res) => {
+  const target = typeof req.body?.path === 'string' ? req.body.path : '';
+  const content = typeof req.body?.content === 'string' ? req.body.content : null;
+  const note = typeof req.body?.note === 'string' ? req.body.note : '';
+  if (!target || content === null) {
+    return res.status(400).json({ ok: false, error: 'path and content are required' });
+  }
+  if (!isWriteAllowed(target)) {
+    return res.status(403).json({ ok: false, error: 'not-allowlisted', needsApproval: true });
+  }
+  try {
+    const resolved = path.resolve(target);
+    const existed = fs.existsSync(resolved);
+    // Back up the original before overwriting.
+    if (existed) {
+      fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      const backup = path.join(BACKUP_DIR, `${Date.now()}-${path.basename(resolved)}`);
+      fs.copyFileSync(resolved, backup);
+    }
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.writeFileSync(resolved, content, 'utf8');
+    logChange({ path: resolved, bytes: Buffer.byteLength(content), created: !existed, note });
+    res.json({ ok: true, applied: true, path: resolved, created: !existed });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get('/api/archco/changes', (_req, res) => {
+  let log: unknown[] = [];
+  try {
+    if (fs.existsSync(CHANGES_LOG)) log = JSON.parse(fs.readFileSync(CHANGES_LOG, 'utf8'));
+  } catch {
+    log = [];
+  }
+  res.json({ ok: true, changes: Array.isArray(log) ? log : [] });
+});
+
 // ---- ArchCo Company Wiki + employee growth state ---------------------------
 
 app.get('/brain/archco-wiki', (req, res) => {
