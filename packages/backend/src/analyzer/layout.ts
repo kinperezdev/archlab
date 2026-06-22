@@ -10,11 +10,11 @@
 
 import type { CanvasNode, CanvasEdge } from '@archlab/shared';
 
-const COL_WIDTH = 200; // horizontal gap between folder depth levels
-const ROW_GAP = 44; // vertical gap between sibling files
+const COL_WIDTH = 220; // horizontal gap between folder depth levels
+const ROW_GAP = 60; // vertical gap between sibling files
 const GROUP_GAP = 22; // extra gap between distinct folders
 const LEFT = 80;
-const TOP = 80;
+const TOP = 40; // keep entry/top nodes near the top with a small padding
 
 interface TrieNode {
   children: Map<string, TrieNode>;
