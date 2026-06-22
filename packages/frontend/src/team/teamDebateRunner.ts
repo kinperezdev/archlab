@@ -59,8 +59,27 @@ export async function* runItemDebate(
   const members = TEAM_MEMBERS.filter((m) => memberIds.includes(m.id));
   const conversationHistory: string[] = [];
 
+  const auditCategory = categorize(item);
+
   for (const member of members) {
     const isArchitect = member.id === 'architect';
+
+    // The compliance pass is deterministic (no token cost) — every item still
+    // gets an enterprise-audit voice without an extra paid call.
+    if (member.id === 'compliance') {
+      const message = knowledgeMessage('compliance', auditCategory, item);
+      conversationHistory.push(`${member.name} (${member.role}): ${message}`);
+      yield {
+        memberId: member.id,
+        memberName: member.name,
+        role: member.role,
+        color: member.color,
+        message,
+        isStreaming: false,
+        timestamp: Date.now(),
+      };
+      continue;
+    }
 
     const systemPrompt = `You are ${member.name}, ${member.role} at the ArchCo engineering team.
 Personality: ${member.personality}
@@ -223,6 +242,16 @@ const ARCHITECT_DECISION: Record<Category, { action: string; prompt: (t: string)
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Deterministic, token-free message for one member from the knowledge base. */
+function knowledgeMessage(memberId: string, category: Category, item: DebateItem): string {
+  if (memberId === 'architect') {
+    const d = ARCHITECT_DECISION[category];
+    return `Synthesizing the team's input on this ${item.severity} ${category} issue. Here's the call.\nACTION: ${d.action}\nPROMPT: ${d.prompt(item.title)}`;
+  }
+  const k = KNOWLEDGE[memberId];
+  return (k && (k[category] ?? k.default)) ?? 'Worth a closer look from my area.';
+}
+
 /**
  * Knowledge-based fallback review for one item — no API key needed. Yields the
  * same DebateMessage shape as runItemDebate, sourced from static engineering
@@ -265,14 +294,7 @@ export async function* runItemReviewFromKnowledge(item: DebateItem): AsyncGenera
 
   for (const member of members) {
     await sleep(200); // light pacing so it reads like a streaming discussion
-    let message: string;
-    if (member.id === 'architect') {
-      const d = ARCHITECT_DECISION[category];
-      message = `Synthesizing the team's input on this ${item.severity} ${category} issue. Here's the call.\nACTION: ${d.action}\nPROMPT: ${d.prompt(item.title)}`;
-    } else {
-      const k = KNOWLEDGE[member.id];
-      message = (k && (k[category] ?? k.default)) ?? 'Worth a closer look from my area.';
-    }
+    const message = knowledgeMessage(member.id, category, item);
     yield {
       memberId: member.id,
       memberName: member.name,
