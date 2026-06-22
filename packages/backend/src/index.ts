@@ -51,6 +51,9 @@ import {
   searchWiki,
   loadArchcoGrowth,
   saveArchcoGrowth,
+  saveEmployeeLivingData,
+  loadEmployeeLivingData,
+  loadAllEmployeeLivingData,
   type WikiEntry,
 } from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
@@ -356,6 +359,40 @@ app.get('/brain/archco-growth', (_req, res) => {
 app.put('/brain/archco-growth', (req, res) => {
   try {
     saveArchcoGrowth(req.body ?? {});
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// ArchCo per-employee living data (personality, mood, knowledge, conversations).
+app.get('/brain/archco/employees', (_req, res) => {
+  try {
+    return res.json(loadAllEmployeeLivingData());
+  } catch {
+    return res.json({});
+  }
+});
+
+app.get('/brain/archco/employees/:employeeId', (req, res) => {
+  const data = loadEmployeeLivingData(req.params.employeeId);
+  if (!data) return res.status(404).json({ ok: false, error: 'Not found' });
+  return res.json(data);
+});
+
+app.post('/brain/archco/employees/:employeeId', (req, res) => {
+  try {
+    saveEmployeeLivingData(req.params.employeeId, req.body ?? {});
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.patch('/brain/archco/employees/:employeeId', (req, res) => {
+  try {
+    const existing = (loadEmployeeLivingData(req.params.employeeId) as Record<string, unknown>) ?? {};
+    saveEmployeeLivingData(req.params.employeeId, { ...existing, ...(req.body ?? {}), lastActiveAt: Date.now() });
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });

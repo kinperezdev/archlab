@@ -370,3 +370,40 @@ export function absorbAgentTeamFindings(
   return next;
 }
 
+
+// ---- ArchCo: per-employee living data (personality, mood, knowledge, etc.) --
+
+const ARCHCO_EMPLOYEES_DIR = path.join(BRAIN_DIR, 'archco', 'employees');
+
+/** Persist one employee's complete living data to its own JSON file. */
+export function saveEmployeeLivingData(employeeId: string, data: unknown): void {
+  fs.mkdirSync(ARCHCO_EMPLOYEES_DIR, { recursive: true });
+  const file = path.join(ARCHCO_EMPLOYEES_DIR, `${employeeId}.json`);
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmp, file);
+  console.log(`[Brain] wrote archco/employees/${employeeId}.json`);
+}
+
+/** Load one employee's living data, or null if none saved yet. */
+export function loadEmployeeLivingData(employeeId: string): unknown | null {
+  const file = path.join(ARCHCO_EMPLOYEES_DIR, `${employeeId}.json`);
+  if (!fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** Load every saved employee's living data, keyed by employee id. */
+export function loadAllEmployeeLivingData(): Record<string, unknown> {
+  fs.mkdirSync(ARCHCO_EMPLOYEES_DIR, { recursive: true });
+  const result: Record<string, unknown> = {};
+  for (const f of fs.readdirSync(ARCHCO_EMPLOYEES_DIR).filter((n) => n.endsWith('.json'))) {
+    const id = f.replace(/\.json$/, '');
+    const data = loadEmployeeLivingData(id);
+    if (data) result[id] = data;
+  }
+  return result;
+}

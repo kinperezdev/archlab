@@ -246,11 +246,25 @@
   image-rendering: pixelated;
   transform-origin: bottom center;
 }
-.archco-sprite:not(.archco-sprite-working):not(.archco-sprite-absent) {
+/* Exactly one animation class is applied per sprite (chosen in EmployeeSprite),
+   so states never fight over the CSS animation property. */
+.archco-sprite-idle {
   animation: archco-idle 3s ease-in-out infinite;
 }
 .archco-sprite-working {
   animation: archco-type 0.3s ease-in-out infinite;
+}
+.archco-sprite-talk {
+  animation: archco-talk 0.5s ease-in-out infinite;
+}
+.archco-sprite-think {
+  animation: archco-think 2s ease-in-out infinite;
+}
+.archco-sprite-celebrate {
+  animation: archco-celebrate 0.6s ease-in-out infinite;
+}
+.archco-sprite-stressed {
+  animation: archco-stressed 0.4s ease-in-out infinite;
 }
 .archco-sprite-absent {
   opacity: 0.45;
@@ -271,6 +285,77 @@
 }
 
 /* Token bar */
+/* Employee profile tabs */
+.archco-profile-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #1a1a2e;
+  flex-wrap: wrap;
+}
+.archco-profile-tab {
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.archco-profile-tab:hover { color: #e2e8f0; }
+.archco-profile-tab.active { color: #f8fafc; border-bottom-color: #6366f1; }
+
+/* Live AI debate thread below the office. */
+.team-debate-thread {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #1a1a2e;
+  border-radius: 10px;
+  background: #0b0b14;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.team-debate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.team-debate-title { font-weight: 700; color: #e2e8f0; }
+.team-debate-tokens { color: #64748b; font-family: var(--font-mono); font-size: 11px; }
+.team-debate-msg {
+  border-left: 3px solid #6366f1;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 0 6px 6px 0;
+}
+.team-debate-msg-head { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.team-debate-role { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.team-debate-text { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: #cbd5e1; }
+.team-debate-typing {
+  font-size: 18px;
+  color: #6366f1;
+  animation: archco-blink 1s ease-in-out infinite;
+}
+
+/* Active AI provider badge next to the AI Update button. */
+.archco-provider-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.archco-provider-badge.provider-anthropic { color: #818cf8; background: rgba(99, 102, 241, 0.12); }
+.archco-provider-badge.provider-openai { color: #34d399; background: rgba(16, 185, 129, 0.12); }
+.archco-provider-badge.provider-gemini { color: #60a5fa; background: rgba(59, 130, 246, 0.12); }
+.archco-provider-badge.provider-none { color: #64748b; background: rgba(100, 116, 139, 0.12); }
+
 .archco-token-bar {
   display: flex;
   align-items: center;
@@ -711,6 +796,27 @@
 @keyframes archco-walk-bob {
   0%, 100% { transform: translateY(0) scaleY(1); }
   50% { transform: translateY(-4px) scaleY(1.05); }
+}
+@keyframes archco-talk {
+  0%, 100% { transform: translateY(0) scaleX(1); }
+  25% { transform: translateY(-1px) scaleX(1.02); }
+  75% { transform: translateY(1px) scaleX(0.98); }
+}
+@keyframes archco-think {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-2px); opacity: 0.8; }
+}
+@keyframes archco-celebrate {
+  0% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(-5deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-5px) rotate(5deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+@keyframes archco-stressed {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
 }
 @keyframes archco-popup {
   from { transform: translateX(-50%) scale(0); opacity: 0; }

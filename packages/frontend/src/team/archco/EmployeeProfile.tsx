@@ -6,8 +6,9 @@
  * derived from the static roster merged with any persisted growth state.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Employee } from './companyData.js';
+import { getLivingData, type EmployeeMood } from './employeeLivingStore.js';
 import {
   levelForXp,
   levelProgress,
@@ -15,6 +16,17 @@ import {
   UNLOCKABLE_ABILITIES,
   type Achievement,
 } from './growthSystem.js';
+
+const MOOD_EMOJI: Record<EmployeeMood, string> = {
+  focused: '🎯',
+  excited: '🤩',
+  concerned: '😟',
+  frustrated: '😤',
+  satisfied: '😌',
+  curious: '🤔',
+};
+
+type ProfileTab = 'overview' | 'knowledge' | 'history' | 'relationships' | 'growth';
 
 interface EmployeeProfileProps {
   employee: Employee;
@@ -43,10 +55,15 @@ export function EmployeeProfile({
   onClose,
   onViewHistory,
 }: EmployeeProfileProps) {
-  const level = Math.max(employee.level, levelForXp(employee.xp));
+  const living = getLivingData(employee.id);
+  const xp = living?.xp ?? employee.xp;
+  const level = Math.max(living?.level ?? employee.level, levelForXp(xp));
   const title = titleForLevel(level);
-  const progress = Math.round(levelProgress(employee.xp) * 100);
+  const progress = Math.round(levelProgress(xp) * 100);
   const abilities = abilitiesUpToLevel(level);
+  const [tab, setTab] = useState<ProfileTab>('overview');
+  const personality = living?.evolvedPersonality || employee.personality;
+  const mood = living?.currentMood ?? 'focused';
 
   return (
     <div className="archco-profile-overlay" role="dialog" aria-modal="true" onClick={onClose}>
@@ -73,113 +90,175 @@ export function EmployeeProfile({
           </aside>
 
           <div className="archco-profile-main">
-            <div className="archco-xp-row">
-              <span className="archco-xp-text">
-                {employee.xp.toLocaleString()} XP · next: {employee.xpToNextLevel.toLocaleString()}
-              </span>
-              <div className="archco-xp-bar">
-                <div
-                  className="archco-xp-fill"
-                  style={{ width: `${progress}%`, background: employee.color }}
-                />
-              </div>
-            </div>
-
-            <div className="archco-profile-stats">
-              <Stat label="Tasks" value={employee.tasksCompleted.toLocaleString()} />
-              <Stat label="Level" value={String(level)} />
-              <Stat label="Status" value={currentStatus || employee.status} />
-            </div>
-
-            {currentThought && (
-              <Section title="Current Thought Process">
-                <div 
-                  className="archco-thought-bubble-profile"
-                  style={{
-                    background: 'rgba(30, 41, 59, 0.45)',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    fontSize: '11px',
-                    fontStyle: 'italic',
-                    color: '#93C5FD',
-                    marginBottom: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
-                  }}
+            <div className="archco-profile-tabs">
+              {(['overview', 'knowledge', 'history', 'relationships', 'growth'] as ProfileTab[]).map((t) => (
+                <button
+                  key={t}
+                  className={`archco-profile-tab${tab === t ? ' active' : ''}`}
+                  onClick={() => setTab(t)}
                 >
-                  <span style={{ fontSize: '14px' }}>💭</span>
-                  <span>"{currentThought}"</span>
+                  {t[0].toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'overview' && (
+              <>
+                <div className="archco-xp-row">
+                  <span className="archco-xp-text">{xp.toLocaleString()} XP · Lv {level}</span>
+                  <div className="archco-xp-bar">
+                    <div className="archco-xp-fill" style={{ width: `${progress}%`, background: employee.color }} />
+                  </div>
                 </div>
-              </Section>
-            )}
-
-            <Section title="Specializations">
-              <div className="archco-pill-row">
-                {employee.specialization.map((s) => (
-                  <span key={s} className="archco-pill">
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </Section>
-
-            <Section title="Unlocked Abilities">
-              <div className="archco-pill-row">
-                {abilities.length === 0 ? (
-                  <span className="archco-muted">None yet — keep shipping.</span>
-                ) : (
-                  abilities.map((a) => (
-                    <span key={a} className="archco-pill archco-pill-ability">
-                      {a.replace(/-/g, ' ')}
-                    </span>
-                  ))
+                <div className="archco-profile-stats">
+                  <Stat label="Mood" value={`${MOOD_EMOJI[mood]} ${mood}`} />
+                  <Stat label="Level" value={String(level)} />
+                  <Stat label="Status" value={currentStatus || employee.status} />
+                </div>
+                {(living?.moodReason || currentThought) && (
+                  <Section title={living?.moodReason ? 'Mood' : 'Current Thought'}>
+                    <p className="archco-profile-personality">"{living?.moodReason || currentThought}"</p>
+                  </Section>
                 )}
-              </div>
-            </Section>
-
-            <Section title="Recent Activity">
-              {recentTasks.length === 0 ? (
-                <span className="archco-muted">No recent tasks recorded.</span>
-              ) : (
-                <ul className="archco-activity">
-                  {recentTasks.slice(0, 5).map((t, i) => (
-                    <li key={i}>{t}</li>
-                  ))}
-                </ul>
-              )}
-            </Section>
-
-            {recentAchievements.length > 0 && (
-              <Section title="Achievements">
-                <div className="archco-pill-row">
-                  {recentAchievements.map((a) => (
-                    <span key={a.id} className="archco-pill archco-pill-achievement">
-                      {a.icon} {a.title}
-                    </span>
-                  ))}
-                </div>
-              </Section>
+                <Section title="Personality">
+                  <p className="archco-profile-personality">{personality}</p>
+                  <div className="archco-catchphrases">
+                    {(living?.evolvedCatchphrases ?? employee.catchphrases).map((c) => (
+                      <span key={c} className="archco-catchphrase">“{c}”</span>
+                    ))}
+                  </div>
+                </Section>
+                <Section title="Specializations">
+                  <div className="archco-pill-row">
+                    {employee.specialization.map((s) => (
+                      <span key={s} className="archco-pill">{s}</span>
+                    ))}
+                  </div>
+                </Section>
+              </>
             )}
 
-            <Section title="Personality">
-              <p className="archco-profile-personality">{employee.personality}</p>
-              <div className="archco-catchphrases">
-                {employee.catchphrases.map((c) => (
-                  <span key={c} className="archco-catchphrase">
-                    “{c}”
-                  </span>
-                ))}
-              </div>
-            </Section>
+            {tab === 'knowledge' && (
+              <>
+                <Section title={`Knowledge Level · ${living?.knowledgeLevel ?? 1}/10`}>
+                  <div className="archco-xp-bar">
+                    <div className="archco-xp-fill" style={{ width: `${((living?.knowledgeLevel ?? 1) / 10) * 100}%`, background: employee.color }} />
+                  </div>
+                </Section>
+                <Section title="Current Opinions">
+                  {(living?.currentOpinions?.length ?? 0) === 0 ? (
+                    <span className="archco-muted">No opinions yet — run an AI Update.</span>
+                  ) : (
+                    living!.currentOpinions.map((o, i) => (
+                      <div key={i} className="archco-catchphrase" style={{ display: 'block', marginBottom: '4px' }}>“{o}”</div>
+                    ))
+                  )}
+                </Section>
+                <Section title="Learned Patterns">
+                  <div className="archco-pill-row">
+                    {(living?.learnedPatterns ?? []).map((p, i) => <span key={i} className="archco-pill">{p}</span>)}
+                    {(living?.learnedPatterns?.length ?? 0) === 0 && <span className="archco-muted">None yet.</span>}
+                  </div>
+                </Section>
+                <Section title="Special Insights">
+                  {(living?.specialInsights?.length ?? 0) === 0 ? (
+                    <span className="archco-muted">None yet.</span>
+                  ) : (
+                    living!.specialInsights.map((s, i) => <p key={i} className="archco-profile-personality">• {s}</p>)
+                  )}
+                </Section>
+              </>
+            )}
+
+            {tab === 'history' && (
+              <>
+                <Section title="AI Updates">
+                  <p className="archco-profile-personality">
+                    {living?.aiUpdateCount ?? 0} update{(living?.aiUpdateCount ?? 0) === 1 ? '' : 's'}
+                    {living?.lastAIUpdate ? ` · last ${new Date(living.lastAIUpdate).toLocaleString()}` : ''}
+                  </p>
+                </Section>
+                <Section title="Conversation History">
+                  {(living?.conversationHistory?.length ?? 0) === 0 ? (
+                    <span className="archco-muted">No conversations recorded yet.</span>
+                  ) : (
+                    <ul className="archco-activity">
+                      {living!.conversationHistory.slice(0, 10).map((c, i) => (
+                        <li key={i}>{c.topic} · with {c.withEmployeeId} · {new Date(c.occurredAt).toLocaleDateString()}</li>
+                      ))}
+                    </ul>
+                  )}
+                </Section>
+              </>
+            )}
+
+            {tab === 'relationships' && (
+              <>
+                <Section title="Closest Colleagues">
+                  <div className="archco-pill-row">
+                    {(living?.closestColleagues?.length ?? 0) === 0 ? (
+                      <span className="archco-muted">No close ties yet.</span>
+                    ) : (
+                      living!.closestColleagues.map((c) => <span key={c} className="archco-pill">{c}</span>)
+                    )}
+                  </div>
+                </Section>
+                <Section title="Recent Tasks">
+                  {(living?.recentTasks?.length ?? 0) === 0 ? (
+                    recentTasks.length === 0 ? (
+                      <span className="archco-muted">No recent tasks.</span>
+                    ) : (
+                      <ul className="archco-activity">{recentTasks.slice(0, 5).map((t, i) => <li key={i}>{t}</li>)}</ul>
+                    )
+                  ) : (
+                    <ul className="archco-activity">
+                      {living!.recentTasks.slice(0, 8).map((t, i) => (
+                        <li key={i}>{t.taskTitle} · +{t.xpEarned} XP</li>
+                      ))}
+                    </ul>
+                  )}
+                </Section>
+              </>
+            )}
+
+            {tab === 'growth' && (
+              <>
+                <Section title="Unlocked Abilities">
+                  <div className="archco-pill-row">
+                    {abilities.length === 0 ? (
+                      <span className="archco-muted">None yet — keep shipping.</span>
+                    ) : (
+                      abilities.map((a) => (
+                        <span key={a} className="archco-pill archco-pill-ability">{a.replace(/-/g, ' ')}</span>
+                      ))
+                    )}
+                  </div>
+                </Section>
+                {recentAchievements.length > 0 && (
+                  <Section title="Achievements">
+                    <div className="archco-pill-row">
+                      {recentAchievements.map((a) => (
+                        <span key={a.id} className="archco-pill archco-pill-achievement">{a.icon} {a.title}</span>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+                <Section title="AI Update History">
+                  {(living?.aiUpdateHistory?.length ?? 0) === 0 ? (
+                    <span className="archco-muted">No AI updates yet.</span>
+                  ) : (
+                    <ul className="archco-activity">
+                      {living!.aiUpdateHistory.slice(-8).reverse().map((h, i) => (
+                        <li key={i}>{new Date(h.updatedAt).toLocaleDateString()} · {h.provider} · {h.moodBefore}→{h.moodAfter} · {h.tokensUsed} tok</li>
+                      ))}
+                    </ul>
+                  )}
+                </Section>
+              </>
+            )}
 
             {onViewHistory && (
-              <button
-                className="archco-history-btn"
-                onClick={() => onViewHistory(employee.id)}
-              >
+              <button className="archco-history-btn" onClick={() => onViewHistory(employee.id)}>
                 View History
               </button>
             )}
