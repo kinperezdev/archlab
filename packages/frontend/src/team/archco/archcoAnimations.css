@@ -146,16 +146,25 @@
 .archco-stage {
   position: relative;
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   overflow: hidden;
   padding: 8px 16px 0;
 }
 .archco-scene-wrap {
-  position: relative;
-  width: 100%;
+  /* Bound the scene to the stage height (top/bottom) and let width follow the
+     720:320 ratio, centered. This guarantees the office is never clipped by the
+     review queue, and keeps the % sprite overlay aligned to the SVG. */
+  position: absolute;
+  top: 8px;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   aspect-ratio: 720 / 320;
-  height: auto;
+  width: auto;
+  max-width: calc(100% - 32px);
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #1a1a2e;
