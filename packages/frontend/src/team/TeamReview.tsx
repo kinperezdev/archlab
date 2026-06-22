@@ -12,7 +12,7 @@ import { ArchCo } from './archco/ArchCo.js';
 import type { ThreatLevel } from './archco/FloorScene.js';
 import { EMPLOYEES } from './archco/companyData.js';
 import { detectAvailableProvider, type ProviderKeys } from './archco/multiProviderAI.js';
-import { runItemDebate, type DebateMessage, type DebateSeverity } from './teamDebateRunner.js';
+import { runItemDebate, runItemReviewFromKnowledge, type DebateMessage, type DebateSeverity } from './teamDebateRunner.js';
 
 export interface ReviewQueueItem {
   id: string;
@@ -206,27 +206,33 @@ export function TeamReview({
     setLocalQueue(items);
 
     const provider = detectAvailableProvider(apiKeys);
-    if (!provider.available) return; // no key — queue populated, employees at work
+    const useAI = provider.available;
 
     setIsDebating(true);
     setTokensUsed(0);
     let runningTokens = 0;
     try {
       for (const item of items.slice(0, 5)) {
-        setDebateTitle(item.title);
+        const debateItem = {
+          id: item.id,
+          title: item.title,
+          description: item.title,
+          severity: toBadgeSeverity(item.severity) as DebateSeverity,
+          type: item.type,
+        };
+        setDebateTitle(useAI ? item.title : `${item.title} · docs review`);
         setDebateMessages([]);
-        for await (const msg of runItemDebate(
-          { id: item.id, title: item.title, description: item.title, severity: toBadgeSeverity(item.severity) as DebateSeverity, type: item.type },
-          projectContext,
-          provider,
-          (tokens) => {
-            runningTokens += tokens;
-            setTokensUsed(runningTokens);
-          },
-        )) {
+        // With a key: live AI debate. Without: deterministic docs/knowledge review.
+        const stream = useAI
+          ? runItemDebate(debateItem, projectContext, provider, (tokens) => {
+              runningTokens += tokens;
+              setTokensUsed(runningTokens);
+            })
+          : runItemReviewFromKnowledge(debateItem);
+        for await (const msg of stream) {
           setDebateMessages((prev) => [...prev, msg]);
         }
-        if (runningTokens >= tokenBudget * 0.9) break; // respect Fran's budget
+        if (useAI && runningTokens >= tokenBudget * 0.9) break; // respect Fran's budget
       }
     } finally {
       setIsDebating(false);
