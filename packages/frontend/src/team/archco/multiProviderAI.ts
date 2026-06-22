@@ -7,6 +7,8 @@
  * crashing the office.
  */
 
+import { PORTS } from '@archlab/shared';
+
 export type AIProvider = 'anthropic' | 'openai' | 'gemini';
 
 export interface AIProviderConfig {
@@ -50,92 +52,42 @@ export interface CompletionResult {
   error?: string;
 }
 
+/**
+ * Calls the backend AI proxy (`/api/ai/complete`) so provider keys stay
+ * server-side — no key exposure in the browser and no provider CORS issues.
+ */
 export async function completeWithProvider(
   config: AIProviderConfig,
   systemPrompt: string,
   userPrompt: string,
   maxTokens = 1000,
 ): Promise<CompletionResult> {
-  if (!config.available || !config.apiKey) {
+  if (!config.available) {
     return { text: 'No AI provider configured. Add an API key in Settings.', tokensUsed: 0, error: 'no-provider' };
   }
-
   try {
-    if (config.provider === 'anthropic') {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': config.apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: config.model,
-          max_tokens: maxTokens,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { text: errorText('Anthropic', data), tokensUsed: 0, error: 'http' };
-      return {
-        text: data?.content?.[0]?.text ?? '',
-        tokensUsed: (data?.usage?.input_tokens ?? 0) + (data?.usage?.output_tokens ?? 0),
-      };
-    }
-
-    if (config.provider === 'openai') {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify({
-          model: config.model,
-          max_tokens: maxTokens,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { text: errorText('OpenAI', data), tokensUsed: 0, error: 'http' };
-      return {
-        text: data?.choices?.[0]?.message?.content ?? '',
-        tokensUsed: (data?.usage?.prompt_tokens ?? 0) + (data?.usage?.completion_tokens ?? 0),
-      };
-    }
-
-    // gemini
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-          generationConfig: { maxOutputTokens: maxTokens },
-        }),
-      },
-    );
+    const res = await fetch(`http://127.0.0.1:${PORTS.backend}/api/ai/complete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: config.provider,
+        model: config.model,
+        system: systemPrompt,
+        user: userPrompt,
+        maxTokens,
+      }),
+    });
     const data = await res.json();
-    if (!res.ok) return { text: errorText('Gemini', data), tokensUsed: 0, error: 'http' };
     return {
-      text: data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '',
-      tokensUsed:
-        (data?.usageMetadata?.promptTokenCount ?? 0) + (data?.usageMetadata?.candidatesTokenCount ?? 0),
+      text: data?.text ?? '',
+      tokensUsed: data?.tokensUsed ?? 0,
+      error: data?.error,
     };
   } catch (err) {
     return {
-      text: `Could not reach ${PROVIDER_LABEL[config.provider]}: ${err instanceof Error ? err.message : 'network error'}`,
+      text: `Could not reach ${PROVIDER_LABEL[config.provider]} via backend: ${err instanceof Error ? err.message : 'network error'}`,
       tokensUsed: 0,
       error: 'network',
     };
   }
-}
-
-function errorText(provider: string, data: unknown): string {
-  const msg =
-    (data as { error?: { message?: string } })?.error?.message ?? 'request failed';
-  return `${provider} error: ${msg}`;
 }

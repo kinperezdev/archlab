@@ -182,6 +182,68 @@ app.post('/api/keys', (req, res) => {
   }
 });
 
+// ---- AI completion proxy ----------------------------------------------------
+// Routes ArchCo's AI calls through the backend so provider keys stay server-side
+// (no browser key exposure / CORS). One shape in; normalized {text, tokensUsed}.
+function storedKeys(): { anthropic: string; openai: string; gemini: string } {
+  try {
+    if (fs.existsSync(KEYS_FILE)) {
+      const k = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+      return { anthropic: k.anthropic || '', openai: k.openai || '', gemini: k.gemini || '' };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { anthropic: '', openai: '', gemini: '' };
+}
+
+app.post('/api/ai/complete', async (req, res) => {
+  const provider = String(req.body?.provider ?? '');
+  const model = String(req.body?.model ?? '');
+  const system = String(req.body?.system ?? '');
+  const user = String(req.body?.user ?? '');
+  const maxTokens = Number(req.body?.maxTokens ?? 1000);
+  const keys = storedKeys();
+
+  try {
+    if (provider === 'anthropic') {
+      if (!keys.anthropic) return res.json({ text: 'No Anthropic key configured.', tokensUsed: 0, error: 'no-key' });
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': keys.anthropic, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+      });
+      const d: any = await r.json();
+      if (!r.ok) return res.json({ text: `Anthropic error: ${d?.error?.message ?? 'failed'}`, tokensUsed: 0, error: 'http' });
+      return res.json({ text: d?.content?.[0]?.text ?? '', tokensUsed: (d?.usage?.input_tokens ?? 0) + (d?.usage?.output_tokens ?? 0) });
+    }
+    if (provider === 'openai') {
+      if (!keys.openai) return res.json({ text: 'No OpenAI key configured.', tokensUsed: 0, error: 'no-key' });
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${keys.openai}` },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+      });
+      const d: any = await r.json();
+      if (!r.ok) return res.json({ text: `OpenAI error: ${d?.error?.message ?? 'failed'}`, tokensUsed: 0, error: 'http' });
+      return res.json({ text: d?.choices?.[0]?.message?.content ?? '', tokensUsed: (d?.usage?.prompt_tokens ?? 0) + (d?.usage?.completion_tokens ?? 0) });
+    }
+    if (provider === 'gemini') {
+      if (!keys.gemini) return res.json({ text: 'No Gemini key configured.', tokensUsed: 0, error: 'no-key' });
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keys.gemini}`,
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `${system}\n\n${user}` }] }], generationConfig: { maxOutputTokens: maxTokens } }) },
+      );
+      const d: any = await r.json();
+      if (!r.ok) return res.json({ text: `Gemini error: ${d?.error?.message ?? 'failed'}`, tokensUsed: 0, error: 'http' });
+      return res.json({ text: d?.candidates?.[0]?.content?.parts?.[0]?.text ?? '', tokensUsed: (d?.usageMetadata?.promptTokenCount ?? 0) + (d?.usageMetadata?.candidatesTokenCount ?? 0) });
+    }
+    return res.json({ text: 'Unknown provider.', tokensUsed: 0, error: 'no-provider' });
+  } catch (err) {
+    return res.json({ text: `AI request failed: ${String(err)}`, tokensUsed: 0, error: 'network' });
+  }
+});
+
 // ---- Terminal file uploads --------------------------------------------
 // Files dropped onto the terminal are copied into a temp folder inside the
 // brain directory, with a timestamped filename; the absolute path is handed
