@@ -190,6 +190,7 @@ export function TeamReview({
   const [debateMessages, setDebateMessages] = useState<DebateMessage[]>([]);
   const [debateTitle, setDebateTitle] = useState<string | null>(null);
   const [isDebating, setIsDebating] = useState(false);
+  const [reviewMode, setReviewMode] = useState<'ai' | 'docs'>('ai');
   const [tokensUsed, setTokensUsed] = useState(0);
   const [tokenBudget, setTokenBudget] = useState(5000);
 
@@ -243,6 +244,7 @@ export function TeamReview({
         const probe = await completeWithProvider(provider, 'ping', 'Reply ok', 1);
         if (probe.error) useAI = false;
       }
+      setReviewMode(useAI ? 'ai' : 'docs');
 
       for (const item of items.slice(0, 5)) {
         const debateItem = {
@@ -252,7 +254,7 @@ export function TeamReview({
           severity: toBadgeSeverity(item.severity) as DebateSeverity,
           type: item.type,
         };
-        setDebateTitle(useAI ? item.title : `${item.title} · docs review`);
+        setDebateTitle(item.title);
         setDebateMessages([]);
         // With a key: live AI debate. Without: deterministic docs/knowledge review.
         const stream = useAI
@@ -374,7 +376,9 @@ export function TeamReview({
             <div className="team-debate-thread">
               <div className="team-debate-head">
                 <span className="team-debate-title">
-                  {debateTitle ? `Debating: ${debateTitle}` : 'Team debate'}
+                  {debateTitle
+                    ? `${reviewMode === 'docs' ? 'Reviewing' : 'Debating'}: ${debateTitle}${reviewMode === 'docs' ? ' · docs review' : ''}`
+                    : 'Team review'}
                 </span>
                 <span className="team-debate-tokens">{tokensUsed.toLocaleString()} / {tokenBudget.toLocaleString()} tokens</span>
               </div>
