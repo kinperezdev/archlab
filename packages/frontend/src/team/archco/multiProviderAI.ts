@@ -45,11 +45,50 @@ export function detectAvailableProvider(apiKeys: ProviderKeys): AIProviderConfig
   return { provider: 'anthropic', apiKey: '', model: '', available: false };
 }
 
+/** Every configured provider, in priority order — used for failover. */
+export function detectAvailableProviders(apiKeys: ProviderKeys): AIProviderConfig[] {
+  const out: AIProviderConfig[] = [];
+  if (apiKeys.anthropic) out.push({ provider: 'anthropic', apiKey: apiKeys.anthropic, model: 'claude-sonnet-4-6', available: true });
+  if (apiKeys.openai) out.push({ provider: 'openai', apiKey: apiKeys.openai, model: 'gpt-4o', available: true });
+  if (apiKeys.gemini) out.push({ provider: 'gemini', apiKey: apiKeys.gemini, model: 'gemini-2.5-pro', available: true });
+  return out;
+}
+
 export interface CompletionResult {
   text: string;
   tokensUsed: number;
   /** Set when the call failed; `text` holds a user-facing message. */
   error?: string;
+}
+
+export interface FallbackResult extends CompletionResult {
+  /** Which provider actually produced this result. */
+  provider: AIProvider;
+}
+
+/**
+ * Try each provider in order, returning the first success. If all fail, returns
+ * the last error (so the caller can surface a real message instead of failing
+ * silently). Lets a quota-exhausted OpenAI key fall through to Gemini, etc.
+ */
+export async function completeWithFallback(
+  configs: AIProviderConfig[],
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens = 1000,
+): Promise<FallbackResult> {
+  let last: FallbackResult = {
+    text: 'No AI provider configured. Add an API key in Settings.',
+    tokensUsed: 0,
+    error: 'no-provider',
+    provider: configs[0]?.provider ?? 'anthropic',
+  };
+  for (const cfg of configs) {
+    const r = await completeWithProvider(cfg, systemPrompt, userPrompt, maxTokens);
+    if (!r.error) return { ...r, provider: cfg.provider };
+    last = { ...r, provider: cfg.provider };
+  }
+  return last;
 }
 
 /**

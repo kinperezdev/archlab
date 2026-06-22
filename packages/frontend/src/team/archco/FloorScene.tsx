@@ -6,7 +6,7 @@ import type { TimeState } from './timeSystem.js';
 import type { FranState } from './tokenMonitor.js';
 import { EmployeeSprite } from './EmployeeSprite.js';
 import { levelForXp, loadGrowthState, saveGrowthState } from './growthSystem.js';
-import { getLivingData, addConversationRecord } from './employeeLivingStore.js';
+import { getLivingData, addConversationRecord, takeConversationTopic } from './employeeLivingStore.js';
 import { PORTS } from '@archlab/shared';
 
 interface WikiEntry {
@@ -965,13 +965,19 @@ export function FloorScene({
                   return next;
                 });
 
-                // Persist the conversation into both employees' living history.
-                const convoMessages = [
-                  { speakerId: sender.id, text: 'synced on current work' },
-                  { speakerId: receiver.id, text: 'agreed on next steps' },
-                ];
-                addConversationRecord(sender.id, receiver.id, convoMessages, 'colleague sync');
-                addConversationRecord(receiver.id, sender.id, convoMessages, 'colleague sync');
+                // Use an AI-generated topic between these two if one is queued,
+                // otherwise fall back to a generic exchange.
+                const aiTopic = takeConversationTopic(sender.id, receiver.id);
+                const convoMessages =
+                  aiTopic?.messages && aiTopic.messages.length > 0
+                    ? aiTopic.messages
+                    : [
+                        { speakerId: sender.id, text: 'synced on current work' },
+                        { speakerId: receiver.id, text: 'agreed on next steps' },
+                      ];
+                const convoLabel = aiTopic?.topic ?? 'colleague sync';
+                addConversationRecord(sender.id, receiver.id, convoMessages, convoLabel);
+                addConversationRecord(receiver.id, sender.id, convoMessages, convoLabel);
 
                 // 6. Clear thought bubble
                 setTimeout(() => {
