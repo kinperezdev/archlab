@@ -40,7 +40,7 @@ export function detectAvailableProvider(apiKeys: ProviderKeys): AIProviderConfig
     return { provider: 'openai', apiKey: apiKeys.openai, model: 'gpt-4o', available: true };
   }
   if (apiKeys.gemini) {
-    return { provider: 'gemini', apiKey: apiKeys.gemini, model: 'gemini-1.5-pro', available: true };
+    return { provider: 'gemini', apiKey: apiKeys.gemini, model: 'gemini-2.5-pro', available: true };
   }
   return { provider: 'anthropic', apiKey: '', model: '', available: false };
 }
