@@ -960,6 +960,14 @@
 .sd-data-table tr:hover td {
   background: var(--bg-interactive);
 }
+.sd-entity-inferred {
+  color: var(--warning, #f59e0b);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 /* Security Audit Blocks */
 .sd-security-findings {

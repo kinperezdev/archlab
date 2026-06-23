@@ -54,6 +54,7 @@ import {
   saveEmployeeLivingData,
   loadEmployeeLivingData,
   loadAllEmployeeLivingData,
+  brainFileSizeKb,
   type WikiEntry,
 } from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
@@ -601,6 +602,9 @@ app.post('/schema', (req, res) => {
 // the access layer: empty when locked, filtered by permissions otherwise.
 app.get('/brain', (_req, res) => res.json(gateBrain(loadBrain())));
 
+/** Current brain.json size in KB, so the UI can surface storage growth. */
+app.get('/brain/size', (_req, res) => res.json({ ok: true, sizeKb: brainFileSizeKb() }));
+
 // ---- Brain access control (Layer 1 lock + Layer 2 permissions) ----------
 app.get('/access/status', (_req, res) => res.json({ ok: true, ...accessStatus() }));
 
@@ -1094,9 +1098,16 @@ function collectProjectDependencies(rootPath: string): string[] {
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
         peerDependencies?: Record<string, string>;
+        scripts?: Record<string, string>;
       };
       for (const group of [pkg.dependencies, pkg.devDependencies, pkg.peerDependencies]) {
         for (const name of Object.keys(group ?? {})) out.add(name.toLowerCase());
+      }
+      // Surface build/test/deploy npm scripts as CI/CD markers so the System
+      // Design guide can show a real pipeline even without a CI config file.
+      for (const scriptName of Object.keys(pkg.scripts ?? {})) {
+        const s = scriptName.toLowerCase();
+        if (s === 'build' || s === 'test' || s === 'deploy') out.add(`script:${s}`);
       }
     }
   } catch {
@@ -1108,7 +1119,9 @@ function collectProjectDependencies(rootPath: string): string[] {
     ['.github/workflows', '.github/workflows'],
     ['.gitlab-ci.yml', '.gitlab-ci.yml'],
     ['Jenkinsfile', 'jenkinsfile'],
+    ['.circleci/config.yml', '.circleci'],
     ['.circleci', '.circleci'],
+    ['Makefile', 'makefile'],
     ['.snyk', '.snyk'],
     ['.github/dependabot.yml', 'dependabot.yml'],
     ['trivy.yaml', 'trivy'],

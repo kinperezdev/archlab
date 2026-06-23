@@ -9,7 +9,9 @@
  */
 
 import { useMemo, useState } from 'react';
-import type { CodeExample, DocArticle as DocArticleType, DocDifficulty } from './docsTypes.js';
+import hljs from 'highlight.js/lib/common';
+import 'highlight.js/styles/github-dark.css';
+import type { CodeExample, CodeLanguage, DocArticle as DocArticleType, DocDifficulty } from './docsTypes.js';
 import { DocDiagram } from './DocDiagram.js';
 
 const DIFFICULTY_CLASS: Record<DocDifficulty, string> = {
@@ -28,7 +30,7 @@ interface DocArticleProps {
   onAskClaude?: (article: DocArticleType) => void;
 }
 
-export function DocArticle({ article, titleFor, onNavigate, hasApiKey, onAskClaude }: DocArticleProps) {
+export function DocArticle({ article, titleFor, onNavigate, onAskClaude }: DocArticleProps) {
   return (
     <article className="doc-article">
       <header className="doc-article-head">
@@ -46,7 +48,9 @@ export function DocArticle({ article, titleFor, onNavigate, hasApiKey, onAskClau
           </span>
         </div>
         <p className="doc-summary">{article.summary}</p>
-        {hasApiKey && onAskClaude && (
+        {/* Always shown: the modal itself handles the no-API-key case so users
+            discover the feature and learn how to enable it. */}
+        {onAskClaude && (
           <button className="doc-ask-claude" onClick={() => onAskClaude(article)}>
             ✦ Ask Claude about this
           </button>
@@ -140,10 +144,34 @@ export function DocArticle({ article, titleFor, onNavigate, hasApiKey, onAskClau
   );
 }
 
-/** Code block with VS Code dark styling, language label, copy button, and line numbers. */
+/** highlight.js language id per DocArticle CodeLanguage (all in the common bundle). */
+const HLJS_LANGUAGE: Record<CodeLanguage, string> = {
+  typescript: 'typescript',
+  python: 'python',
+  go: 'go',
+  java: 'java',
+  rust: 'rust',
+  kotlin: 'kotlin',
+  swift: 'swift',
+};
+
+/** Code block with real syntax highlighting (highlight.js, github-dark theme). */
 function CodeBlock({ example }: { example: CodeExample }) {
   const [copied, setCopied] = useState(false);
-  const lines = useMemo(() => example.code.split('\n'), [example.code]);
+
+  // Highlight once per example. Falls back to plain (escaped) text if the
+  // language is unknown or highlighting throws, so a block never renders raw.
+  const highlighted = useMemo(() => {
+    const language = HLJS_LANGUAGE[example.language];
+    try {
+      if (language && hljs.getLanguage(language)) {
+        return hljs.highlight(example.code, { language }).value;
+      }
+      return hljs.highlightAuto(example.code).value;
+    } catch {
+      return escapeHtml(example.code);
+    }
+  }, [example.code, example.language]);
 
   const copy = async () => {
     try {
@@ -168,15 +196,16 @@ function CodeBlock({ example }: { example: CodeExample }) {
       </div>
       <p className="doc-code-desc">{example.description}</p>
       <pre className="doc-code-pre">
-        <code>
-          {lines.map((line, i) => (
-            <span key={i} className="doc-code-line">
-              <span className="doc-code-ln">{i + 1}</span>
-              <span className="doc-code-text">{line || ' '}</span>
-            </span>
-          ))}
-        </code>
+        <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
       </pre>
     </div>
   );
+}
+
+/** Escape HTML for the plain-text fallback path (never inject raw user code). */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }

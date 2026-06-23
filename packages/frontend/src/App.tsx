@@ -370,6 +370,7 @@ export function App() {
               hasProject={Boolean(state.projectId)}
               findings={state.diagnostics}
               dependencies={state.dependencies}
+              inferredSql={state.inferredSql}
               hasApiKey={hasApiKey}
               onOpenAgentTeam={() => setTab('agentteam')}
               onOpenApiKeys={() => setApiKeysOpen(true)}
@@ -378,7 +379,7 @@ export function App() {
           ) : tab === 'blueprint' ? (
             <IdeasCanvas />
           ) : tab === 'docs' ? (
-            <Docs hasApiKey={hasApiKey} />
+            <Docs hasApiKey={hasApiKey} apiKeys={apiKeys} />
           ) : tab === 'database' ? (
             <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
           ) : tab === 'archco' ? (

@@ -13,12 +13,16 @@ import { DOC_ARTICLES, DOC_ARTICLE_COUNT } from './docsContent.js';
 import { DOC_CATEGORY_ORDER, type DocArticle as DocArticleType, type DocCategory } from './docsTypes.js';
 import { DocArticle } from './DocArticle.js';
 import { DocsSearch, buildSearchIndex } from './DocsSearch.js';
+import { AskClaude } from './AskClaude.js';
+import type { ProviderKeys } from '../team/archco/multiProviderAI.js';
 
 interface DocsProps {
   hasApiKey?: boolean;
+  /** Provider keys (Anthropic/OpenAI/Gemini) for the Ask Claude modal. */
+  apiKeys?: ProviderKeys;
 }
 
-export function Docs({ hasApiKey }: DocsProps) {
+export function Docs({ hasApiKey, apiKeys = {} }: DocsProps) {
   const [selectedId, setSelectedId] = useState<string>(DOC_ARTICLES[0]?.id ?? '');
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<DocCategory>>(new Set());
@@ -134,22 +138,7 @@ export function Docs({ hasApiKey }: DocsProps) {
       <DocsSearch index={searchIndex} open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={navigate} />
 
       {askArticle && (
-        <div className="docs-ask-overlay" onClick={() => setAskArticle(null)}>
-          <div className="docs-ask-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Ask Claude about “{askArticle.title}”</h3>
-            <p className="docs-ask-context">
-              Context preloaded: {askArticle.category} · {askArticle.difficulty}. {askArticle.summary}
-            </p>
-            <textarea
-              className="docs-ask-input"
-              placeholder={`e.g. "How would I apply ${askArticle.title} to my current project?"`}
-              defaultValue={`About "${askArticle.title}": `}
-            />
-            <div className="docs-ask-actions">
-              <button className="btn btn-sm" onClick={() => setAskArticle(null)}>Close</button>
-            </div>
-          </div>
-        </div>
+        <AskClaude article={askArticle} apiKeys={apiKeys} onClose={() => setAskArticle(null)} />
       )}
     </div>
   );

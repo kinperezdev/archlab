@@ -31,6 +31,7 @@ import { EnterpriseAudit } from './EnterpriseAudit.js';
 import { InfraNode, type InfraNodeData } from './InfraNode.js';
 import { INFRA_TYPES, LAYERS, LAYER_LABEL, infraMeta, infraDescription } from './infraCatalog.js';
 import type { InfraNode as InfraNodeT, InfraEdge } from '@archlab/shared';
+import { parseSqlSchema } from '../lib/sqlSchema.js';
 
 const nodeTypes = { infra: InfraNode };
 
@@ -43,6 +44,8 @@ interface SystemDesignProps {
   findings?: Diagnostic[];
   /** package.json deps + config markers, used by Enterprise Audit for proof. */
   dependencies?: string[];
+  /** Inferred SQL schema from the scan, used by Guide Mode's Data Flow Map. */
+  inferredSql?: string | null;
   /** Whether an Anthropic API key is configured (gates Agent Team nudges). */
   hasApiKey?: boolean;
   /** Open the Agent Team modal. */
@@ -369,7 +372,15 @@ function LayerBands() {
 // ---------------------------------------------------------------------------
 // Guide Mode Component (Complete Technical Documentation)
 // ---------------------------------------------------------------------------
-function GuideMode({ infra }: { infra: SystemDesignMap }) {
+function GuideMode({
+  infra,
+  dependencies,
+  inferredSql,
+}: {
+  infra: SystemDesignMap;
+  dependencies: string[];
+  inferredSql: string | null;
+}) {
   const [activeSection, setActiveSection] = useState('overview');
   const sectionsRef = useRef<Record<string, HTMLElement | null>>({});
 
@@ -489,18 +500,81 @@ function GuideMode({ infra }: { infra: SystemDesignMap }) {
     return steps;
   }, [infra]);
 
+  // Real CI/CD detection: each stage is backed by a config file or npm script
+  // actually present in the project (markers come from the backend dependency
+  // collector). No detection → an honest empty state with a setup suggestion.
   const pipelineInfo = useMemo(() => {
-    return {
-      hasPipeline: false,
-      stages: [
-        { name: 'Code Push', tool: 'GitHub Webhook', duration: '5s', status: 'passed' },
-        { name: 'Build', tool: 'Vite / tsc Compiler', duration: '45s', status: 'passed' },
-        { name: 'Test', tool: 'Vitest / Jest', duration: '1m 15s', status: 'passed' },
-        { name: 'Security Scan', tool: 'npm audit / Trivy', duration: '30s', status: 'passed' },
-        { name: 'Deploy Staging', tool: 'Vercel / Netlify CDN', duration: '50s', status: 'passed' },
-      ]
-    };
-  }, []);
+    const has = (marker: string) => dependencies.includes(marker.toLowerCase());
+    const stages: { name: string; tool: string; evidence: string }[] = [];
+
+    if (has('.github/workflows')) stages.push({ name: 'GitHub Actions', tool: 'GitHub-hosted runners', evidence: '.github/workflows/' });
+    if (has('.gitlab-ci.yml')) stages.push({ name: 'GitLab CI', tool: 'GitLab pipelines', evidence: '.gitlab-ci.yml' });
+    if (has('jenkinsfile')) stages.push({ name: 'Jenkins', tool: 'Jenkins pipeline', evidence: 'Jenkinsfile' });
+    if (has('.circleci')) stages.push({ name: 'CircleCI', tool: 'CircleCI', evidence: '.circleci/config.yml' });
+    if (has('makefile')) stages.push({ name: 'Make Targets', tool: 'Makefile', evidence: 'Makefile' });
+    if (has('script:build')) stages.push({ name: 'Build', tool: 'npm run build', evidence: 'package.json scripts' });
+    if (has('script:test')) stages.push({ name: 'Test', tool: 'npm run test', evidence: 'package.json scripts' });
+    if (has('script:deploy')) stages.push({ name: 'Deploy', tool: 'npm run deploy', evidence: 'package.json scripts' });
+
+    // Dependency scanning surfaces as a security stage when configured.
+    if (has('.snyk') || has('snyk')) stages.push({ name: 'Security Scan', tool: 'Snyk', evidence: '.snyk' });
+    else if (has('dependabot.yml')) stages.push({ name: 'Dependency Scan', tool: 'Dependabot', evidence: '.github/dependabot.yml' });
+    else if (has('trivy')) stages.push({ name: 'Image Scan', tool: 'Trivy', evidence: 'trivy.yaml' });
+
+    return { hasPipeline: stages.length > 0, stages };
+  }, [dependencies]);
+
+  // Real data entities from the inferred schema: each detected table becomes an
+  // entity row, its storage layer resolved against the detected database node.
+  const dataEntities = useMemo(() => {
+    const tables = inferredSql ? parseSqlSchema(inferredSql) : [];
+    const dbNode = infra.nodes.find((n) =>
+      ['postgres', 'mysql', 'mongodb', 'redis'].includes(n.type),
+    );
+    const bucketNode = infra.nodes.find((n) => n.type === 'private-bucket' || n.type === 'public-bucket');
+    const storageLabel = dbNode ? `${infraMeta(dbNode.type).label} (${dbNode.label})` : 'Application database';
+    const hasAuth = infra.nodes.some((n) => n.type === 'auth-service');
+    const hasGateway = infra.nodes.some((n) => n.type === 'api-gateway');
+    const hasMigrations =
+      dependencies.includes('prisma') ||
+      dependencies.includes('knex') ||
+      dependencies.includes('typeorm') ||
+      dependencies.includes('node-pg-migrate');
+
+    const readAccess = hasGateway ? 'API gateway → services' : hasAuth ? 'Authenticated services' : 'Application services';
+    const lifecycle = hasMigrations ? 'Versioned migrations' : 'Application-managed';
+
+    const rows = tables.map((t) => {
+      const pk = t.columns.find((c) => c.isPk);
+      const fk = t.columns.find((c) => c.isFk);
+      const origin = fk?.fkRelation
+        ? `Linked to ${fk.fkRelation.parentTable}`
+        : 'Created by application write path';
+      return {
+        entity: t.name,
+        origin,
+        storage: storageLabel,
+        read: readAccess,
+        lifecycle: pk ? `${lifecycle} · keyed on ${pk.name}` : lifecycle,
+        inferred: Boolean(t.isInferred),
+      };
+    });
+
+    // If no schema was parsed but a storage bucket exists, surface that as the
+    // one honest data entity rather than inventing tables.
+    if (rows.length === 0 && bucketNode) {
+      rows.push({
+        entity: 'Stored Files / Assets',
+        origin: 'Uploaded via application',
+        storage: `${infraMeta(bucketNode.type).label} (${bucketNode.label})`,
+        read: bucketNode.type === 'public-bucket' ? 'Public (no auth)' : readAccess,
+        lifecycle: 'Object lifecycle policy',
+        inferred: true,
+      });
+    }
+
+    return rows;
+  }, [inferredSql, infra.nodes, dependencies]);
 
   return (
     <div className="sd-guide-container" id="sd-guide-document">
@@ -650,25 +724,39 @@ function GuideMode({ infra }: { infra: SystemDesignMap }) {
           className="sd-section-card"
         >
           <h2 className="sd-section-title">CI/CD Pipeline</h2>
-          <div className="sd-pipeline-flow-visual">
-            {pipelineInfo.stages.map((stage, i) => (
-              <div key={i} className="sd-pipeline-step">
-                <div className="sd-pipeline-bullet">✓</div>
-                <div className="sd-pipeline-step-name">{stage.name}</div>
-                <div className="sd-pipeline-step-meta">{stage.tool} ({stage.duration})</div>
+          {pipelineInfo.hasPipeline ? (
+            <>
+              <p className="sd-panel-text">
+                Detected {pipelineInfo.stages.length} pipeline stage{pipelineInfo.stages.length === 1 ? '' : 's'} from
+                configuration files and scripts in this project.
+              </p>
+              <div className="sd-pipeline-flow-visual">
+                {pipelineInfo.stages.map((stage, i) => (
+                  <div key={i} className="sd-pipeline-step">
+                    <div className="sd-pipeline-bullet">✓</div>
+                    <div className="sd-pipeline-step-name">{stage.name}</div>
+                    <div className="sd-pipeline-step-meta">{stage.tool}</div>
+                    <div className="sd-pipeline-step-meta" style={{ opacity: 0.6, fontFamily: 'var(--font-mono)', fontSize: '10px' }}>
+                      {stage.evidence}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="sd-cicd-suggestion-card" style={{ marginTop: '20px' }}>
-            <h4>🚀 Automated CI/CD Setup Suggestion</h4>
-            <p className="sd-panel-text">
-              Improve development safety by locking in automated builds, tests, and security scanning on pull requests.
-            </p>
-            <CopyPromptButton
-              prompt={`Generate a complete GitHub Actions CI/CD workflow template (.github/workflows/ci.yml) for a TypeScript/Node/Vite monorepo. It should execute: lint check, TypeScript compilation, Vitest tests, npm audit security check, and bundle builds on every main branch push.`}
-              label="Generate Actions workflow"
-            />
-          </div>
+            </>
+          ) : (
+            <div className="sd-cicd-suggestion-card">
+              <h4>No CI/CD pipeline detected</h4>
+              <p className="sd-panel-text">
+                No GitHub Actions, GitLab CI, Jenkins, CircleCI, Makefile, or build/test/deploy npm scripts were found in
+                this project. Adding automated builds, tests, and security scanning on every change is table stakes for
+                production.
+              </p>
+              <CopyPromptButton
+                prompt={`Generate a complete GitHub Actions CI/CD workflow template (.github/workflows/ci.yml) for a TypeScript/Node/Vite monorepo. It should execute: lint check, TypeScript compilation, Vitest tests, npm audit security check, and bundle builds on every main branch push.`}
+                label="Generate Actions workflow"
+              />
+            </div>
+          )}
         </section>
 
         {/* Section 5: Data Flow Map */}
@@ -677,38 +765,55 @@ function GuideMode({ infra }: { infra: SystemDesignMap }) {
           className="sd-section-card"
         >
           <h2 className="sd-section-title">Data Flow Map</h2>
-          <p className="sd-panel-text">
-            Mapping of major core system entities and their respective lifecycles across the current infrastructure layers.
-          </p>
-          <div className="sd-table-container">
-            <table className="sd-data-table">
-              <thead>
-                <tr>
-                  <th>Entity</th>
-                  <th>Origin / Created</th>
-                  <th>Storage Layer</th>
-                  <th>Read Access</th>
-                  <th>Deletion / Lifecycle</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>User Profile</strong></td>
-                  <td>Auth signup router</td>
-                  <td>Postgres DB / Auth Cache</td>
-                  <td>Services Gateway</td>
-                  <td>Auth API Delete flow</td>
-                </tr>
-                <tr>
-                  <td><strong>Media Assets</strong></td>
-                  <td>Direct Dashboard uploads</td>
-                  <td>Storage Bucket</td>
-                  <td>Public CDN Edge</td>
-                  <td>Admin asset lifecycle cleanups</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {dataEntities.length > 0 ? (
+            <>
+              <p className="sd-panel-text">
+                {dataEntities.length} data entit{dataEntities.length === 1 ? 'y' : 'ies'} derived from this project's
+                detected schema and infrastructure. Rows marked <em>inferred</em> were reconstructed from application
+                code rather than a declared schema file.
+              </p>
+              <div className="sd-table-container">
+                <table className="sd-data-table">
+                  <thead>
+                    <tr>
+                      <th>Entity</th>
+                      <th>Origin / Created</th>
+                      <th>Storage Layer</th>
+                      <th>Read Access</th>
+                      <th>Lifecycle</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dataEntities.map((row) => (
+                      <tr key={row.entity}>
+                        <td>
+                          <strong>{row.entity}</strong>
+                          {row.inferred && <em className="sd-entity-inferred"> · inferred</em>}
+                        </td>
+                        <td>{row.origin}</td>
+                        <td>{row.storage}</td>
+                        <td>{row.read}</td>
+                        <td>{row.lifecycle}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="sd-cicd-suggestion-card">
+              <h4>No data model detected</h4>
+              <p className="sd-panel-text">
+                No database tables, inferred schema, or storage buckets were detected in this project, so there is no
+                data lifecycle to map yet. Once a persistence layer is in place, entities and their flows appear here
+                automatically.
+              </p>
+              <CopyPromptButton
+                prompt={`Design a relational data model for this project. Propose the core tables, their columns and primary keys, the foreign-key relationships between them, and a migration strategy. Use PostgreSQL conventions.`}
+                label="Design a data model"
+              />
+            </div>
+          )}
         </section>
       </div>
     </div>
@@ -722,6 +827,7 @@ function DetectedMode({
   infra,
   findings,
   dependencies,
+  inferredSql,
   hasApiKey,
   onOpenAgentTeam,
   onOpenApiKeys,
@@ -730,6 +836,7 @@ function DetectedMode({
   infra: SystemDesignMap;
   findings: Diagnostic[];
   dependencies: string[];
+  inferredSql: string | null;
   hasApiKey: boolean;
   onOpenAgentTeam?: () => void;
   onOpenApiKeys?: () => void;
@@ -845,7 +952,7 @@ function DetectedMode({
           onAddApiKey={onOpenApiKeys}
         />
       ) : tabMode === 'guide' ? (
-        <GuideMode infra={infra} />
+        <GuideMode infra={infra} dependencies={dependencies} inferredSql={inferredSql} />
       ) : (
         <div className="sd-detected">
           <div className="sd-toolbar">
@@ -1013,6 +1120,7 @@ export function SystemDesign({
   hasProject,
   findings = [],
   dependencies = [],
+  inferredSql = null,
   hasApiKey = false,
   onOpenAgentTeam,
   onOpenApiKeys,
@@ -1030,6 +1138,7 @@ export function SystemDesign({
             infra={infra}
             findings={findings}
             dependencies={dependencies}
+            inferredSql={inferredSql}
             hasApiKey={hasApiKey}
             onOpenAgentTeam={onOpenAgentTeam}
             onOpenApiKeys={onOpenApiKeys}

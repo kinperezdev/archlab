@@ -266,6 +266,9 @@
   line-height: 1.6;
 }
 .doc-code-pre code { display: block; }
+/* highlight.js (github-dark) sets its own background; keep the code transparent
+   so it sits on the existing code-block surface, and give it readable padding. */
+.doc-code-pre code.hljs { background: transparent; padding: 0 14px; }
 .doc-code-line { display: flex; }
 .doc-code-ln {
   flex: 0 0 44px;
@@ -431,27 +434,79 @@
   justify-content: center;
 }
 .docs-ask-modal {
-  width: min(560px, 92vw);
+  width: min(620px, 92vw);
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
   background: #0d0d17;
   border: 1px solid #26263a;
   border-radius: 14px;
   padding: 24px;
 }
 .docs-ask-modal h3 { margin: 0 0 10px; font-size: 18px; }
-.docs-ask-context { font-size: 13px; color: #64748b; line-height: 1.5; margin: 0 0 14px; }
+.docs-ask-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.docs-ask-head h3 { margin: 0; }
+.docs-ask-context { font-size: 13px; color: #64748b; line-height: 1.5; margin: 8px 0 14px; }
+
+.docs-ask-thread {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 140px;
+  max-height: 48vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 12px;
+}
+.docs-ask-empty { font-size: 13px; color: #475569; margin: 0; }
+.docs-ask-turn {
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid #1f1f30;
+}
+.docs-ask-user { background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3); }
+.docs-ask-assistant { background: #11111c; }
+.docs-ask-error { border-color: rgba(239, 68, 68, 0.5); }
+.docs-ask-role {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #818cf8;
+  margin-bottom: 4px;
+}
+.docs-ask-error .docs-ask-role { color: #f87171; }
+.docs-ask-text { margin: 0; font-size: 14px; line-height: 1.55; color: #e2e8f0; white-space: pre-wrap; }
+
+.docs-ask-typing { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
+.docs-ask-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #818cf8;
+  animation: docs-ask-bounce 1.2s infinite ease-in-out;
+}
+.docs-ask-typing span:nth-child(2) { animation-delay: 0.15s; }
+.docs-ask-typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes docs-ask-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
 .docs-ask-input {
-  width: 100%;
-  min-height: 120px;
+  flex: 1;
+  min-height: 44px;
   background: #0f0f17;
   border: 1px solid #26263a;
   border-radius: 8px;
   color: #e2e8f0;
   font-family: inherit;
   font-size: 14px;
-  padding: 12px;
+  padding: 10px 12px;
   resize: vertical;
 }
-.docs-ask-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.docs-ask-actions { display: flex; align-items: flex-end; gap: 8px; margin-top: 12px; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 760px) {

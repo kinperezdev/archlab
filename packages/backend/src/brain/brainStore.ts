@@ -121,14 +121,52 @@ export function loadBrain(): BrainState {
   }
 }
 
+/**
+ * Bound the brain so brain.json cannot grow without limit: keep the most recent
+ * 20 projects, the 100 highest-count patterns, and the most recent 50 insights.
+ * Returns a new state (never mutates the input).
+ */
+function compactBrain(state: BrainState): BrainState {
+  const projects = state.projects.length > 20 ? state.projects.slice(-20) : state.projects;
+
+  const patterns =
+    state.patterns.length > 100
+      ? [...state.patterns].sort((a, b) => b.count - a.count).slice(0, 100)
+      : state.patterns;
+
+  const insights = state.insights.length > 50 ? state.insights.slice(-50) : state.insights;
+
+  // Drop any insight whose backing pattern was pruned, so the panel never shows
+  // an insight with no supporting pattern.
+  const patternIds = new Set(patterns.map((p) => p.id));
+  const liveInsights = insights.filter((i) => !i.patternId || patternIds.has(i.patternId));
+
+  return { ...state, projects, patterns, insights: liveInsights };
+}
+
+// Compaction runs on every 10th write so a long-running brain stays bounded
+// without paying the cost on every single save.
+let brainWriteCount = 0;
+
 /** Persist the brain state atomically (write temp, then rename). */
 function saveBrain(state: BrainState): void {
   ensureDirs();
-  state.updatedAt = new Date().toISOString();
+  brainWriteCount += 1;
+  const toWrite = brainWriteCount % 10 === 0 ? compactBrain(state) : state;
+  toWrite.updatedAt = new Date().toISOString();
   const tmp = `${BRAIN_STATE_FILE}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+  fs.writeFileSync(tmp, JSON.stringify(toWrite, null, 2), 'utf8');
   fs.renameSync(tmp, BRAIN_STATE_FILE);
   console.log(`[Brain] wrote ${path.basename(BRAIN_STATE_FILE)}`);
+}
+
+/** Current brain.json size in KB (0 if it does not exist yet). */
+export function brainFileSizeKb(): number {
+  try {
+    return Math.round(fs.statSync(BRAIN_STATE_FILE).size / 1024);
+  } catch {
+    return 0;
+  }
 }
 
 /**
