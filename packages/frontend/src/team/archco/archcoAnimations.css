@@ -293,6 +293,24 @@
   animation: archco-slide-right 280ms ease;
 }
 
+/* Always-mounted floors crossfade instead of mounting/unmounting (no flash).
+   Every panel fills the (position:relative) stage so the absolutely-positioned
+   .archco-scene-wrap inside keeps a real sized positioning context. Only opacity
+   and pointer-events change between active/inactive — never `position`, which
+   would collapse the panel height and hide the scene. */
+.archco-floor-panel {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+.archco-floor-panel.active {
+  opacity: 1;
+  pointer-events: all;
+  transition: opacity 150ms ease-in;
+}
+
 /* Token bar */
 /* Employee profile tabs */
 .archco-profile-tabs {
@@ -923,4 +941,88 @@
 }
 .archco-emotion-bubble.founder-bubble::before {
   border-top-color: #10B981;
+}
+
+/* =====================================================================
+   Security guards (Rex & Dana), critical alert, and late-arrival panic
+   ===================================================================== */
+
+/* A patrolling guard reuses the employee sprite container. */
+.archco-guard {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.archco-guard.alert {
+  animation: guard-alert-bob 0.6s ease-in-out infinite;
+}
+@keyframes guard-alert-bob {
+  0%, 100% { transform: translate(-50%, -50%); }
+  50% { transform: translate(-50%, -56%); }
+}
+
+/* Gold badge over the guard sprite. */
+.archco-guard .archco-sprite-wrap::after,
+.archco-guard::after {
+  content: '★';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #FCD34D;
+  text-shadow: 0 0 4px rgba(252, 211, 77, 0.8);
+  z-index: 9;
+}
+
+.guard-name {
+  color: #FCD34D !important;
+}
+
+/* Flashlight cone extending in the guard's facing direction at night. */
+.archco-guard-flashlight {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: 64px;
+  height: 26px;
+  border-radius: 0 50% 50% 0;
+  background: linear-gradient(90deg, rgba(254, 240, 138, 0.55), rgba(254, 240, 138, 0));
+  transform-origin: left center;
+  filter: blur(2px);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.guard-bubble {
+  border-color: #FCD34D !important;
+}
+
+/* Critical alert red flash overlay on Floor 4. */
+.archco-critical-flash {
+  position: absolute;
+  inset: 0;
+  background: #EF4444;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  animation: critical-flash 1.1s ease-in-out infinite;
+}
+@keyframes critical-flash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.125; } /* ~#EF444420 */
+}
+
+/* Late employee panic — speed scales with severity. */
+.archco-employee.panic-mild { animation: panic-shake 0.5s ease-in-out infinite; }
+.archco-employee.panic-moderate { animation: panic-shake 0.32s ease-in-out infinite; }
+.archco-employee.panic-severe { animation: panic-shake 0.18s ease-in-out infinite; }
+@keyframes panic-shake {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-1px) rotate(-4deg); }
+  75% { transform: translateY(1px) rotate(4deg); }
 }

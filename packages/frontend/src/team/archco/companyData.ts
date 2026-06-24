@@ -68,7 +68,97 @@ export interface Employee {
   status: EmployeeStatus;
   catchphrases: string[];
   ambientMessages: string[];
+  /** Hour (0-23) this person normally arrives at the office. */
+  arrivalTime?: number;
+  /** Bubble shown as they walk in for the morning arrival sequence. */
+  arrivalMood?: string;
+  /** 0-1 likelihood this person stays late / is the on-call type. */
+  stayLateChance?: number;
 }
+
+/**
+ * A security guard. Reuses the EmployeeSprite shape (so it can be rendered the
+ * same way) but patrols floors instead of owning a desk.
+ */
+export interface SecurityGuard {
+  id: string;
+  name: string;
+  role: string;
+  /** Dark uniform color used for the sprite body. */
+  uniformColor: string;
+  skinTone: string;
+  hairStyle: HairStyle;
+  hairColor: string;
+  accessory?: Accessory;
+  /** Floors this guard rotates through, in order, one every ~45s. */
+  patrolFloors: Floor[];
+  /** Ambient lines shown while patrolling. */
+  patrolMessages: string[];
+  /** Lines shown when responding to a critical security alert. */
+  alertPhrases: string[];
+}
+
+export const SECURITY_GUARDS: SecurityGuard[] = [
+  {
+    id: 'guard-rex',
+    name: 'Rex',
+    role: 'Security Guard',
+    uniformColor: '#1F2937',
+    skinTone: '#8D5524',
+    hairStyle: 'short',
+    hairColor: '#1A1A1A',
+    accessory: 'phone',
+    patrolFloors: [1, 2, 3, 4],
+    patrolMessages: ['All clear on this floor 🫡', 'Just doing my rounds', 'Badges, people!', 'Nothing to see here', 'Keeping it secure 🔒'],
+    alertPhrases: ['🚨 Moving to Floor 4!', 'Securing the war room!', 'On my way — hold tight!', 'Locking it down!'],
+  },
+  {
+    id: 'guard-dana',
+    name: 'Dana',
+    role: 'Security Guard',
+    uniformColor: '#1F2937',
+    skinTone: '#C68642',
+    hairStyle: 'bun',
+    hairColor: '#4A3728',
+    accessory: 'phone',
+    patrolFloors: [4, 3, 2, 1],
+    patrolMessages: ['Perimeter looks good 👀', 'Coffee then rounds ☕', 'Eyes open, all good', 'Quiet shift so far', 'Stay safe out there'],
+    alertPhrases: ['🚨 Responding to Floor 4!', 'Backing up the war room!', 'Incoming — clear the way!', 'Threat response, go go go!'],
+  },
+];
+
+/**
+ * Per-employee schedule (arrival hour, arrival bubble, stay-late tendency),
+ * tuned to each personality. Merged onto the EMPLOYEES objects at load so every
+ * employee carries arrivalTime / arrivalMood / stayLateChance.
+ */
+const EMPLOYEE_SCHEDULE: Record<string, { arrivalTime: number; arrivalMood: string; stayLateChance: number }> = {
+  'alex-chen': { arrivalTime: 7, arrivalMood: 'First one in, as always ☕', stayLateChance: 0.5 },
+  'jamie-park': { arrivalTime: 8, arrivalMood: 'Straight into standup 🗓️', stayLateChance: 0.3 },
+  'fran-torres': { arrivalTime: 8, arrivalMood: 'Budget check before coffee 💸', stayLateChance: 0.4 },
+  'marcus-webb': { arrivalTime: 7, arrivalMood: 'Coffee acquired, let’s code ☕', stayLateChance: 0.6 },
+  'kai-nakamura': { arrivalTime: 9, arrivalMood: 'Lo-fi on, headphones in 🎧', stayLateChance: 0.5 },
+  'yuna-park': { arrivalTime: 9, arrivalMood: 'Morning! API docs await 📝', stayLateChance: 0.3 },
+  'ravi-patel': { arrivalTime: 9, arrivalMood: 'Query plans don’t read themselves 🔍', stayLateChance: 0.4 },
+  'elena-vasquez': { arrivalTime: 9, arrivalMood: 'Into the queue we go 📨', stayLateChance: 0.4 },
+  'casey-kim': { arrivalTime: 9, arrivalMood: 'Lighthouse scores, here I come 💡', stayLateChance: 0.4 },
+  'mia-chen': { arrivalTime: 9, arrivalMood: 'Types first, coffee second ⌨️', stayLateChance: 0.3 },
+  'tyler-brooks': { arrivalTime: 10, arrivalMood: 'Okay okay I’m here 😅', stayLateChance: 0.2 },
+  'jordan-lee': { arrivalTime: 7, arrivalMood: 'Was I ever really off-call? 😵', stayLateChance: 0.9 },
+  'sam-rivera': { arrivalTime: 8, arrivalMood: 'Terraform plan, then breakfast 🌱', stayLateChance: 0.7 },
+  'priya-sharma': { arrivalTime: 8, arrivalMood: 'Roadmap brain activated 🗺️', stayLateChance: 0.3 },
+  'leo-zhang': { arrivalTime: 9, arrivalMood: 'Checking overnight metrics 📊', stayLateChance: 0.3 },
+  'rio-tanaka': { arrivalTime: 9, arrivalMood: 'Figma open, ready to design 🎨', stayLateChance: 0.3 },
+  'nadia-hassan': { arrivalTime: 10, arrivalMood: 'Pixels won’t align themselves 📐', stayLateChance: 0.3 },
+  'maya-patel': { arrivalTime: 9, arrivalMood: 'User interviews at 10 🗣️', stayLateChance: 0.2 },
+  'sarah-chen': { arrivalTime: 8, arrivalMood: 'Scanning the overnight logs 🛡️', stayLateChance: 0.7 },
+  'omar-khalil': { arrivalTime: 9, arrivalMood: 'Certs to rotate today 🔑', stayLateChance: 0.5 },
+  'zara-ahmed': { arrivalTime: 9, arrivalMood: 'Time to break some things 🧨', stayLateChance: 0.5 },
+  'chris-park': { arrivalTime: 9, arrivalMood: 'Edge cases incoming 🧪', stayLateChance: 0.4 },
+  'ava-thompson': { arrivalTime: 9, arrivalMood: 'Playwright suite, go green ✅', stayLateChance: 0.3 },
+};
+
+const DEFAULT_SCHEDULE = { arrivalTime: 9, arrivalMood: 'Morning, team! 👋', stayLateChance: 0.3 };
 
 export const EMPLOYEES: Employee[] = [
   // FLOOR 1 — Leadership & Operations
@@ -580,10 +670,24 @@ export const EMPLOYEES: Employee[] = [
   },
 ];
 
+// Stamp each employee with their schedule so arrivalTime / arrivalMood /
+// stayLateChance are always present (matching their personality).
+for (const emp of EMPLOYEES) {
+  const s = EMPLOYEE_SCHEDULE[emp.id] ?? DEFAULT_SCHEDULE;
+  emp.arrivalTime = s.arrivalTime;
+  emp.arrivalMood = s.arrivalMood;
+  emp.stayLateChance = s.stayLateChance;
+}
+
 /** Lookup by id. */
 const BY_ID = new Map(EMPLOYEES.map((e) => [e.id, e]));
 export function employeeById(id: string): Employee | undefined {
   return BY_ID.get(id);
+}
+
+/** Which guards are patrolling a given floor right now (by their rotation index). */
+export function guardsOnFloor(floor: Floor, rotationIndex: number): SecurityGuard[] {
+  return SECURITY_GUARDS.filter((g) => g.patrolFloors[rotationIndex % g.patrolFloors.length] === floor);
 }
 
 /** Employees assigned to a given floor (CTO also keeps an office on floor 5). */

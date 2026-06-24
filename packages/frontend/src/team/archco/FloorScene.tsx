@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
-import type { Employee, Floor, HairStyle, Accessory } from './companyData.js';
-import { employeesOnFloor, EMPLOYEES } from './companyData.js';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import type { Employee, Floor, HairStyle, Accessory, SecurityGuard } from './companyData.js';
+import { employeesOnFloor, EMPLOYEES, SECURITY_GUARDS } from './companyData.js';
 import { FLOOR_CONFIGS } from './floorLayouts.js';
 import type { TimeState } from './timeSystem.js';
+import { generateMorningArrival, detectLateEmployees } from './timeSystem.js';
 import type { FranState } from './tokenMonitor.js';
 import { EmployeeSprite } from './EmployeeSprite.js';
 import { levelForXp, loadGrowthState, saveGrowthState } from './growthSystem.js';
@@ -35,6 +36,10 @@ interface FloorSceneProps {
   isOffDuty?: boolean;
   /** Fran's token-budget state, drives her sprite + bubble on Floor 1. */
   franState?: FranState;
+  /** A live critical security alert — guards respond and Floor 4 flashes red. */
+  criticalAlertMode?: boolean;
+  /** Whether this floor is the one currently shown (all floors stay mounted). */
+  active?: boolean;
 }
 
 const SCENE_W = 720;
@@ -224,6 +229,10 @@ interface EmpState {
   emotion: string | null;
   /** Raise the speech bubble so two people talking don't cover each other. */
   emotionRaised?: boolean;
+  /** Set while a late employee is panic-arriving (drives the fast-walk class). */
+  panic?: 'mild' | 'moderate' | 'severe';
+  /** Per-move walk duration (ms) to override the default transition, distance-based. */
+  walkMs?: number;
 }
 
 export function FloorScene({
@@ -237,6 +246,8 @@ export function FloorScene({
   aiUpgradeTrigger = 0,
   isOffDuty = false,
   franState = 'relaxed',
+  criticalAlertMode = false,
+  active = true,
 }: FloorSceneProps) {
   const config = FLOOR_CONFIGS[floor];
   // Stable per floor: employeesOnFloor() filters a fresh array each call, so we
@@ -252,6 +263,29 @@ export function FloorScene({
   const [mentoringIds, setMentoringIds] = useState<ReadonlySet<string>>(new Set());
   // Employees who have walked out the exit door for the day (off-duty).
   const [leftForDay, setLeftForDay] = useState<ReadonlySet<string>>(new Set());
+  // Who has already arrived this session (morning arrival / late panic play once
+  // per person per day). Seeded from sessionStorage so a refresh doesn't replay.
+  const [arrivedEmployees, setArrivedEmployees] = useState<ReadonlySet<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem('archco-arrived');
+      return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const markArrived = (id: string) => {
+    setArrivedEmployees((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      try {
+        sessionStorage.setItem('archco-arrived', JSON.stringify([...next]));
+      } catch {
+        /* sessionStorage unavailable */
+      }
+      return next;
+    });
+  };
   
   // Floor 5 Visitor state
   const [visitor, setVisitor] = useState<{
@@ -301,11 +335,12 @@ export function FloorScene({
       .catch(() => {});
   }, [floor]);
 
-  // Seed positions for any employee on this floor that doesn't have a state yet,
-  // and drop states for employees no longer on the floor. Runs only when the
-  // floor's roster actually changes — never on every render — so live positions
-  // and emotion bubbles are preserved between ticks.
+  // Seed positions once per component lifetime. Floors stay mounted now, so this
+  // initialization must not re-run and reset live sprite positions/bubbles.
+  const initialized = useRef(false);
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
     setEmpStates((prev) => {
       const next: Record<string, EmpState> = {};
       for (const emp of employees) {
@@ -324,6 +359,180 @@ export function FloorScene({
     setFounderVisitor(null);
     setMentoringIds(new Set());
   }, [employees]);
+
+  // -------------------------------------------------------------------------
+  // Fix 4 — Morning arrival. Employees whose normal arrival hour is the current
+  // hour and who have not arrived yet walk in from the elevator to their desk
+  // with their arrivalMood bubble. Anyone whose arrival already passed is left
+  // at their desk (seeded above), no animation.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!active || isOffDuty) return;
+    const arrivingIds = generateMorningArrival(timeState, employees);
+    const toArrive = employees.filter(
+      (e) => arrivingIds.includes(e.id) && presentIds.has(e.id) && !arrivedEmployees.has(e.id),
+    );
+    if (toArrive.length === 0) return;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    setEmpStates((prev) => {
+      const next = { ...prev };
+      for (const emp of toArrive) {
+        next[emp.id] = {
+          x: ELEVATOR_X - 65,
+          y: emp.deskPosition.y + 40,
+          isWalking: true,
+          flip: true,
+          emotion: emp.arrivalMood ?? 'Morning! 👋',
+        };
+      }
+      return next;
+    });
+    // Walk each new arrival to their desk, then settle + mark arrived.
+    for (const emp of toArrive) {
+      timers.push(
+        setTimeout(() => {
+          const deskX = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
+          setEmpStates((prev) => {
+            const cur = prev[emp.id];
+            if (!cur) return prev;
+            return { ...prev, [emp.id]: { ...cur, x: deskX, isWalking: true, flip: false } };
+          });
+          timers.push(
+            setTimeout(() => {
+              setEmpStates((prev) => {
+                const cur = prev[emp.id];
+                if (!cur) return prev;
+                return { ...prev, [emp.id]: { ...cur, isWalking: false, emotion: null } };
+              });
+              markArrived(emp.id);
+            }, 1800),
+          );
+        }, 600),
+      );
+    }
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, presentIds, timeState.hour, isOffDuty, active]);
+
+  // -------------------------------------------------------------------------
+  // Fix 5 — Late employee panic. Detected late employees who have not arrived
+  // yet rush in. Severity scales the speed and bubble drama; colleagues react.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!active || isOffDuty) return;
+    const late = detectLateEmployees(timeState, employees).filter(
+      (l) => presentIds.has(l.id) && !arrivedEmployees.has(l.id),
+    );
+    if (late.length === 0) return;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const { id, severity } of late) {
+      const emp = employees.find((e) => e.id === id);
+      if (!emp) continue;
+
+      const firstBubble =
+        severity === 'mild'
+          ? 'Spilled my coffee ☕💦'
+          : severity === 'moderate'
+            ? 'I KNOW I KNOW 😬'
+            : 'oh no oh no oh no 😱';
+
+      // Enter fast from the elevator with the panic bubble + a wall class.
+      setEmpStates((prev) => ({
+        ...prev,
+        [id]: {
+          x: ELEVATOR_X - 65,
+          y: emp.deskPosition.y + 40,
+          isWalking: true,
+          flip: true,
+          emotion: firstBubble,
+          panic: severity,
+        },
+      }));
+
+      // Nearby colleagues react (👀) for moderate+; severe gets a guard quip.
+      if (severity !== 'mild') {
+        setEmpStates((prev) => {
+          const next = { ...prev };
+          for (const other of employees) {
+            if (other.id === id || !presentIds.has(other.id)) continue;
+            const cur = next[other.id];
+            if (cur && !cur.emotion) next[other.id] = { ...cur, emotion: '👀' };
+          }
+          return next;
+        });
+      }
+
+      // Special cases.
+      if (id === 'tyler-brooks' && severity === 'severe') {
+        setEmpStates((prev) => {
+          const casey = prev['casey-kim'];
+          return casey ? { ...prev, ['casey-kim']: { ...casey, emotion: 'Again?? 🙄' } } : prev;
+        });
+      }
+      if (id === 'jordan-lee') {
+        setEmpStates((prev) => {
+          const next = { ...prev };
+          for (const other of employees) {
+            if (other.id === id) continue;
+            const cur = next[other.id];
+            if (cur) next[other.id] = { ...cur, emotion: '😱' };
+          }
+          return next;
+        });
+      }
+
+      // Rush to desk, settle, clear reactions, mark arrived.
+      const deskX = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
+      timers.push(
+        setTimeout(() => {
+          setEmpStates((prev) => {
+            const cur = prev[id];
+            if (!cur) return prev;
+            return { ...prev, [id]: { ...cur, x: deskX, isWalking: true, flip: false } };
+          });
+          timers.push(
+            setTimeout(() => {
+              setEmpStates((prev) => {
+                const next = { ...prev };
+                const cur = next[id];
+                if (cur) next[id] = { ...cur, isWalking: false, emotion: 'Made it… 😮‍💨', panic: undefined };
+                // Clear colleague reaction bubbles.
+                for (const other of employees) {
+                  if (other.id === id) continue;
+                  const oc = next[other.id];
+                  if (oc && (oc.emotion === '👀' || oc.emotion === '😱')) {
+                    next[other.id] = { ...oc, emotion: null };
+                  }
+                }
+                return next;
+              });
+              markArrived(id);
+            }, 1400),
+          );
+        }, 500),
+      );
+    }
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, presentIds, timeState.hour, timeState.minute, isOffDuty, active]);
+
+  // -------------------------------------------------------------------------
+  // Fix 3 — Critical alert response on the security floor. Sarah Chen initiates
+  // the protocol and Jordan starts monitoring for impact.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!criticalAlertMode) return;
+    setEmpStates((prev) => {
+      const next = { ...prev };
+      const sarah = next['sarah-chen'];
+      if (sarah) next['sarah-chen'] = { ...sarah, emotion: 'On it. Initiating security protocol. 🛡️' };
+      const jordan = next['jordan-lee'];
+      if (jordan) next['jordan-lee'] = { ...jordan, emotion: '🚨 Security alert — monitoring for service impact' };
+      return next;
+    });
+  }, [criticalAlertMode]);
 
   // Listen for payroll triggers to make present employees celebrate!
   useEffect(() => {
@@ -520,6 +729,9 @@ export function FloorScene({
     if (employees.length === 0) return;
     
     const tick = setInterval(() => {
+      // Only the visible floor runs ambient activity; hidden (but still mounted)
+      // floors stay quiet so all floors can be mounted without churning CPU.
+      if (!active) return;
       // Nobody is around while the office is off-duty — skip all activity.
       if (isOffDuty) return;
       // -------------------------------------------------------------
@@ -837,7 +1049,46 @@ export function FloorScene({
             const approachFromLeft = senderDefaultX < receiverDefaultX;
             const targetX = receiverDefaultX + (approachFromLeft ? -52 : 52);
 
-            // 1. Sender starts walking and tells receiver they are heading over
+            // Distance-based walk timing (~80px/sec), so the bubble only opens
+            // once the initiator has actually reached the target.
+            const walkDist = Math.abs(targetX - senderDefaultX);
+            const walkMs = Math.max(600, Math.round((walkDist / 80) * 1000));
+            // After arrival, the initiator faces the receiver; the receiver
+            // faces the initiator. (flip = true means the sprite faces left.)
+            const faceReceiverFlip = !approachFromLeft;
+            const faceSenderFlip = approachFromLeft;
+
+            const questions = [
+              "Yo! Did you check that PR? 📂",
+              "Hey, how's the refactor going? 🛠️",
+              "Got a sec to look at this bug? 🔍",
+              "Is the production build green? 🚀",
+              "Do you want to grab lunch after this? 🍕",
+              "Need a hand with this module? 🤝",
+              "Did you run the security scanners? 🚨",
+            ];
+            const responses = [
+              "Yeah, checking it now! 👍",
+              "All good, just finished! 🔥",
+              "Let me review the logs... 💻",
+              "Yep, tests are passing! ✅",
+              "Sure, let's go! ☕",
+              "Almost done, will ping you! ⏳",
+              "No threats detected! 🛡️",
+            ];
+            const thoughts = [
+              "💭 Hmm, need to optimize that connection pooling...",
+              "💭 Okay, let me write some unit tests for this query...",
+              "💭 Let's rebase the branch now.",
+              "💭 Need to update the API documentation.",
+              "💭 Wait, did I check the cache expiration?",
+              "💭 Let's refactor that component to use hooks.",
+            ];
+            const question = questions[Math.floor(Math.random() * questions.length)];
+            const response = responses[Math.floor(Math.random() * responses.length)];
+            const thought = thoughts[Math.floor(Math.random() * thoughts.length)];
+
+            // PHASE 1 — Intent: only a thought bubble (no text), start walking.
             setEmpStates((prev) => {
               const s = prev[sender.id];
               if (!s) return prev;
@@ -845,152 +1096,123 @@ export function FloorScene({
                 ...prev,
                 [sender.id]: {
                   ...s,
-                  emotion: `Going to chat with ${receiver.name.split(' ')[0]}... 🏃‍♂️`,
+                  emotion: '💭',
+                  emotionRaised: false,
                   x: targetX,
                   isWalking: true,
-                  flip: targetX < s.x
-                }
+                  flip: targetX < s.x, // face the direction of travel
+                  walkMs,
+                },
               };
             });
 
-            // Prevent other interactions from choosing them during the walk & talk
+            // Lock both so no other interaction grabs them during the walk & talk.
             setMentoringIds((prev) => new Set([...prev, sender.id, receiver.id]));
 
-            // 2. Sender arrives at receiver's desk
+            // PHASE 3 — Arrived: face each other, THEN the opening line appears.
             setTimeout(() => {
               setEmpStates((prev) => {
                 const s = prev[sender.id];
-                if (!s) return prev;
-                const questions = [
-                  "Yo! Did you check that PR? 📂",
-                  "Hey, how's the refactor going? 🛠️",
-                  "Got a sec to look at this bug? 🔍",
-                  "Is the production build green? 🚀",
-                  "Do you want to grab lunch after this? 🍕",
-                  "Need a hand with this module? 🤝",
-                  "Did you run the security scanners? 🚨"
-                ];
+                const r = prev[receiver.id];
+                if (!s || !r) return prev;
                 return {
                   ...prev,
-                  [sender.id]: {
-                    ...s,
-                    isWalking: false,
-                    emotion: questions[Math.floor(Math.random() * questions.length)]
-                  }
+                  [sender.id]: { ...s, isWalking: false, walkMs: undefined, flip: faceReceiverFlip, emotion: question },
+                  [receiver.id]: { ...r, flip: faceSenderFlip, emotionRaised: true, emotion: '...' },
                 };
               });
 
-              // 3. Receiver responds shortly after
+              // PHASE 4 — Exchange: receiver replies; initiator now listens ("...").
               setTimeout(() => {
-                setEmpStates((prev) => {
-                  const r = prev[receiver.id];
-                  if (!r) return prev;
-                  const lookLeft = senderDefaultX < receiverDefaultX;
-                  const responses = [
-                    "Yeah, checking it now! 👍",
-                    "All good, just finished! 🔥",
-                    "Let me review the logs... 💻",
-                    "Yep, tests are passing! ✅",
-                    "Sure, let's go! ☕",
-                    "Almost done, will ping you! ⏳",
-                    "No threats detected! 🛡️"
-                  ];
-                  return {
-                    ...prev,
-                    [receiver.id]: {
-                      ...r,
-                      flip: lookLeft,
-                      // Raise the responder's bubble so it stacks above the
-                      // asker's instead of covering it.
-                      emotionRaised: true,
-                      emotion: responses[Math.floor(Math.random() * responses.length)]
-                    }
-                  };
-                });
-              }, 1800);
-
-              // 4. Conversation ends, sender heads back
-              setTimeout(() => {
-                setEmpStates((prev) => {
-                  const r = prev[receiver.id];
-                  if (!r) return prev;
-                  return { ...prev, [receiver.id]: { ...r, emotion: null, emotionRaised: false } };
-                });
-
                 setEmpStates((prev) => {
                   const s = prev[sender.id];
-                  if (!s) return prev;
+                  const r = prev[receiver.id];
+                  if (!s || !r) return prev;
+                  return {
+                    ...prev,
+                    [sender.id]: { ...s, emotion: '...' },
+                    [receiver.id]: { ...r, emotionRaised: true, emotion: response },
+                  };
+                });
+              }, 800);
+
+              // PHASE 5a — Both wave goodbye.
+              setTimeout(() => {
+                setEmpStates((prev) => {
+                  const s = prev[sender.id];
+                  const r = prev[receiver.id];
+                  if (!s || !r) return prev;
+                  return {
+                    ...prev,
+                    [sender.id]: { ...s, emotion: '👋' },
+                    [receiver.id]: { ...r, emotion: '👋' },
+                  };
+                });
+              }, 1600);
+
+              // PHASE 5b — Initiator walks back; receiver resumes.
+              setTimeout(() => {
+                setEmpStates((prev) => {
+                  const s = prev[sender.id];
+                  const r = prev[receiver.id];
+                  if (!s || !r) return prev;
                   return {
                     ...prev,
                     [sender.id]: {
                       ...s,
-                      emotion: "Got it! Heading back. 🚶‍♂️",
+                      emotion: null,
                       x: senderDefaultX,
                       isWalking: true,
-                      flip: senderDefaultX < s.x
-                    }
-                  };
-                });
-              }, 5000);
-
-              // 5. Sender arrives back at desk, thinks, then goes back to standby/work
-              setTimeout(() => {
-                setEmpStates((prev) => {
-                  const s = prev[sender.id];
-                  if (!s) return prev;
-                  const thoughts = [
-                    "💭 Hmm, need to optimize that connection pooling...",
-                    "💭 Okay, let me write some unit tests for this query...",
-                    "💭 Let's rebase the branch now.",
-                    "💭 Need to update the API documentation.",
-                    "💭 Wait, did I check the cache expiration?",
-                    "💭 Let's refactor that component to use hooks."
-                  ];
-                  return {
-                    ...prev,
-                    [sender.id]: {
-                      ...s,
-                      isWalking: false,
-                      flip: false,
-                      emotion: thoughts[Math.floor(Math.random() * thoughts.length)]
-                    }
+                      flip: senderDefaultX < s.x,
+                      walkMs,
+                    },
+                    [receiver.id]: { ...r, emotion: null, emotionRaised: false, flip: false },
                   };
                 });
 
-                // Free them up for future tasks
-                setMentoringIds((prev) => {
-                  const next = new Set(prev);
-                  next.delete(sender.id);
-                  next.delete(receiver.id);
-                  return next;
-                });
-
-                // Use an AI-generated topic between these two if one is queued,
-                // otherwise fall back to a generic exchange.
-                const aiTopic = takeConversationTopic(sender.id, receiver.id);
-                const convoMessages =
-                  aiTopic?.messages && aiTopic.messages.length > 0
-                    ? aiTopic.messages
-                    : [
-                        { speakerId: sender.id, text: 'synced on current work' },
-                        { speakerId: receiver.id, text: 'agreed on next steps' },
-                      ];
-                const convoLabel = aiTopic?.topic ?? 'colleague sync';
-                addConversationRecord(sender.id, receiver.id, convoMessages, convoLabel);
-                addConversationRecord(receiver.id, sender.id, convoMessages, convoLabel);
-
-                // 6. Clear thought bubble
+                // PHASE 5c — Initiator arrives home, reflects, then resumes work.
                 setTimeout(() => {
                   setEmpStates((prev) => {
                     const s = prev[sender.id];
                     if (!s) return prev;
-                    return { ...prev, [sender.id]: { ...s, emotion: null } };
+                    return {
+                      ...prev,
+                      [sender.id]: { ...s, isWalking: false, walkMs: undefined, flip: false, emotion: thought },
+                    };
                   });
-                }, 3000);
 
-              }, 9800); // 5000 conversation + 4800 walk back
+                  // Free both up for future interactions.
+                  setMentoringIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(sender.id);
+                    next.delete(receiver.id);
+                    return next;
+                  });
 
-            }, 4800); // Walk to receiver desk
+                  // Record the exchange (AI-generated topic if one is queued).
+                  const aiTopic = takeConversationTopic(sender.id, receiver.id);
+                  const convoMessages =
+                    aiTopic?.messages && aiTopic.messages.length > 0
+                      ? aiTopic.messages
+                      : [
+                          { speakerId: sender.id, text: question },
+                          { speakerId: receiver.id, text: response },
+                        ];
+                  const convoLabel = aiTopic?.topic ?? 'colleague sync';
+                  addConversationRecord(sender.id, receiver.id, convoMessages, convoLabel);
+                  addConversationRecord(receiver.id, sender.id, convoMessages, convoLabel);
+
+                  // Clear the thought bubble.
+                  setTimeout(() => {
+                    setEmpStates((prev) => {
+                      const s = prev[sender.id];
+                      if (!s) return prev;
+                      return { ...prev, [sender.id]: { ...s, emotion: null } };
+                    });
+                  }, 3000);
+                }, walkMs);
+              }, 2400);
+            }, walkMs);
 
             return; // skip other random actions on this tick
           }
@@ -1203,7 +1425,7 @@ export function FloorScene({
     }, 2200);
 
     return () => clearInterval(tick);
-  }, [employees, presentIds, taskBadges, floor, threatLevel, mentoringIds, visitor, isOffDuty]);
+  }, [employees, presentIds, taskBadges, floor, threatLevel, mentoringIds, visitor, isOffDuty, active]);
 
 
   return (
@@ -1216,6 +1438,9 @@ export function FloorScene({
       />
       {floor === 4 && (
         <div className={`archco-threat-tint threat-${threatLevel}`} aria-hidden="true" />
+      )}
+      {floor === 4 && criticalAlertMode && (
+        <div className="archco-critical-flash" aria-hidden="true" />
       )}
 
       <svg
@@ -1650,8 +1875,15 @@ export function FloorScene({
           return (
             <button
               key={emp.id}
-              className="archco-employee"
-              style={{ left: `${(x / SCENE_W) * 100}%`, top: `${(y / SCENE_H) * 100}%` }}
+              className={`archco-employee${state?.panic ? ` panic-${state.panic}` : ''}`}
+              style={{
+                left: `${(x / SCENE_W) * 100}%`,
+                top: `${(y / SCENE_H) * 100}%`,
+                // Distance-based walk timing overrides the default transition.
+                ...(state?.walkMs
+                  ? { transition: `left ${state.walkMs}ms linear, top ${state.walkMs}ms linear` }
+                  : {}),
+              }}
               onClick={() => {
                 const dynStatus = getDynamicStatus(emp, state, badge, mentoringIds, timeState);
                 const ambientMsg = emp.ambientMessages[Math.floor((emp.name.length + emp.role.length) % emp.ambientMessages.length)];
@@ -1866,8 +2098,127 @@ export function FloorScene({
             )}
           </>
         )}
+
+        {/* Security guards patrol on top of the floor scene. */}
+        <GuardLayer floor={floor} timeState={timeState} criticalAlertMode={criticalAlertMode} />
       </div>
     </div>
+  );
+}
+
+/** Build an Employee-shaped object so a guard can use the EmployeeSprite. */
+function guardSpriteEmployee(g: SecurityGuard): Employee {
+  return {
+    id: g.id,
+    name: g.name,
+    role: g.role,
+    department: 'security',
+    floor: 4,
+    color: g.uniformColor,
+    skinTone: g.skinTone,
+    hairStyle: g.hairStyle,
+    hairColor: g.hairColor,
+    accessory: g.accessory,
+    personality: '',
+    specialization: [],
+    deskPosition: { x: 0, y: 0 },
+    level: 1,
+    xp: 0,
+    xpToNextLevel: 100,
+    tasksCompleted: 0,
+    status: 'working',
+    catchphrases: [],
+    ambientMessages: [],
+  };
+}
+
+/**
+ * Security guards (Rex & Dana). They patrol left/right on a ~6s cycle and rotate
+ * floors every 45s. At night they carry a flashlight glow. On a critical alert
+ * both converge on Floor 4 with alert bubbles.
+ */
+function GuardLayer({
+  floor,
+  timeState,
+  criticalAlertMode,
+}: {
+  floor: Floor;
+  timeState: TimeState;
+  criticalAlertMode: boolean;
+}) {
+  const [rotationIndex, setRotationIndex] = useState(0);
+  const [tick, setTick] = useState(0);
+  const tickRef = useRef(0);
+
+  // Rotate floors every 45s.
+  useEffect(() => {
+    const r = setInterval(() => setRotationIndex((i) => i + 1), 45_000);
+    return () => clearInterval(r);
+  }, []);
+  // Patrol + bubble cadence every 3s (so a left/right round trip is ~6s).
+  useEffect(() => {
+    const t = setInterval(() => {
+      tickRef.current += 1;
+      setTick(tickRef.current);
+    }, 3_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const isNight = timeState.lightLevel < 0.5;
+  const leftX = 90;
+  const rightX = SCENE_W - 130;
+
+  return (
+    <>
+      {SECURITY_GUARDS.map((g, gi) => {
+        const onFloor = criticalAlertMode
+          ? floor === 4
+          : g.patrolFloors[rotationIndex % g.patrolFloors.length] === floor;
+        if (!onFloor) return null;
+
+        const goRight = (tick + gi) % 2 === 0;
+        const x = criticalAlertMode ? (gi === 0 ? 250 : 360) : goRight ? rightX : leftX;
+        const flip = !goRight && !criticalAlertMode; // face the direction of travel
+        const y = SCENE_H - 74;
+        const facing = flip ? -1 : 1;
+        const bubble = criticalAlertMode
+          ? g.alertPhrases[(tick + gi) % g.alertPhrases.length]
+          : (tick + gi) % 3 === 0
+            ? g.patrolMessages[(tick + gi) % g.patrolMessages.length]
+            : null;
+
+        return (
+          <div
+            key={g.id}
+            className={`archco-guard${criticalAlertMode ? ' alert' : ''}`}
+            style={{
+              left: `${(x / SCENE_W) * 100}%`,
+              top: `${(y / SCENE_H) * 100}%`,
+              transition: 'left 2.8s linear, top 0.6s ease',
+            }}
+            title={`${g.name} · ${g.role}`}
+          >
+            {isNight && (
+              <span
+                className="archco-guard-flashlight"
+                style={{ transform: `translateX(${facing * 14}px) scaleX(${facing})` }}
+                aria-hidden="true"
+              />
+            )}
+            {bubble && <div className="archco-emotion-bubble guard-bubble">{bubble}</div>}
+            <EmployeeSprite
+              employee={guardSpriteEmployee(g)}
+              scale={2}
+              absent={false}
+              working={false}
+              isWalking
+              flip={flip}
+            />
+            <span className="archco-employee-name guard-name">{g.name} 🛡️</span>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

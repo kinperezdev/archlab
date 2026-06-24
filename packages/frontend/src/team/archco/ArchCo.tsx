@@ -18,11 +18,11 @@ import { EmployeeProfile } from './EmployeeProfile.js';
 import { CompanyWiki } from './CompanyWiki.js';
 import { TokenDisplay } from './TokenDisplay.js';
 import { calculateTokenState, pushBurnSample } from './tokenMonitor.js';
-import { levelForXp, loadGrowthState, saveGrowthState } from './growthSystem.js';
+import { levelForXp } from './growthSystem.js';
 import { PORTS } from '@archlab/shared';
 import { runAIUpdate } from './aiUpdateRunner.js';
 import { detectAvailableProvider, detectAvailableProviders, PROVIDER_LABEL, type ProviderKeys } from './multiProviderAI.js';
-import { initializeLivingData, getAllLivingData } from './employeeLivingStore.js';
+import { initializeLivingData, getAllLivingData, updateLivingData } from './employeeLivingStore.js';
 
 interface TaskBadge {
   label: string;
@@ -70,7 +70,6 @@ export function ArchCo({
   const [selected, setSelected] = useState<Employee | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedThought, setSelectedThought] = useState<string | null>(null);
-  const [slideDir, setSlideDir] = useState<'left' | 'right'>('right');
   const [burnHistory, setBurnHistory] = useState<number[]>([]);
   const startRef = useRef(sessionStartTime ?? Date.now());
 
@@ -165,8 +164,14 @@ export function ArchCo({
 
   const changeFloor = (floor: Floor | 0) => {
     if (floor === activeFloor) return;
-    setSlideDir(floor > activeFloor ? 'left' : 'right');
     setActiveFloor(floor);
+  };
+
+  // Shared selection handler for every floor (all floors are mounted at once).
+  const handleSelect = (emp: Employee, status?: string, thought?: string) => {
+    setSelected(emp);
+    setSelectedStatus(status || null);
+    setSelectedThought(thought || null);
   };
 
   return (
@@ -244,30 +249,16 @@ export function ArchCo({
             textShadow: '0 0 8px rgba(245, 158, 11, 0.3)',
           }}
           onClick={() => {
-            EMPLOYEES.forEach((emp) => {
-              emp.xp += 50;
-              const newLvl = levelForXp(emp.xp);
-              if (newLvl > emp.level) {
-                emp.level = newLvl;
-              }
-            });
-            // Persist upgraded growth state
-            loadGrowthState().then((current) => {
-              const updated = { ...current };
-              EMPLOYEES.forEach((emp) => {
-                updated[emp.id] = {
-                  employeeId: emp.id,
-                  level: emp.level,
-                  xp: emp.xp,
-                  xpToNextLevel: emp.xpToNextLevel,
-                  tasksCompleted: emp.tasksCompleted,
-                  specializations: emp.specialization,
-                  unlockedAbilities: [],
-                  recentAchievements: [],
-                };
-              });
-              saveGrowthState(updated);
-            });
+            // Route XP/level growth through the living-data store (the persisted
+            // source of truth) instead of mutating the shared EMPLOYEES module.
+            const all = getAllLivingData();
+            for (const emp of EMPLOYEES) {
+              const cur = all[emp.id];
+              const newXp = (cur?.xp ?? emp.xp) + 50;
+              const newLevel = levelForXp(newXp);
+              void updateLivingData(emp.id, { xp: newXp, level: newLevel });
+            }
+            setLivingTick((t) => t + 1); // re-read living data for display
             alert('💸 Payroll Sent!\nDistributed salaries and weekend double-pay bonuses to all employees. Team satisfaction +100%! (+50 XP rewarded) 💰');
             setPayrollTrigger((prev) => prev + 1);
           }}
@@ -292,28 +283,31 @@ export function ArchCo({
       </div>
 
       <div className="archco-stage">
-        <div key={activeFloor} className={`archco-slide slide-${slideDir}`}>
-          {activeFloor === 0 ? (
-            <OutsideScene timeState={timeState} isOffDuty={isOffDuty} presentIds={presentIds} />
-          ) : (
+        {/* All floors stay mounted and crossfade via .active, so switching never
+            unmounts/remounts a scene (which caused the flash and reset sprites). */}
+        <div className={`archco-floor-panel${activeFloor === 0 ? ' active' : ''}`}>
+          <OutsideScene timeState={timeState} isOffDuty={isOffDuty} presentIds={presentIds} />
+        </div>
+        {FLOOR_ORDER.map((f) => (
+          <div key={f} className={`archco-floor-panel${activeFloor === f ? ' active' : ''}`}>
             <FloorScene
-              floor={activeFloor}
+              floor={f}
+              active={activeFloor === f}
               timeState={timeState}
               presentIds={presentIds}
               taskBadges={taskBadges}
               threatLevel={threatLevel}
-              onSelect={(emp, status, thought) => {
-                setSelected(emp);
-                setSelectedStatus(status || null);
-                setSelectedThought(thought || null);
-              }}
+              onSelect={handleSelect}
               payrollTrigger={payrollTrigger}
               aiUpgradeTrigger={aiUpgradeTrigger}
               isOffDuty={isOffDuty}
               franState={tokenState.franState}
+              // A red threat level means a critical security finding is live —
+              // the guards respond and Floor 4 goes into alert mode.
+              criticalAlertMode={threatLevel === 'red'}
             />
-          )}
-        </div>
+          </div>
+        ))}
 
         {activeFloor === 5 && (
           <div className="archco-wiki-panel">
