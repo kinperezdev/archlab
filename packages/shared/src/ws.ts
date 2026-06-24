@@ -13,7 +13,7 @@ import type {
   PipelineStepId,
   StepStatus,
 } from './pipeline.js';
-import type { ProjectIntelligence } from './intelligence.js';
+import type { ProjectIntelligence, MissingInfraPattern } from './intelligence.js';
 import type { BrainInsight, BrainPattern } from './brain.js';
 import type { SystemDesignMap } from './systemdesign.js';
 import type {
@@ -51,7 +51,7 @@ export type ClientMessage =
 /** Messages the server sends to the client. */
 export type ServerMessage =
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string; at: string }
-  | { type: 'project-ready'; projectId: string; name: string; rootPath: string; canvas: CanvasGraph; inferredSql?: string; infra?: SystemDesignMap; dependencies?: string[] }
+  | { type: 'project-ready'; projectId: string; name: string; rootPath: string; canvas: CanvasGraph; inferredSql?: string; infra?: SystemDesignMap; dependencies?: string[]; missingInfraPatterns?: MissingInfraPattern[]; techStack?: string[] }
   | { type: 'canvas-update'; canvas: CanvasGraph }
   | {
       type: 'node-animate';

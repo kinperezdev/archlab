@@ -78,6 +78,24 @@ export function searchWiki(query: string): WikiEntry[] {
   );
 }
 
+// ---- Failure simulation history (per project) -------------------------------
+
+const SIMULATIONS_DIR = path.join(BRAIN_DIR, 'simulations');
+
+/** Persist a simulation result for a project, keeping the last 10 most recent. */
+export function saveSimulationResult(projectName: string, result: unknown): void {
+  const file = path.join(SIMULATIONS_DIR, `${slug(projectName || 'untitled')}.json`);
+  const history = readJsonFile<unknown[]>(file, []);
+  const next = [{ savedAt: Date.now(), result }, ...history].slice(0, 10);
+  writeJsonFile(file, next);
+}
+
+/** Read a project's simulation history (most recent first), or [] if none. */
+export function getSimulationHistory(projectName: string): unknown[] {
+  const file = path.join(SIMULATIONS_DIR, `${slug(projectName || 'untitled')}.json`);
+  return readJsonFile<unknown[]>(file, []);
+}
+
 /** Load the ArchCo per-employee growth state (XP, levels, achievements). */
 export function loadArchcoGrowth(): Record<string, unknown> {
   return readJsonFile<Record<string, unknown>>(ARCHCO_GROWTH_FILE, {});

@@ -55,6 +55,8 @@ import {
   loadEmployeeLivingData,
   loadAllEmployeeLivingData,
   brainFileSizeKb,
+  saveSimulationResult,
+  getSimulationHistory,
   type WikiEntry,
 } from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
@@ -604,6 +606,30 @@ app.get('/brain', (_req, res) => res.json(gateBrain(loadBrain())));
 
 /** Current brain.json size in KB, so the UI can surface storage growth. */
 app.get('/brain/size', (_req, res) => res.json({ ok: true, sizeKb: brainFileSizeKb() }));
+
+/** Save a failure-simulation result for a project (keeps the last 10). */
+app.post('/brain/simulation', (req, res) => {
+  const projectName = String(req.body?.projectName ?? '').trim();
+  const result = req.body?.result;
+  if (!projectName || result === undefined) {
+    return res.status(400).json({ ok: false, error: 'projectName and result are required' });
+  }
+  try {
+    saveSimulationResult(projectName, result);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/** Read a project's simulation history (most recent first). */
+app.get('/brain/simulation/:projectName', (req, res) => {
+  try {
+    return res.json({ ok: true, history: getSimulationHistory(req.params.projectName) });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 // ---- Brain access control (Layer 1 lock + Layer 2 permissions) ----------
 app.get('/access/status', (_req, res) => res.json({ ok: true, ...accessStatus() }));
@@ -1223,6 +1249,8 @@ async function handleAnalyze(
     inferredSql,
     infra: analysis.infra,
     dependencies: collectProjectDependencies(analysis.rootPath),
+    missingInfraPatterns: analysis.missingInfraPatterns,
+    techStack: analysis.techStack,
   });
   log(
     emit,

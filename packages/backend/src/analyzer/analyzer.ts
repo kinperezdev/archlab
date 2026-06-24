@@ -6,7 +6,13 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { CanvasGraph, ProjectIntelligence, SystemDesignMap } from '@archlab/shared';
+import type {
+  CanvasGraph,
+  CanvasNode,
+  MissingInfraPattern,
+  ProjectIntelligence,
+  SystemDesignMap,
+} from '@archlab/shared';
 import { scanProject, type ScanResult } from './scan.js';
 import { classify } from './classify.js';
 import { detectEdges } from './edges.js';
@@ -25,6 +31,8 @@ export interface AnalysisResult {
   infra: SystemDesignMap;
   /** Raw README contents read from the project root, or null if none. */
   projectReadme: string | null;
+  /** Major infrastructure the project is missing, with ready-to-use prompts. */
+  missingInfraPatterns: MissingInfraPattern[];
 }
 
 /** Common README filenames, in priority order. */
@@ -61,6 +69,7 @@ export function analyzeProject(rootPath: string): AnalysisResult {
   // stated tech stack and architecture as high-confidence corroborating signals.
   const projectReadme = readProjectReadme(scan.root);
   const infra = detectInfrastructure(scan, techStack, projectReadme);
+  const missingInfraPatterns = detectMissingInfra(scan, positioned, techStack);
 
   return {
     projectId,
@@ -72,7 +81,323 @@ export function analyzeProject(rootPath: string): AnalysisResult {
     techStack,
     infra,
     projectReadme,
+    missingInfraPatterns,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Missing-infrastructure detection
+// ---------------------------------------------------------------------------
+
+const DB_LIBS = ['pg', 'mysql', 'mysql2', 'mongoose', 'mongodb', 'sequelize', 'typeorm', 'prisma', '@prisma/client', 'drizzle-orm', 'redis', 'ioredis', 'sqlite3', 'better-sqlite3', 'knex'];
+const AUTH_LIBS = ['passport', 'jsonwebtoken', 'next-auth', '@clerk/clerk-sdk-node', '@clerk/nextjs', '@auth/core', 'bcrypt', 'bcryptjs', 'argon2', 'express-session', 'lucia'];
+const TEST_LIBS = ['jest', 'vitest', 'mocha', '@playwright/test', 'cypress', 'pytest', 'testing-library', '@testing-library/react'];
+const SERVER_FRAMEWORKS = ['Express', 'Fastify', 'NestJS', 'Django', 'Flask', 'Spring', 'Laravel', 'Rails', 'Next.js'];
+
+/** Read lowercased dependency names from package.json (deps + devDeps). */
+function readPackageDeps(root: string): Set<string> {
+  try {
+    const p = path.join(root, 'package.json');
+    if (!fs.existsSync(p)) return new Set();
+    const pkg = JSON.parse(fs.readFileSync(p, 'utf8')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const names = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})];
+    return new Set(names.map((n) => n.toLowerCase()));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Detect which major pieces of infrastructure are absent, and generate a
+ * project-specific implementation prompt for each. Pure derivation from the
+ * already-computed nodes + techStack + the project's package.json.
+ */
+function detectMissingInfra(
+  scan: ScanResult,
+  nodes: CanvasNode[],
+  techStack: string[],
+): MissingInfraPattern[] {
+  const deps = readPackageDeps(scan.root);
+  const has = (libs: string[]) => libs.some((l) => deps.has(l));
+  const rel = (f: { relPath: string }) => f.relPath.toLowerCase();
+
+  const hasFrontend = nodes.some((n) => n.lane === 'frontend');
+  const hasBackend = nodes.some((n) => n.lane === 'backend');
+  const hasDb = nodes.some((n) => n.kind === 'database') || has(DB_LIBS);
+  const hasAuth = nodes.some((n) => n.kind === 'auth') || has(AUTH_LIBS);
+  const hasEndpoints = nodes.some((n) => n.kind === 'endpoint');
+  const hasServerFramework = hasBackend || techStack.some((t) => SERVER_FRAMEWORKS.includes(t));
+  const isFlutter = scan.files.some((f) => rel(f).endsWith('.dart')) || techStack.includes('Flutter');
+  const isReactNative = deps.has('react-native') || deps.has('expo');
+  const isMobile = isFlutter || isReactNative;
+
+  const hasTests =
+    scan.files.some((f) => /\.(test|spec)\.[jt]sx?$|_test\.go$|(^|\/)test_[^/]*\.py$|\.test\.dart$/.test(rel(f))) ||
+    has(TEST_LIBS);
+  const hasConfig = scan.files.some((f) =>
+    /(^|\/)\.env|(^|\/)[^/]*\.config\.[jt]s$|(^|\/)config\/|settings\.py$|application\.ya?ml$|(^|\/)config\.[jt]s$/.test(rel(f)),
+  );
+
+  const componentCount = nodes.filter((n) => n.kind === 'component').length;
+  const routeCount = nodes.filter((n) => n.kind === 'route').length;
+  const endpointCount = nodes.filter((n) => n.kind === 'endpoint').length;
+  const stack = techStack.join(' + ') || (isFlutter ? 'Flutter / Dart' : 'an undetected stack');
+  const topDeps = [...deps].slice(0, 12).join(', ') || 'none detected';
+
+  const ctx = { name: scan.name, stack, topDeps, componentCount, routeCount, endpointCount };
+  const out: MissingInfraPattern[] = [];
+
+  // Mobile apps legitimately have no backend in-repo — frame it as info.
+  if (isMobile && !hasBackend) {
+    out.push({
+      type: 'frontend-only',
+      title: `This is a ${isFlutter ? 'Flutter' : 'React Native'} mobile app`,
+      description: 'Mobile apps typically do not ship a backend in the same repository. ArchLab analyzed the client; the API it talks to usually lives elsewhere.',
+      severity: 'info',
+      detectedStack: stack,
+      suggestedImplementation: 'Add a backend API service or connect to an existing one.',
+      generatedPrompt: backendPrompt(ctx, true),
+    });
+  } else if (hasFrontend && !hasBackend) {
+    out.push({
+      type: 'frontend-only',
+      title: 'Frontend-only project',
+      description: `This looks like a pure client-side ${stack} app: ${componentCount} components and ${routeCount} routes, with no backend or database detected.`,
+      severity: 'info',
+      detectedStack: stack,
+      suggestedImplementation: 'Add a backend API and a persistence layer when you need server state.',
+      generatedPrompt: backendPrompt(ctx, false),
+    });
+    if (!hasServerFramework) {
+      out.push({
+        type: 'no-backend',
+        title: 'No backend detected',
+        description: 'No server framework or backend lane was found. A backend lets you persist data, authenticate users, and keep secrets off the client.',
+        severity: 'warning',
+        detectedStack: stack,
+        suggestedImplementation: 'Add a Node.js + Express (or FastAPI) backend with a REST API.',
+        generatedPrompt: backendPrompt(ctx, false),
+      });
+    }
+  }
+
+  if (hasBackend && !hasFrontend) {
+    out.push({
+      type: 'backend-only',
+      title: 'Backend-only project',
+      description: `A ${stack} service with ${endpointCount} endpoints and no frontend detected. This is normal for an API or worker service.`,
+      severity: 'info',
+      detectedStack: stack,
+      suggestedImplementation: 'Add a frontend client if this service needs a UI.',
+      generatedPrompt: frontendPrompt(ctx),
+    });
+    out.push({
+      type: 'no-frontend',
+      title: 'No frontend detected',
+      description: 'No frontend lane was found. If end users need a UI, add a client application.',
+      severity: 'info',
+      detectedStack: stack,
+      suggestedImplementation: 'Add a React or Vue frontend that consumes this API.',
+      generatedPrompt: frontendPrompt(ctx),
+    });
+  }
+
+  if (hasBackend && !hasDb) {
+    out.push({
+      type: 'no-database',
+      title: 'No database detected',
+      description: 'The backend has no detected database connection or ORM dependency, so application data has nowhere durable to live.',
+      severity: 'warning',
+      detectedStack: stack,
+      suggestedImplementation: 'Add PostgreSQL with an ORM (Prisma) and migrations.',
+      generatedPrompt: databasePrompt(ctx),
+    });
+  }
+
+  if (hasBackend && hasEndpoints && !hasAuth) {
+    out.push({
+      type: 'no-auth',
+      title: 'No authentication detected',
+      description: `${endpointCount} API endpoints exist but no auth layer or auth library was found. Unauthenticated endpoints are the most common serious vulnerability.`,
+      severity: 'critical',
+      detectedStack: stack,
+      suggestedImplementation: 'Add token-based auth (JWT) enforced in middleware before protected handlers.',
+      generatedPrompt: authPrompt(ctx),
+    });
+  }
+
+  if (hasFrontend && !hasEndpoints && !hasBackend && !isMobile) {
+    out.push({
+      type: 'no-api',
+      title: 'No API routes detected',
+      description: 'This is a pure client-side app with no API calls or endpoints detected. Dynamic data needs an API to talk to.',
+      severity: 'info',
+      detectedStack: stack,
+      suggestedImplementation: 'Add a REST API and wire the frontend data layer to it.',
+      generatedPrompt: backendPrompt(ctx, false),
+    });
+  }
+
+  if (!hasTests && nodes.length > 0) {
+    out.push({
+      type: 'no-tests',
+      title: 'No tests detected',
+      description: 'No test files or test runner dependency were found. Tests are what let you change this code safely as it grows.',
+      severity: 'warning',
+      detectedStack: stack,
+      suggestedImplementation: 'Add a test runner and a starter unit + integration suite.',
+      generatedPrompt: testsPrompt(ctx),
+    });
+  }
+
+  if (!hasConfig && nodes.length > 0) {
+    out.push({
+      type: 'no-config',
+      title: 'No environment config detected',
+      description: 'No .env or configuration files were found. Externalizing config keeps secrets out of code and lets the app behave differently per environment.',
+      severity: 'info',
+      detectedStack: stack,
+      suggestedImplementation: 'Add a .env + typed config loader and a committed .env.example.',
+      generatedPrompt: configPrompt(ctx),
+    });
+  }
+
+  return out;
+}
+
+interface PromptCtx {
+  name: string;
+  stack: string;
+  topDeps: string;
+  componentCount: number;
+  routeCount: number;
+  endpointCount: number;
+}
+
+function backendPrompt(c: PromptCtx, mobile: boolean): string {
+  return [
+    'You are a senior full-stack engineer.',
+    `I have a ${c.stack} ${mobile ? 'mobile app' : 'frontend project'} called "${c.name}" with no backend.`,
+    '',
+    'PROJECT CONTEXT:',
+    `- Stack: ${c.stack}`,
+    `- Detected surface: ${c.componentCount} UI components, ${c.routeCount} routes/pages`,
+    `- Current dependencies: ${c.topDeps}`,
+    '',
+    'TASK:',
+    'Add a production-ready Node.js + Express + TypeScript backend with:',
+    "1. A RESTful API structure matching the frontend's data needs",
+    '2. Authentication using JWT (login, token verification middleware)',
+    '3. Database integration with PostgreSQL via Prisma (schema + migrations)',
+    '4. Environment configuration (.env + typed loader) and CORS for the frontend',
+    '5. Sensible error handling and a health-check endpoint',
+    '',
+    'Show me the complete folder structure, package.json changes, and starter files.',
+  ].join('\n');
+}
+
+function frontendPrompt(c: PromptCtx): string {
+  return [
+    'You are a senior frontend engineer.',
+    `I have a ${c.stack} backend called "${c.name}" with ${c.endpointCount} endpoints and no frontend.`,
+    '',
+    'PROJECT CONTEXT:',
+    `- Backend stack: ${c.stack}`,
+    `- Detected endpoints: ${c.endpointCount}`,
+    `- Current dependencies: ${c.topDeps}`,
+    '',
+    'TASK:',
+    'Add a React + TypeScript + Vite frontend that consumes this API with:',
+    '1. A typed API client matching the existing endpoints',
+    '2. Routing, a couple of real pages, and loading/error states',
+    '3. Auth handling (store and send the token) if the API requires it',
+    '4. A clean component structure and environment config for the API base URL',
+    '',
+    'Show me the folder structure, package.json, and starter files.',
+  ].join('\n');
+}
+
+function databasePrompt(c: PromptCtx): string {
+  return [
+    'You are a senior backend engineer.',
+    `My ${c.stack} backend "${c.name}" has no database layer.`,
+    '',
+    'PROJECT CONTEXT:',
+    `- Stack: ${c.stack}`,
+    `- Detected endpoints: ${c.endpointCount}`,
+    `- Current dependencies: ${c.topDeps}`,
+    '',
+    'TASK:',
+    'Add a PostgreSQL persistence layer with:',
+    '1. Prisma (or an idiomatic ORM for this stack) with a schema for the core entities the endpoints imply',
+    '2. Versioned migrations and a seed script',
+    '3. A repository/data-access layer the handlers call (no raw queries in routes)',
+    '4. Connection pooling and environment-based config',
+    '',
+    'Show me the schema, migration setup, and how to wire it into the existing handlers.',
+  ].join('\n');
+}
+
+function authPrompt(c: PromptCtx): string {
+  return [
+    'You are a senior application security engineer.',
+    `My ${c.stack} backend "${c.name}" exposes ${c.endpointCount} endpoints with no authentication.`,
+    '',
+    'PROJECT CONTEXT:',
+    `- Stack: ${c.stack}`,
+    `- Current dependencies: ${c.topDeps}`,
+    '',
+    'TASK:',
+    'Add token-based authentication and authorization with:',
+    '1. Login/refresh issuing signed JWTs (or sessions if more appropriate)',
+    '2. Middleware that verifies the token and rejects expired/forged tokens with 401/403',
+    '3. Role-based authorization checks on protected routes',
+    '4. Secure secret handling via environment variables and a regression test for the unauthorized path',
+    '',
+    'Show me the middleware, how to protect existing routes, and the config changes.',
+  ].join('\n');
+}
+
+function testsPrompt(c: PromptCtx): string {
+  return [
+    'You are a senior engineer who values testability.',
+    `My ${c.stack} project "${c.name}" has no tests.`,
+    '',
+    'PROJECT CONTEXT:',
+    `- Stack: ${c.stack}`,
+    `- Detected surface: ${c.componentCount} components, ${c.routeCount} routes, ${c.endpointCount} endpoints`,
+    `- Current dependencies: ${c.topDeps}`,
+    '',
+    'TASK:',
+    'Set up a test suite appropriate for this stack with:',
+    '1. A test runner configured (Vitest/Jest for JS, pytest for Python, go test for Go)',
+    '2. Unit tests for core logic and a couple of integration tests for the main flow',
+    '3. A test script in the project config and a CI step that runs it',
+    '',
+    'Show me the config, example tests, and how to run them.',
+  ].join('\n');
+}
+
+function configPrompt(c: PromptCtx): string {
+  return [
+    'You are a senior engineer.',
+    `My ${c.stack} project "${c.name}" has no environment configuration.`,
+    '',
+    'PROJECT CONTEXT:',
+    `- Stack: ${c.stack}`,
+    `- Current dependencies: ${c.topDeps}`,
+    '',
+    'TASK:',
+    'Add environment configuration with:',
+    '1. A typed config loader that validates required variables at startup (e.g. Zod)',
+    '2. A committed .env.example documenting every variable',
+    '3. .env added to .gitignore and clear separation of dev/prod values',
+    '',
+    'Show me the config module, the .env.example, and how to consume it.',
+  ].join('\n');
 }
 
 /** First-pass intelligence derived purely from structure (step 1 deepens it). */

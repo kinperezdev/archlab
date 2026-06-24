@@ -17,3 +17,28 @@ export interface ProjectIntelligence {
   /** Plain English explanation of how everything connects. */
   howItConnects: string;
 }
+
+/** A major piece of infrastructure the analyzer detected as absent. */
+export type MissingInfraType =
+  | 'no-backend'
+  | 'no-frontend'
+  | 'no-database'
+  | 'no-auth'
+  | 'no-api'
+  | 'frontend-only'
+  | 'backend-only'
+  | 'no-tests'
+  | 'no-config';
+
+export interface MissingInfraPattern {
+  type: MissingInfraType;
+  title: string;
+  description: string;
+  severity: 'info' | 'warning' | 'critical';
+  /** What was detected, e.g. "React + TypeScript". */
+  detectedStack: string;
+  /** One sentence describing what to add. */
+  suggestedImplementation: string;
+  /** Full, project-specific implementation prompt. */
+  generatedPrompt: string;
+}
