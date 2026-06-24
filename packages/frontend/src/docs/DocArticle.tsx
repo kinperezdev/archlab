@@ -9,8 +9,25 @@
  */
 
 import { useMemo, useState } from 'react';
-import hljs from 'highlight.js/lib/common';
+import hljs from 'highlight.js/lib/core';
+import typescript from 'highlight.js/lib/languages/typescript';
+import python from 'highlight.js/lib/languages/python';
+import go from 'highlight.js/lib/languages/go';
+import java from 'highlight.js/lib/languages/java';
+import rust from 'highlight.js/lib/languages/rust';
+import kotlin from 'highlight.js/lib/languages/kotlin';
+import swift from 'highlight.js/lib/languages/swift';
 import 'highlight.js/styles/github-dark.css';
+
+// Register only the languages used by Docs articles, so the bundle does not
+// pull in the full highlight.js common pack.
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('go', go);
+hljs.registerLanguage('java', java);
+hljs.registerLanguage('rust', rust);
+hljs.registerLanguage('kotlin', kotlin);
+hljs.registerLanguage('swift', swift);
 import type { CodeExample, CodeLanguage, DocArticle as DocArticleType, DocDifficulty } from './docsTypes.js';
 import { DocDiagram } from './DocDiagram.js';
 
