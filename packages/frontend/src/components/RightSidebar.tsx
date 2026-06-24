@@ -5,7 +5,7 @@
  * and the running findings list.
  */
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import {
   type CanvasGraph,
   type CanvasNode,
@@ -47,6 +47,14 @@ interface RightSidebarProps {
   stepFilter?: PipelineStepId | null;
   /** Clear the active step filter. */
   onClearStepFilter?: () => void;
+  /**
+   * Simulation panel/report. When provided, it replaces the normal sidebar body
+   * (diagnostic prompt, node inspector, findings) so the failure simulation owns
+   * the sidebar while it is active.
+   */
+  simulationContent?: ReactNode;
+  /** Open the Code Intelligence Panel for a node id (same as double-click). */
+  onOpenCode?: (nodeId: string) => void;
 }
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
@@ -96,6 +104,8 @@ export function RightSidebar({
   onResizeStart,
   stepFilter,
   onClearStepFilter,
+  simulationContent,
+  onOpenCode,
 }: RightSidebarProps) {
   const { agentTeamHasRun, openAgentTeam } = useApiKeyContext();
   const latest = diagnostics[diagnostics.length - 1] ?? null;
@@ -131,6 +141,10 @@ export function RightSidebar({
         ▶
       </button>
       <div className="sidebar-scroll">
+      {simulationContent ? (
+        simulationContent
+      ) : (
+      <>
       {latest && (
         <DiagnosticPrompt
           diagnostic={latest}
@@ -147,6 +161,7 @@ export function RightSidebar({
           node={selectedNode}
           graph={graph}
           diagnostics={diagnostics}
+          onOpenCode={onOpenCode}
         />
       )}
 
@@ -249,6 +264,8 @@ export function RightSidebar({
           )}
         </ul>
       </section>
+      </>
+      )}
       </div>
     </aside>
   );
@@ -373,6 +390,55 @@ function describeNode(node: CanvasNode, outgoing: CanvasNode[], incoming: Canvas
   }
 }
 
+/**
+ * One connection row. When the connected node has a source file, the whole row
+ * becomes a button that opens the Code Intelligence Panel for it (the same as
+ * double-clicking that node on the canvas); otherwise it renders as a plain row.
+ */
+function ConnRow({
+  link,
+  dir,
+  onOpenCode,
+}: {
+  link: NodeLink;
+  dir: 'in' | 'out';
+  onOpenCode?: (nodeId: string) => void;
+}) {
+  const canOpen = Boolean(link.node.filePath) && Boolean(onOpenCode);
+  const open = () => {
+    // No file path -> nothing to open; do nothing rather than error.
+    if (!link.node.filePath || !onOpenCode) return;
+    onOpenCode(link.node.id);
+  };
+  return (
+    <li
+      className={`node-conn-item${canOpen ? ' conn-clickable' : ''}`}
+      role={canOpen ? 'button' : undefined}
+      tabIndex={canOpen ? 0 : undefined}
+      title={canOpen ? `Open ${link.node.filePath} in Code Intelligence` : undefined}
+      onClick={canOpen ? open : undefined}
+      onKeyDown={
+        canOpen
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                open();
+              }
+            }
+          : undefined
+      }
+    >
+      <span className="conn-op" style={{ color: OPERATION_COLORS[link.operation] }}>
+        {link.operation}
+      </span>
+      <span className={`conn-arrow ${dir}`}>{dir === 'out' ? '→' : '←'}</span>
+      <span className="conn-label">{link.node.label}</span>
+      <span className="conn-kind">{KIND_LABEL[link.node.kind] ?? link.node.kind}</span>
+      {canOpen && <span className="conn-open-icon" aria-hidden="true">&lt;/&gt;</span>}
+    </li>
+  );
+}
+
 /** Node details plus a live preview of the file's contents (defaulting to a summary view). */
 function NodeInspector({
   projectName,
@@ -380,12 +446,14 @@ function NodeInspector({
   node,
   graph,
   diagnostics,
+  onOpenCode,
 }: {
   projectName: string | null;
   projectPath: string | null;
   node: CanvasNode;
   graph: CanvasGraph;
   diagnostics: Diagnostic[];
+  onOpenCode?: (nodeId: string) => void;
 }) {
   // Derive connections and related findings from the in-memory analysis only.
   const { outgoing, incoming, relatedFindings, description } = useMemo(() => {
@@ -472,14 +540,7 @@ function NodeInspector({
           ) : (
             <ul className="node-conn-list">
               {outgoing.map((l) => (
-                <li key={`out-${l.node.id}`} className="node-conn-item">
-                  <span className="conn-op" style={{ color: OPERATION_COLORS[l.operation] }}>
-                    {l.operation}
-                  </span>
-                  <span className="conn-arrow out">→</span>
-                  <span className="conn-label">{l.node.label}</span>
-                  <span className="conn-kind">{KIND_LABEL[l.node.kind] ?? l.node.kind}</span>
-                </li>
+                <ConnRow key={`out-${l.node.id}`} link={l} dir="out" onOpenCode={onOpenCode} />
               ))}
             </ul>
           )}
@@ -492,14 +553,7 @@ function NodeInspector({
           ) : (
             <ul className="node-conn-list">
               {incoming.map((l) => (
-                <li key={`in-${l.node.id}`} className="node-conn-item">
-                  <span className="conn-op" style={{ color: OPERATION_COLORS[l.operation] }}>
-                    {l.operation}
-                  </span>
-                  <span className="conn-arrow in">←</span>
-                  <span className="conn-label">{l.node.label}</span>
-                  <span className="conn-kind">{KIND_LABEL[l.node.kind] ?? l.node.kind}</span>
-                </li>
+                <ConnRow key={`in-${l.node.id}`} link={l} dir="in" onOpenCode={onOpenCode} />
               ))}
             </ul>
           )}

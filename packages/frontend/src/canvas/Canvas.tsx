@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -9,11 +9,13 @@ import ReactFlow, {
   useEdgesState,
   useReactFlow,
 } from 'reactflow';
-import type { CanvasGraph, CanvasNode, Diagnostic } from '@archlab/shared';
+import type { CanvasGraph, CanvasNode, Diagnostic, MissingInfraPattern } from '@archlab/shared';
 import { isEntryFile } from '@archlab/shared';
 import { ArchNode, type ArchNodeData, type PortInfo } from './ArchNode.js';
 import { LaneGroup, type LaneVariant, type LaneGroupData } from './LaneGroup.js';
 import { inferOperation, destinationLabel, OPERATION_COLORS } from '../lib/operations.js';
+import type { SimulationResult } from '../simulation/simulationEngine.js';
+import { SmartEmptyState } from './SmartEmptyState.js';
 
 const nodeTypes = { arch: ArchNode, laneGroup: LaneGroup };
 
@@ -120,6 +122,9 @@ function isolationReasonFor(kind: string): string {
 // Estimated node footprint, used only to size the swim-lane background boxes.
 const NODE_W = 240;
 const NODE_H = 110;
+// Above this edge count, a selected node culls non-incident edges while it is
+// highlighted, instead of dimming hundreds of edges (which thrashes paint).
+const EDGE_CULL_THRESHOLD = 300;
 const LANE_PAD = 70; // breathing room around the group
 const LANE_PAD_TOP = 96; // extra room at the top for the lane label
 
@@ -157,6 +162,21 @@ interface CanvasProps {
   onOpenCode: (nodeId: string) => void;
   selectedNodeId: string | null;
   filter: 'all' | 'frontend' | 'backend' | 'api' | 'security';
+  /** Whether failure-simulation mode is active (shows the click-a-node banner). */
+  simulationMode?: boolean;
+  /** The current simulation result, or null. Drives the cascade wave animation. */
+  simulationResult?: SimulationResult | null;
+  /** Clear the active simulation. */
+  onResetSimulation?: () => void;
+  /** Whether a project is loaded (drives the smart empty state). */
+  hasProject?: boolean;
+  /** Project name + detected stack, shown in the empty state. */
+  projectName?: string | null;
+  techStack?: string[];
+  /** Missing-infrastructure patterns from the analyzer. */
+  missingPatterns?: MissingInfraPattern[];
+  /** Optional: run a generated prompt in the terminal. */
+  onRunPrompt?: (prompt: string) => void;
 }
 
 interface EdgeRef {
@@ -165,7 +185,22 @@ interface EdgeRef {
   target: string;
 }
 
-export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedNodeId, filter }: CanvasProps) {
+export function Canvas({
+  graph,
+  diagnostics,
+  onSelectNode,
+  onOpenCode,
+  selectedNodeId,
+  filter,
+  simulationMode = false,
+  simulationResult = null,
+  onResetSimulation,
+  hasProject = false,
+  projectName = null,
+  techStack = [],
+  missingPatterns = [],
+  onRunPrompt,
+}: CanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<ArchNodeData | LaneGroupData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
@@ -181,6 +216,15 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
   const [selectedEdges, setSelectedEdges] = useState<Record<string, EdgeRef>>({});
   const { setCenter, fitView } = useReactFlow();
 
+  // Perf plumbing for the highlight system:
+  //  - rAF refs batch the node/edge highlight patches with the paint cycle.
+  //  - hoverTimerRef debounces hover so a fast mouse sweep doesn't recompute.
+  //  - edgeCull reports how many edges are shown when large graphs are culled.
+  const nodeRafRef = useRef<number | null>(null);
+  const edgeRafRef = useRef<number | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const [edgeCull, setEdgeCull] = useState<{ shown: number; total: number } | null>(null);
+
   // Auto-fit the view when the graph goes from empty to populated, after a short
   // delay so React Flow has finished measuring/rendering the nodes.
   const hasNodes = nodes.length > 0;
@@ -190,6 +234,16 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
       return () => clearTimeout(id);
     }
   }, [hasNodes, fitView]);
+
+  // Switching tabs (all / frontend / backend / api / security) changes the
+  // visible node set while hasNodes stays true, so the effect above won't fire.
+  // Re-fit the view to the newly filtered nodes once they have been laid out.
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    const id = setTimeout(() => fitView({ padding: 0.08, duration: 400 }), 140);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   // Escape releases the locked node highlight.
   useEffect(() => {
@@ -505,73 +559,105 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
     );
   }, [bottleneckById, setNodes]);
 
-  // 2. Update hover/click highlight/dim states on existing nodes without changing positions
+  // 1d. Failure simulation: play the cascade as timed waves. Each node flips to
+  //     its failure state at affectedAtMs (hop * 800ms); resilient nodes then
+  //     transition to "recovering". Clears all sim state when the result clears.
   useEffect(() => {
-    const hasSelection = Object.keys(selectedEdges).length > 0;
-    const activeHighlightNodes = new Set<string>();
+    const clearSim = () =>
+      setNodes((prev) =>
+        prev.map((node) =>
+          'kind' in node.data && node.data.simState
+            ? { ...node, data: { ...node.data, simState: undefined } }
+            : node,
+        ),
+      );
 
-    // Priority: an active node (hovered, or locked by a click) beats a hovered
-    // edge beats a click-selected edge.
-    if (activeNodeId) {
-      // The active node plus every node directly connected to it by an edge.
-      activeHighlightNodes.add(activeNodeId);
-      for (const e of graph.edges) {
-        if (e.source === activeNodeId) activeHighlightNodes.add(e.target);
-        if (e.target === activeNodeId) activeHighlightNodes.add(e.source);
+    clearSim();
+    if (!simulationResult) return;
+
+    const timers: number[] = [];
+    for (const ns of simulationResult.nodeStates) {
+      timers.push(
+        window.setTimeout(() => {
+          setNodes((prev) =>
+            prev.map((node) =>
+              node.id === ns.nodeId && 'kind' in node.data
+                ? { ...node, data: { ...node.data, simState: ns.state } }
+                : node,
+            ),
+          );
+        }, ns.affectedAtMs),
+      );
+
+      // Resilient nodes recover a beat after they fail.
+      if (ns.recovers && ns.state !== 'healthy' && ns.state !== 'warning') {
+        timers.push(
+          window.setTimeout(() => {
+            setNodes((prev) =>
+              prev.map((node) =>
+                node.id === ns.nodeId && 'kind' in node.data
+                  ? { ...node, data: { ...node.data, simState: 'recovering' } }
+                  : node,
+              ),
+            );
+          }, ns.affectedAtMs + 1600),
+        );
       }
-    } else if (hoveredEdge) {
-      activeHighlightNodes.add(hoveredEdge.source);
-      activeHighlightNodes.add(hoveredEdge.target);
-    } else if (hasSelection) {
-      // Otherwise highlight all endpoints of all selected edges
-      Object.values(selectedEdges).forEach((edge) => {
-        activeHighlightNodes.add(edge.source);
-        activeHighlightNodes.add(edge.target);
-      });
     }
 
-    const hasActiveHighlight = activeNodeId !== null || hoveredEdge !== null || hasSelection;
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, [simulationResult, setNodes]);
 
-    setNodes((prevNodes) =>
-      prevNodes.map((node) => {
-        // Leave background lane containers untouched.
-        if (!('kind' in node.data)) return node;
-        const isHighlighted = hasActiveHighlight ? activeHighlightNodes.has(node.id) : false;
-        const isDimmed = hasActiveHighlight ? !activeHighlightNodes.has(node.id) : false;
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            isHighlighted,
-            isDimmed,
-          },
-        };
-      })
-    );
-  }, [activeNodeId, hoveredEdge, selectedEdges, graph.edges, setNodes]);
-
-  // 3. Sync edges when graph, filter, hover, or selection states change
-  useEffect(() => {
-    const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
+  // Fix 1 — the highlight node set is memoized so the BFS over edges only runs
+  // when the active node / hovered edge / selection actually changes, not on
+  // every render. Priority: active node (hover or click-lock) beats hovered edge
+  // beats click-selected edges.
+  const { highlightNodeIds, hasActiveHighlight } = useMemo(() => {
+    const set = new Set<string>();
     const hasSelection = Object.keys(selectedEdges).length > 0;
-    const hasActiveHighlight = activeNodeId !== null || hoveredEdgeId !== null || hasSelection;
+    if (activeNodeId) {
+      set.add(activeNodeId);
+      for (const e of graph.edges) {
+        if (e.source === activeNodeId) set.add(e.target);
+        if (e.target === activeNodeId) set.add(e.source);
+      }
+    } else if (hoveredEdge) {
+      set.add(hoveredEdge.source);
+      set.add(hoveredEdge.target);
+    } else if (hasSelection) {
+      for (const edge of Object.values(selectedEdges)) {
+        set.add(edge.source);
+        set.add(edge.target);
+      }
+    }
+    return {
+      highlightNodeIds: set,
+      hasActiveHighlight: activeNodeId !== null || hoveredEdge !== null || hasSelection,
+    };
+  }, [activeNodeId, hoveredEdge, selectedEdges, graph.edges]);
 
+  // Fix 2 — set of "active" edge ids (touching the active node, hovered, or
+  // selected). Membership lookups replace the per-click full edge rebuild.
+  const activeEdgeIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of graph.edges) {
+      const touchesActive =
+        activeNodeId !== null && (e.source === activeNodeId || e.target === activeNodeId);
+      if (e.id === hoveredEdgeId || selectedEdges[e.id] || touchesActive) set.add(e.id);
+    }
+    return set;
+  }, [graph.edges, hoveredEdgeId, selectedEdges, activeNodeId]);
+
+  // Fix 2 — the STATIC edge structure (color, marker, offset, branch color) is
+  // computed once per graph/filter. This is where the expensive `inferOperation`
+  // per edge runs, so it is kept off the hover/click hot path entirely.
+  const baseEdges = useMemo(() => {
+    const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
     const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-    // Count how many edges share each source so parallel edges can be fanned out
-    // with a small per-edge offset instead of stacking on top of each other.
     const sourceSeen = new Map<string, number>();
-
-    const nextEdges = graph.edges
+    return graph.edges
       .filter((e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target))
       .map((e) => {
-        const isSelected = Boolean(selectedEdges[e.id]);
-        const isHovered = e.id === hoveredEdgeId;
-        // Edges touching the active (hovered or locked) node trace its data flow.
-        const isConnectedToActiveNode =
-          activeNodeId !== null && (e.source === activeNodeId || e.target === activeNodeId);
-        const isActive = isHovered || isSelected || isConnectedToActiveNode;
-
-        // Per-connection-type color, inferred from the two node kinds + label.
         const source = byId.get(e.source);
         const target = byId.get(e.target);
         const operation = inferOperation({
@@ -581,51 +667,131 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
           direction: 'out',
         });
         const opColor = OPERATION_COLORS[operation];
-        // Mind-map branch color: the whole subtree shares one color (fall back to
-        // the child's kind color for anything outside a tree branch).
         const branchColor =
           branchColorById.get(e.target) ?? KIND_COLORS[target?.kind ?? 'unknown'] ?? opColor;
-
-        // Opacity: 0.5 at rest; when a node is active its edges go full 1.0 and
-        // every other edge fades to 0.15 so the connection path pops.
-        const opacity = hasActiveHighlight ? (isActive ? 1 : 0.15) : 0.5;
-
-        // Fan parallel edges out of the same source so they don't overlap.
         const n = sourceSeen.get(e.source) ?? 0;
         sourceSeen.set(e.source, n + 1);
         const offset = 12 + (n % 5) * 8;
-
         return {
           id: e.id,
           source: e.source,
           target: e.target,
           label: e.label,
-          // Curved (bezier) branches for the left-to-right mind-map tree; low
-          // zIndex so edges always paint behind the nodes (never on top).
-          type: 'default',
-          pathOptions: { offset },
-          zIndex: 0,
-          animated: e.animated || isActive,
-          className: (e.animated || isActive) ? 'edge-flowing' : undefined,
-          // Wires are not hover/click targets — only nodes are interactive.
-          interactionWidth: 0,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 16,
-            height: 16,
-            color: branchColor,
-          },
-          style: {
-            strokeWidth: isActive ? 3 : 1.5,
-            stroke: branchColor,
-            opacity,
-            transition: 'stroke-width 0.15s ease, opacity 0.15s ease',
-          },
+          baseAnimated: e.animated,
+          branchColor,
+          offset,
+          markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: branchColor },
         };
       });
+  }, [graph.edges, graph.nodes, filteredNodes, branchColorById]);
 
-    setEdges(nextEdges);
-  }, [graph.edges, filteredNodes, activeNodeId, hoveredEdgeId, selectedEdges, branchColorById, setEdges]);
+  // 2. Patch highlight/dim onto existing nodes. Fix 1 (memoized set) + Fix 3
+  //    (rAF-batched) + identity short-circuit so only nodes whose state actually
+  //    changed get a new object (and therefore re-render).
+  useEffect(() => {
+    if (nodeRafRef.current !== null) cancelAnimationFrame(nodeRafRef.current);
+    nodeRafRef.current = requestAnimationFrame(() => {
+      setNodes((prevNodes) => {
+        let changed = false;
+        const next = prevNodes.map((node) => {
+          if (!('kind' in node.data)) return node; // leave lane backgrounds alone
+          const isHighlighted = hasActiveHighlight ? highlightNodeIds.has(node.id) : false;
+          const isDimmed = hasActiveHighlight ? !highlightNodeIds.has(node.id) : false;
+          if (node.data.isHighlighted === isHighlighted && node.data.isDimmed === isDimmed) {
+            return node;
+          }
+          changed = true;
+          return { ...node, data: { ...node.data, isHighlighted, isDimmed } };
+        });
+        return changed ? next : prevNodes;
+      });
+    });
+    return () => {
+      if (nodeRafRef.current !== null) cancelAnimationFrame(nodeRafRef.current);
+    };
+  }, [highlightNodeIds, hasActiveHighlight, setNodes]);
+
+  // 3. Patch the dynamic edge styling (animated / width / opacity) from the
+  //    static baseEdges. Fix 3 (rAF), Fix 4 (only active edges animate during a
+  //    highlight), Fix 5 (cull non-incident edges on very large graphs), plus an
+  //    identity short-circuit so unchanged edges are not re-rendered.
+  useEffect(() => {
+    if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
+    edgeRafRef.current = requestAnimationFrame(() => {
+      // Fix 5: while a node is highlighted on a large graph, render only the
+      // edges incident to the highlighted region instead of dimming all of them.
+      const culling = activeNodeId !== null && baseEdges.length > EDGE_CULL_THRESHOLD;
+      const visibleBase = culling
+        ? baseEdges.filter((b) => highlightNodeIds.has(b.source) && highlightNodeIds.has(b.target))
+        : baseEdges;
+
+      setEdges((prevEdges) => {
+        const prevById = new Map(prevEdges.map((e) => [e.id, e]));
+        return visibleBase.map((b) => {
+          const isActive = activeEdgeIds.has(b.id);
+          // Fix 4: during a highlight only the active edges animate; everything
+          // else stops flowing. At rest, restore each edge's base flow state.
+          const animated = hasActiveHighlight ? isActive : b.baseAnimated;
+          const opacity = hasActiveHighlight ? (isActive ? 1 : 0.15) : 0.5;
+          const strokeWidth = isActive ? 3 : 1.5;
+          const className = animated ? 'edge-flowing' : undefined;
+
+          // Reuse the previous edge object when its visible state is unchanged so
+          // React Flow can skip re-rendering it.
+          const prev = prevById.get(b.id);
+          if (
+            prev &&
+            prev.animated === animated &&
+            prev.className === className &&
+            prev.style?.strokeWidth === strokeWidth &&
+            prev.style?.opacity === opacity
+          ) {
+            return prev;
+          }
+          return {
+            id: b.id,
+            source: b.source,
+            target: b.target,
+            label: b.label,
+            type: 'default',
+            pathOptions: { offset: b.offset },
+            zIndex: 0,
+            animated,
+            className,
+            interactionWidth: 0,
+            markerEnd: b.markerEnd,
+            style: {
+              strokeWidth,
+              stroke: b.branchColor,
+              opacity,
+              transition: 'stroke-width 0.15s ease, opacity 0.15s ease',
+            },
+          };
+        });
+      });
+
+      // Update the cull indicator only when its value actually changes.
+      setEdgeCull((prev) => {
+        const nextVal = culling ? { shown: visibleBase.length, total: baseEdges.length } : null;
+        if (!prev && !nextVal) return prev;
+        if (prev && nextVal && prev.shown === nextVal.shown && prev.total === nextVal.total) return prev;
+        return nextVal;
+      });
+    });
+    return () => {
+      if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
+    };
+  }, [baseEdges, activeEdgeIds, highlightNodeIds, hasActiveHighlight, activeNodeId, setEdges]);
+
+  // Clean up the debounce timer and any pending rAF when the canvas unmounts.
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+      if (nodeRafRef.current !== null) cancelAnimationFrame(nodeRafRef.current);
+      if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
+    },
+    [],
+  );
 
   // 4. Auto Arrange nodes back to their default layout positions
   const handleAutoArrange = () => {
@@ -656,11 +822,15 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
 
   return (
     <div className="canvas-wrap">
-      {graph.nodes.length === 0 ? (
-        <div className="canvas-empty">
-          <h2>No project loaded</h2>
-          <p>Enter a project folder path in the top bar and click Analyze to generate the canvas.</p>
-        </div>
+      {filteredNodes.length === 0 ? (
+        <SmartEmptyState
+          tab={filter}
+          missingPatterns={missingPatterns}
+          projectName={projectName}
+          techStack={techStack}
+          hasProject={hasProject}
+          onRunPrompt={onRunPrompt}
+        />
       ) : (
         <>
           <ReactFlow
@@ -699,9 +869,19 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             onNodeMouseEnter={(_e, node) => {
               // Lane backgrounds are not interactive targets.
               if (node.type === 'laneGroup') return;
-              setHoveredNodeId(node.id);
+              // Fix 6: debounce hover by 80ms so a fast mouse sweep across many
+              // nodes does not fire a highlight recompute for each one.
+              if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+              const id = node.id;
+              hoverTimerRef.current = window.setTimeout(() => setHoveredNodeId(id), 80);
             }}
-            onNodeMouseLeave={() => setHoveredNodeId(null)}
+            onNodeMouseLeave={() => {
+              if (hoverTimerRef.current !== null) {
+                clearTimeout(hoverTimerRef.current);
+                hoverTimerRef.current = null;
+              }
+              setHoveredNodeId(null);
+            }}
             onPaneClick={() => {
               onSelectNode(null);
               setSelectedEdges({});
@@ -747,10 +927,25 @@ export function Canvas({ graph, diagnostics, onSelectNode, onOpenCode, selectedN
             )}
             <Controls showInteractive={false} />
           </ReactFlow>
+          {simulationMode && !simulationResult && (
+            <div className="sim-canvas-banner">
+              ⚡ Simulation Mode — click any node to simulate a failure
+            </div>
+          )}
+          {edgeCull && (
+            <div className="canvas-cull-indicator">
+              Showing {edgeCull.shown} of {edgeCull.total} connections
+            </div>
+          )}
           <div className="canvas-floating-controls">
             <button className="btn btn-auto-arrange" onClick={handleAutoArrange}>
               Arrange Nodes
             </button>
+            {simulationResult && onResetSimulation && (
+              <button className="btn btn-sim-reset" onClick={onResetSimulation}>
+                Reset Simulation
+              </button>
+            )}
           </div>
         </>
       )}

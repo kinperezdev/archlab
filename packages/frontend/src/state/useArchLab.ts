@@ -14,6 +14,7 @@ import {
   type DiagnosticReport,
   type PipelineStep,
   type ProjectIntelligence,
+  type MissingInfraPattern,
   type ServerMessage,
   type ClientMessage,
   type BrainInsight,
@@ -121,6 +122,10 @@ export interface ArchLabState {
   infra: SystemDesignMap | null;
   /** package.json dependency names + CI/scan config markers, for Enterprise Audit. */
   dependencies: string[];
+  /** Major infrastructure the project is missing (for the smart empty state). */
+  missingPatterns: MissingInfraPattern[];
+  /** Detected tech stack labels, e.g. ["React", "TypeScript"]. */
+  techStack: string[];
   /** Agent Team live state. */
   agentTeam: AgentTeamState;
 }
@@ -147,6 +152,8 @@ export function useArchLab() {
     inferredSql: null,
     infra: null,
     dependencies: [],
+    missingPatterns: [],
+    techStack: [],
     agentTeam: {
       running: false,
       agents: emptyAgents(),
@@ -183,6 +190,8 @@ export function useArchLab() {
           inferredSql: msg.inferredSql ?? null,
           infra: msg.infra ?? null,
           dependencies: msg.dependencies ?? [],
+          missingPatterns: msg.missingInfraPatterns ?? [],
+          techStack: msg.techStack ?? [],
         };
 
       case 'canvas-update':

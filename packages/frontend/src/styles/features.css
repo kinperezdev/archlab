@@ -835,6 +835,10 @@
 }
 .db-filter-btn:hover { color: var(--text-primary); }
 .db-filter-btn.active { background: var(--accent); color: #fff; }
+.db-canvas-count-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
 .db-canvas-count {
   position: absolute;
   bottom: 12px;

@@ -28,6 +28,14 @@ interface PipelineTagsProps {
   activeStep: PipelineStepId | null;
   onSelect: (stepId: PipelineStepId | null) => void;
   isVertical?: boolean;
+  /** Whether failure-simulation mode is active. */
+  simulationMode?: boolean;
+  /** Whether a simulation result currently exists (shows Reset). */
+  hasSimulationResult?: boolean;
+  /** Toggle simulation mode on/off. */
+  onToggleSimulate?: () => void;
+  /** Clear the active simulation. */
+  onResetSimulation?: () => void;
 }
 
 function tagState(
@@ -43,28 +51,62 @@ function tagState(
   return 'pending';
 }
 
-export function PipelineTags({ steps, diagnostics, activeStep, onSelect, isVertical }: PipelineTagsProps) {
+export function PipelineTags({
+  steps,
+  diagnostics,
+  activeStep,
+  onSelect,
+  isVertical,
+  simulationMode = false,
+  hasSimulationResult = false,
+  onToggleSimulate,
+  onResetSimulation,
+}: PipelineTagsProps) {
   return (
-    <div className={`pipeline-tags ${isVertical ? 'flat-vertical' : ''}`} role="list" aria-label="Pipeline steps">
-      {PIPELINE_STEPS.map((id, i) => {
-        const state = tagState(id, steps, diagnostics);
-        const count = diagnostics.filter((d) => d.step === id).length;
-        const isActive = activeStep === id;
-        return (
-          <button
-            key={id}
-            type="button"
-            role="listitem"
-            className={`pipeline-tag tag-${state}${isActive ? ' tag-active' : ''}`}
-            title={`${STEP_TITLES[id]}${count > 0 ? ` — ${count} finding(s)` : ''}`}
-            onClick={() => onSelect(isActive ? null : id)}
-          >
-            <span className="pipeline-tag-num">{state === 'passed' ? '✓' : i + 1}</span>
-            <span className="pipeline-tag-name">{STEP_TITLES[id]}</span>
-            {count > 0 && <span className="pipeline-tag-count">{count}</span>}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div className={`pipeline-tags ${isVertical ? 'flat-vertical' : ''}`} role="list" aria-label="Pipeline steps">
+        {PIPELINE_STEPS.map((id, i) => {
+          const state = tagState(id, steps, diagnostics);
+          const count = diagnostics.filter((d) => d.step === id).length;
+          const isActive = activeStep === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="listitem"
+              className={`pipeline-tag tag-${state}${isActive ? ' tag-active' : ''}`}
+              title={`${STEP_TITLES[id]}${count > 0 ? ` — ${count} finding(s)` : ''}`}
+              onClick={() => onSelect(isActive ? null : id)}
+            >
+              <span className="pipeline-tag-num">{state === 'passed' ? '✓' : i + 1}</span>
+              <span className="pipeline-tag-name">{STEP_TITLES[id]}</span>
+              {count > 0 && <span className="pipeline-tag-count">{count}</span>}
+            </button>
+          );
+        })}
+
+        {onToggleSimulate && (
+          <span className="sim-toolbar-group">
+            <button
+              type="button"
+              className={`sim-toggle-btn${simulationMode ? ' active' : ''}`}
+              onClick={onToggleSimulate}
+              title="Toggle failure simulation mode (S)"
+            >
+              ⚡ Simulate
+            </button>
+            {hasSimulationResult && onResetSimulation && (
+              <button type="button" className="sim-reset-btn" onClick={onResetSimulation}>
+                Reset
+              </button>
+            )}
+          </span>
+        )}
+      </div>
+
+      {simulationMode && !hasSimulationResult && (
+        <div className="sim-banner">⚡ Simulation Mode — click any node to simulate a failure</div>
+      )}
+    </>
   );
 }

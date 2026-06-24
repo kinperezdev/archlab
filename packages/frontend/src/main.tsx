@@ -11,6 +11,8 @@ import './styles/systemdesign.css';
 import './styles/agents.css';
 import './styles/redesign.css';
 import './styles/confidence.css';
+import './styles/simulation.css';
+import './styles/emptystate.css';
 import 'reactflow/dist/style.css';
 
 const root = document.getElementById('root');

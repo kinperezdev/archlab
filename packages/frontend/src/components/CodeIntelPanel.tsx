@@ -8,7 +8,8 @@
  * Analysis (a project-wide before/after diff) that can be applied to disk.
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type {
   CanvasNode,
   Diagnostic,
@@ -118,6 +119,13 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
   const [popover, setPopover] = useState<{ line: number; symbol: string; refs: CodeReference[] } | null>(null);
   const [secondary, setSecondary] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+
+  // Find-in-file state (an in-panel find bar, not the browser's native find).
+  const [findOpen, setFindOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [activeMatch, setActiveMatch] = useState(0);
+  const findInputRef = useRef<HTMLInputElement>(null);
 
   // Editing state. Per-line edits are kept in a ref so typing never re-renders
   // (which would fight the contentEditable cursor). `dirty` only flips once.
@@ -165,6 +173,68 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
       setTimeout(() => el.classList.remove('line-flash'), 1200);
     }
   }, []);
+
+  // ---- Find in file -------------------------------------------------------
+  // Every case-insensitive occurrence of the query across the raw line text.
+  const matches = useMemo(() => {
+    if (!intel || !query) return [] as number[];
+    const q = query.toLowerCase();
+    const lines: number[] = [];
+    for (const l of intel.lines) {
+      const text = l.text.toLowerCase();
+      let idx = text.indexOf(q);
+      while (idx !== -1) {
+        lines.push(l.n);
+        idx = text.indexOf(q, idx + q.length);
+      }
+    }
+    return lines;
+  }, [intel, query]);
+
+  const matchLines = useMemo(() => new Set(matches), [matches]);
+  const activeLine = matches.length > 0 ? matches[Math.min(activeMatch, matches.length - 1)] : null;
+
+  // Reset the active match whenever the query changes.
+  useEffect(() => {
+    setActiveMatch(0);
+  }, [query]);
+
+  // Keep the active match scrolled into view as the user navigates.
+  useEffect(() => {
+    if (findOpen && activeLine !== null) {
+      const el = bodyRef.current?.querySelector<HTMLElement>(`[data-line="${activeLine}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeLine, findOpen]);
+
+  const openFind = useCallback(() => {
+    setFindOpen(true);
+    requestAnimationFrame(() => findInputRef.current?.focus());
+  }, []);
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    setQuery('');
+  }, []);
+  const nextMatch = useCallback(() => {
+    setActiveMatch((m) => (matches.length === 0 ? 0 : (m + 1) % matches.length));
+  }, [matches.length]);
+  const prevMatch = useCallback(() => {
+    setActiveMatch((m) => (matches.length === 0 ? 0 : (m - 1 + matches.length) % matches.length));
+  }, [matches.length]);
+
+  // Cmd/Ctrl+F opens the in-panel find bar when the panel is focused/hovered.
+  useEffect(() => {
+    const el = viewRef.current;
+    if (!el) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        openFind();
+      }
+    };
+    el.addEventListener('keydown', onKey);
+    return () => el.removeEventListener('keydown', onKey);
+  }, [openFind]);
 
   const openReferences = useCallback(
     async (line: number, symbol: string) => {
@@ -239,7 +309,7 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
   const fileName = filePath.split('/').pop() ?? filePath;
 
   return (
-    <div className={`code-view ${floating ? 'code-view-floating' : ''}`}>
+    <div className={`code-view ${floating ? 'code-view-floating' : ''}`} ref={viewRef} tabIndex={-1}>
       <header className="code-panel-head">
         <div className="code-panel-titlewrap">
           <span className="code-panel-title">
@@ -259,9 +329,69 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
               </button>
             </>
           )}
+          <button
+            className={`code-icon-btn ${findOpen ? 'active' : ''}`}
+            onClick={() => (findOpen ? closeFind() : openFind())}
+            title="Find in file (⌘F)"
+            aria-label="Find in file"
+          >
+            <Search size={14} />
+          </button>
           <button className="code-icon-btn" onClick={onClose} title="Close panel">✕</button>
         </div>
       </header>
+
+      {findOpen && (
+        <div className="code-find-bar">
+          <Search size={13} className="code-find-icon" aria-hidden="true" />
+          <input
+            ref={findInputRef}
+            className="code-find-input"
+            placeholder="Find in file..."
+            value={query}
+            spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                closeFind();
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) prevMatch();
+                else nextMatch();
+              }
+            }}
+          />
+          <span className={`code-find-count ${query && matches.length === 0 ? 'no-results' : ''}`}>
+            {query
+              ? matches.length === 0
+                ? 'No results'
+                : `${activeMatch + 1} of ${matches.length}`
+              : ''}
+          </span>
+          <button
+            className="code-find-nav"
+            onClick={prevMatch}
+            disabled={matches.length === 0}
+            title="Previous match (Shift+Enter)"
+            aria-label="Previous match"
+          >
+            <ChevronUp size={14} />
+          </button>
+          <button
+            className="code-find-nav"
+            onClick={nextMatch}
+            disabled={matches.length === 0}
+            title="Next match (Enter)"
+            aria-label="Next match"
+          >
+            <ChevronDown size={14} />
+          </button>
+          <button className="code-find-nav" onClick={closeFind} title="Close (Esc)" aria-label="Close find">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="code-toolbar">
         <SymbolNavigator intel={intel} onJump={jumpToLine} />
@@ -286,6 +416,9 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
               onAction={runAction}
               onBadge={badgeFor}
               onEdit={onEditLine}
+              isFindMatch={findOpen && matchLines.has(line.n)}
+              isFindActive={findOpen && activeLine === line.n}
+              query={findOpen ? query : ''}
             />
           ))}
         </div>
@@ -380,6 +513,9 @@ const CodeLine = memo(function CodeLine({
   onAction,
   onBadge,
   onEdit,
+  isFindMatch = false,
+  isFindActive = false,
+  query = '',
 }: {
   line: LineInfo;
   findings: Diagnostic[];
@@ -388,12 +524,22 @@ const CodeLine = memo(function CodeLine({
   onAction: (line: LineInfo, a: LineAction) => void;
   onBadge: (line: LineInfo) => void;
   onEdit: (n: number, text: string) => void;
+  isFindMatch?: boolean;
+  isFindActive?: boolean;
+  query?: string;
 }) {
   const tokens = useMemo(() => tokenizeLine(line.text), [line.text]);
   const actions = useMemo(() => promoteFindingActions(line, findings), [line, findings]);
 
+  // While a search is active, matched lines render their text with the query
+  // occurrences highlighted; otherwise the normal token coloring is used.
+  const highlighted = useMemo(() => {
+    if (!query || !isFindMatch) return null;
+    return buildHighlighted(line.text, query, isFindActive);
+  }, [query, isFindMatch, isFindActive, line.text]);
+
   return (
-    <div className="code-line" data-line={line.n}>
+    <div className={`code-line${isFindActive ? ' find-active-line' : ''}`} data-line={line.n}>
       <button
         className={`code-gutter-toggle ${menuOpen ? 'open' : ''}`}
         onClick={() => onToggleMenu(line.n)}
@@ -414,7 +560,9 @@ const CodeLine = memo(function CodeLine({
           if (e.key === 'Enter') e.preventDefault();
         }}
       >
-        {tokens.length === 0 ? (
+        {highlighted ? (
+          highlighted
+        ) : tokens.length === 0 ? (
           ' '
         ) : (
           tokens.map((t, i) => (
@@ -462,6 +610,35 @@ const CodeLine = memo(function CodeLine({
     </div>
   );
 });
+
+/**
+ * Render a line's text with every case-insensitive occurrence of `query`
+ * wrapped in a highlight mark. On the active line the marks use the brighter
+ * (active) style.
+ */
+function buildHighlighted(text: string, query: string, active: boolean): ReactNode[] {
+  const q = query.toLowerCase();
+  if (!q) return [text];
+  const lower = text.toLowerCase();
+  const out: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  while (i <= text.length) {
+    const idx = lower.indexOf(q, i);
+    if (idx === -1) {
+      if (i < text.length) out.push(<span key={key++}>{text.slice(i)}</span>);
+      break;
+    }
+    if (idx > i) out.push(<span key={key++}>{text.slice(i, idx)}</span>);
+    out.push(
+      <mark key={key++} className={`code-find-hl${active ? ' active' : ''}`}>
+        {text.slice(idx, idx + query.length)}
+      </mark>,
+    );
+    i = idx + query.length;
+  }
+  return out;
+}
 
 /**
  * Promote pipeline-finding fixes to the top of a line's action list when a

@@ -54,6 +54,9 @@ import { TeamReview } from './team/TeamReview.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
 import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { Docs } from './docs/Docs.js';
+import { SimulationPanel } from './simulation/SimulationPanel.js';
+import { SimulationReport } from './simulation/SimulationReport.js';
+import { runSimulation, type SimulationResult, type SimulationScenario } from './simulation/simulationEngine.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 import { ApiKeysModal } from './components/ApiKeysModal.js';
 import { ApiKeyContext } from './state/apiKeyContext.js';
@@ -172,6 +175,9 @@ export function App() {
   const [bottomCollapsed, , toggleBottom] = usePersistentBoolean('archlab:bottomCollapsed', false);
   // The Code Intelligence Panel: which locked node (with a source file) it shows.
   const [codeNodeId, setCodeNodeId] = useState<string | null>(null);
+  // Failure simulation: whether the mode is armed, and the latest result.
+  const [simulationMode, setSimulationMode] = useState(false);
+  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   // Resizable panel widths, persisted between sessions.
   const [codeWidth, setCodeWidth] = usePersistentNumber('archlab:codeWidth', 480, 300, 800);
   const [rightWidth, setRightWidth] = usePersistentNumber('archlab:rightWidth', 340, 200, 500);
@@ -211,6 +217,13 @@ export function App() {
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         toggleBottom();
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        setSimulationMode((m) => {
+          const next = !m;
+          if (!next) setSimulationResult(null);
+          return next;
+        });
       } else if (e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key, 10) - 1;
         const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint', 'docs', 'archco', 'agentteam'];
@@ -280,6 +293,36 @@ export function App() {
   const handleOpenCode = (id: string) => {
     setCodeNodeId(id);
   };
+
+  // Run a failure simulation from a node and persist it to the brain.
+  const runSim = (scenario: SimulationScenario) => {
+    const result = runSimulation(scenario, state.canvas.nodes, state.canvas.edges, state.diagnostics);
+    setSimulationResult(result);
+    if (state.projectName) {
+      fetch(`http://127.0.0.1:${PORTS.backend}/brain/simulation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectName: state.projectName, result }),
+      }).catch(() => {
+        /* brain persistence is best-effort */
+      });
+    }
+  };
+  const resetSimulation = () => setSimulationResult(null);
+  const toggleSimulation = () =>
+    setSimulationMode((m) => {
+      const next = !m;
+      if (!next) setSimulationResult(null); // leaving the mode clears the run
+      return next;
+    });
+
+  // What the right sidebar shows while simulating: the report once a run exists,
+  // otherwise the control panel for the selected node.
+  const simulationContent = simulationResult ? (
+    <SimulationReport result={simulationResult} nodes={state.canvas.nodes} onReset={resetSimulation} />
+  ) : simulationMode && selectedNode ? (
+    <SimulationPanel node={selectedNode} onRun={runSim} />
+  ) : null;
 
   // True whenever a full-screen overlay is showing. The bottom-panel toggle is
   // hidden while this is true so it never floats on top of a modal.
@@ -452,6 +495,10 @@ export function App() {
                       diagnostics={state.diagnostics}
                       activeStep={securityStep}
                       onSelect={setSecurityStep}
+                      simulationMode={simulationMode}
+                      hasSimulationResult={Boolean(simulationResult)}
+                      onToggleSimulate={toggleSimulation}
+                      onResetSimulation={resetSimulation}
                     />
                   </div>
                 </div>
@@ -474,6 +521,14 @@ export function App() {
                 onOpenCode={handleOpenCode}
                 selectedNodeId={selectedNodeId}
                 filter={filter}
+                simulationMode={simulationMode}
+                simulationResult={simulationResult}
+                onResetSimulation={resetSimulation}
+                hasProject={Boolean(state.projectId)}
+                projectName={state.projectName}
+                techStack={state.techStack}
+                missingPatterns={state.missingPatterns}
+                onRunPrompt={(text) => setTermCommand({ id: Date.now(), text })}
               />
             </ReactFlowProvider>
           )}
@@ -493,6 +548,8 @@ export function App() {
             onResizeStart={makeResizeHandler(rightWidth, setRightWidth)}
             stepFilter={tab === 'security' ? securityStep : null}
             onClearStepFilter={() => setSecurityStep(null)}
+            simulationContent={simulationContent}
+            onOpenCode={handleOpenCode}
           />
         )}
 

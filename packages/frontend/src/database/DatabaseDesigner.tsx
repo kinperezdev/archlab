@@ -881,12 +881,24 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
 
         {LARGE_SCHEMA && (
           <div className="db-canvas-count">
-            <span>
-              Showing {visibleTables.length} of {resolvedTables.length} tables — search or filter to find specific tables
-            </span>
             {canLoadMore && (
               <button className="db-filter-btn" onClick={() => setShowAll(true)}>
                 Load More
+              </button>
+            )}
+            <span className="db-canvas-count-label">
+              Showing {visibleTables.length} of {resolvedTables.length} tables
+            </span>
+            {showAll && (
+              <button
+                className="db-filter-btn"
+                onClick={() => {
+                  setShowAll(false);
+                  // Re-frame the now-smaller set (scroll the table view back to top).
+                  fitView({ duration: 400, maxZoom: 1 });
+                }}
+              >
+                Show Less
               </button>
             )}
           </div>

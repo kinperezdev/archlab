@@ -479,3 +479,63 @@
   border: 1px solid var(--code-border);
 }
 .code-view-floating { background: var(--code-bg); height: 100%; }
+
+/* ---- Find in file (in-panel search bar) ---- */
+.code-find-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #0F0F1A;
+  border-bottom: 1px solid #2D2D3E;
+}
+.code-find-icon { color: #64748b; flex-shrink: 0; }
+.code-find-input {
+  flex: 1;
+  min-width: 0;
+  background: #0F0F1A;
+  border: 1px solid #2D2D3E;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 12px;
+  padding: 5px 9px;
+  outline: none;
+}
+.code-find-input:focus { border-color: #6366f1; }
+.code-find-count {
+  font-size: 11px;
+  color: #64748b;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.code-find-count.no-results { color: #f87171; }
+.code-find-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #94a3b8;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.code-find-nav:hover:not(:disabled) { background: #1e1e30; color: #e2e8f0; }
+.code-find-nav:disabled { opacity: 0.35; cursor: default; }
+
+/* Matched text within a line; the active line's matches are brighter. */
+.code-find-hl {
+  background: #FEF08A;
+  color: #1A1A2E;
+  border-radius: 2px;
+}
+.code-find-hl.active {
+  background: #FB923C;
+  color: #1A1A2E;
+}
+.code-line.find-active-line {
+  background: rgba(251, 146, 60, 0.08);
+}

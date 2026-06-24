@@ -1,0 +1,207 @@
+/* ===========================================================================
+   Smart canvas empty state — contextual "what's missing" + implementation prompt
+   Matches the ArchLab dark theme and typography.
+   =========================================================================== */
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+  pointer-events: auto;
+}
+
+.empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  background: var(--color-surface-2, #14141f);
+  border: 1px solid var(--color-border, #26263a);
+  color: #94a3b8;
+}
+.empty-icon-info { color: #60a5fa; border-color: rgba(96, 165, 250, 0.4); }
+.empty-icon-warning { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
+.empty-icon-critical {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.5);
+  box-shadow: 0 0 24px rgba(248, 113, 113, 0.18);
+}
+.empty-icon-good {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.45);
+  box-shadow: 0 0 24px rgba(52, 211, 153, 0.16);
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text, #f1f5f9);
+}
+.empty-subtitle {
+  margin: 0;
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-dim, #94a3b8);
+}
+
+.empty-stack-badges {
+  display: flex;
+  gap: 8px;
+}
+.empty-stack-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.16);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  color: #c7d2fe;
+}
+
+.empty-enables {
+  text-align: left;
+  background: var(--color-surface-2, #14141f);
+  border: 1px solid var(--color-border, #26263a);
+  border-radius: 12px;
+  padding: 14px 18px;
+  max-width: 480px;
+}
+.empty-enables-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.empty-enables ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.empty-enables li {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.empty-generate-btn {
+  margin-top: 4px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: none;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 22px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.empty-generate-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+}
+
+/* Welcome (no project) variant */
+.empty-state-welcome .empty-logo-pulse {
+  font-size: 48px;
+  color: #6366f1;
+  animation: empty-pulse 2.4s ease-in-out infinite;
+}
+@keyframes empty-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+.empty-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  color: #93c5fd;
+  background: #0b0b14;
+  border: 1px solid var(--color-border, #26263a);
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+
+/* Prompt modal */
+.empty-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 5, 10, 0.72);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.empty-modal {
+  width: min(660px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: #0d0d17;
+  border: 1px solid #26263a;
+  border-radius: 14px;
+  padding: 22px;
+}
+.empty-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.empty-modal-head h3 { margin: 0; font-size: 17px; color: #f1f5f9; }
+.empty-modal-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 16px;
+  cursor: pointer;
+}
+.empty-modal-sub { margin: 6px 0 12px; font-size: 12.5px; color: #64748b; }
+.empty-modal-text {
+  flex: 1;
+  width: 100%;
+  background: #0b0b12;
+  border: 1px solid #26263a;
+  border-radius: 8px;
+  color: #cbd5e1;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px;
+  resize: vertical;
+}
+.empty-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.empty-modal-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #2a2a3c;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.empty-modal-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.empty-modal-btn.primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border-color: transparent;
+  color: #fff;
+}

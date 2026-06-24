@@ -42,7 +42,18 @@ export interface ArchNodeData {
   depth?: number;
   /** Mind-map branch color shared by the whole subtree (overrides kind color). */
   branchColor?: string;
+  /** Failure-simulation state (set only while a simulation is playing). */
+  simState?: 'healthy' | 'warning' | 'degraded' | 'failed' | 'cascade-failed' | 'recovering';
 }
+
+/** Short badge label per simulation state (none for healthy). */
+const SIM_STATE_LABEL: Record<string, string> = {
+  warning: 'WARNING',
+  degraded: 'DEGRADED',
+  failed: 'FAILED',
+  'cascade-failed': 'CASCADE',
+  recovering: 'RECOVERING',
+};
 
 interface DbColumn {
   name: string;
@@ -132,7 +143,7 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
         hasPorts ? 'has-ports' : ''
       } ${data.isBottleneck ? 'is-bottleneck' : ''} ${data.isIsolated ? 'is-isolated' : ''} ${
         data.isEntry ? 'is-entry' : ''
-      }`}
+      } ${data.simState && data.simState !== 'healthy' ? `sim-state-${data.simState}` : ''}`}
       style={data.branchColor ? ({ ['--node-color']: data.branchColor } as CSSProperties) : undefined}
       title={data.isBottleneck ? data.bottleneckHint ?? data.bottleneckType : data.filePath ?? data.label}
     >
@@ -187,6 +198,12 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
             <Port key={`out-${i}`} port={p} />
           ))}
         </div>
+      )}
+
+      {data.simState && data.simState !== 'healthy' && (
+        <span className={`sim-node-label lbl-${data.simState}`}>
+          {SIM_STATE_LABEL[data.simState]}
+        </span>
       )}
 
       <Handle type="source" position={Position.Right} />
