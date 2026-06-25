@@ -36,7 +36,7 @@ export interface ArchNodeData {
   isIsolated?: boolean;
   /** Plain-English reason isolation might be a problem, e.g. "Unused component". */
   isolationReason?: string;
-  /** Detected entry point of its lane — rendered larger with an ENTRY badge. */
+  /** Detected entry point of its lane, rendered larger with an ENTRY badge. */
   isEntry?: boolean;
   /** Depth from the nearest entry point (entry = 0). Undefined if unreachable. */
   depth?: number;
@@ -44,6 +44,18 @@ export interface ArchNodeData {
   branchColor?: string;
   /** Failure-simulation state (set only while a simulation is playing). */
   simState?: 'healthy' | 'warning' | 'degraded' | 'failed' | 'cascade-failed' | 'recovering';
+  /** Detected third-party tools/services. */
+  detectedTools?: {
+    id: string;
+    name: string;
+    color: string;
+    icon: string;
+    isInternetConnected: boolean;
+    connectionType: string;
+    category: string;
+  }[];
+  /** Large graphs use a lighter node body to keep panning and zooming smooth. */
+  isLite?: boolean;
 }
 
 /** Short badge label per simulation state (none for healthy). */
@@ -76,7 +88,7 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
   const dimClass = data.isDimmed ? 'node-dimmed' : '';
 
   // Check if we have parsed database schema tables in this node
-  const dbSchema: DbTable[] | null = data.meta?.dbSchema
+  const dbSchema: DbTable[] | null = !data.isLite && data.meta?.dbSchema
     ? JSON.parse(String(data.meta.dbSchema))
     : null;
 
@@ -134,8 +146,17 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
     );
   }
 
-  const ports = data.ports;
+  const ports = data.isLite ? undefined : data.ports;
   const hasPorts = Boolean(ports && (ports.incoming.length > 0 || ports.outgoing.length > 0));
+
+  const internetTools = data.isLite ? [] : (data.detectedTools ?? []).filter((t) => t.isInternetConnected);
+  const isLive = internetTools.length > 0;
+  const primaryToolColor = internetTools[0]?.color;
+
+  const glowStyle = isLive && primaryToolColor ? {
+    borderColor: primaryToolColor,
+    boxShadow: `0 0 12px ${primaryToolColor}40`,
+  } : {};
 
   return (
     <div
@@ -144,33 +165,54 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
       } ${data.isBottleneck ? 'is-bottleneck' : ''} ${data.isIsolated ? 'is-isolated' : ''} ${
         data.isEntry ? 'is-entry' : ''
       } ${data.simState && data.simState !== 'healthy' ? `sim-state-${data.simState}` : ''}`}
-      style={data.branchColor ? ({ ['--node-color']: data.branchColor } as CSSProperties) : undefined}
+      style={{
+        ...glowStyle,
+        ...(data.branchColor ? ({ ['--node-color']: data.branchColor } as CSSProperties) : {}),
+      }}
       title={data.isBottleneck ? data.bottleneckHint ?? data.bottleneckType : data.filePath ?? data.label}
     >
       <Handle type="target" position={Position.Left} />
 
-      {data.isEntry && (
+      {isLive && (
+        <span
+          className="live-pulsing-dot"
+          title={`This file connects to: ${internetTools.map((t) => t.name).join(', ')}`}
+          style={{
+            position: 'absolute',
+            top: '4px',
+            right: '4px',
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: '#10b981',
+            boxShadow: '0 0 8px #10b981',
+            zIndex: 10,
+          }}
+        />
+      )}
+
+      {!data.isLite && data.isEntry && (
         <span className="entry-badge" title="Entry point of this lane">
           <span className="entry-icon">★</span>
           ENTRY
         </span>
       )}
 
-      {data.depth !== undefined && (
+      {!data.isLite && data.depth !== undefined && (
         <span className="depth-badge" title={`Depth ${data.depth} from the entry point`}>
           L{data.depth}
         </span>
       )}
 
-      {data.isBottleneck && (
+      {!data.isLite && data.isBottleneck && (
         <span className="bottleneck-badge" title={data.bottleneckHint}>
           <span className="bottleneck-icon">⚠</span>
           {data.bottleneckType}
         </span>
       )}
 
-      {data.isIsolated && data.isolationReason && (
-        <span className="isolation-badge" title={`${data.isolationReason} — this node has no connections to the rest of the project.`}>
+      {!data.isLite && data.isIsolated && data.isolationReason && (
+        <span className="isolation-badge" title={`${data.isolationReason} - this node has no connections to the rest of the project.`}>
           <span className="isolation-icon">⚠</span>
           {data.isolationReason}
         </span>

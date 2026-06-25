@@ -37,6 +37,32 @@
   stroke-width: 3;
 }
 
+/* ---------- Bundled cable edges ---------- */
+.wire-edge .react-flow__edge-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wire-edge-shadow {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.42);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.wire-edge-tie rect {
+  fill: #0b0f1a;
+  stroke: rgba(255, 255, 255, 0.24);
+  stroke-width: 0.8;
+}
+.wire-edge-tie line {
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 0.8;
+}
+.edge-flowing .wire-edge-tie rect {
+  stroke: rgba(125, 211, 252, 0.72);
+}
+
 /* ---------- Swim-lane background containers ---------- */
 .lane-group {
   box-sizing: border-box;
@@ -69,7 +95,7 @@
 .lane-group-backend .lane-group-label {
   color: rgb(126, 34, 206);
 }
-/* Connected vs Isolated containers — the two primary partitions of the graph. */
+/* Connected vs Isolated containers: the two primary partitions of the graph. */
 .lane-group-connected {
   background: rgba(13, 153, 255, 0.06); /* subtle blue tint */
   border-color: rgba(13, 153, 255, 0.3);
@@ -100,13 +126,82 @@
   box-shadow: 0 4px 12px rgba(9, 9, 11, 0.05), 0 1px 3px rgba(9, 9, 11, 0.03);
   transition:
     box-shadow var(--duration-normal) var(--ease-out-expo),
-    transform var(--duration-normal) var(--ease-out-expo),
     border-color var(--duration-fast),
     background-color var(--duration-fast);
 }
 .arch-node:hover {
-  transform: translateY(-2px) scale(1.02);
   box-shadow: 0 8px 16px rgba(9, 9, 11, 0.08), 0 2px 4px rgba(9, 9, 11, 0.04);
+}
+
+/* Very large projects favor panning responsiveness over decorative effects.
+   React Flow mounts only visible elements in this mode; these rules also avoid
+   expensive shadows, transforms, and translucent lane fills during movement. */
+.arch-flow.is-compact-graph .arch-node {
+  background: #10131d !important;
+  box-shadow: none;
+  contain: layout paint style;
+  transition: none;
+  will-change: transform;
+}
+.arch-flow.is-compact-graph .arch-node:hover {
+  transform: none;
+  box-shadow: none;
+}
+.arch-flow.is-compact-graph .lane-group {
+  background: transparent;
+}
+.arch-flow.is-compact-graph .react-flow__edge-path {
+  transition: none;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: optimizeSpeed;
+}
+.arch-flow.is-compact-graph .react-flow__edge.edge-bundle .react-flow__edge-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tied-bundle-edge .react-flow__edge-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.arch-flow.is-compact-graph .tied-bundle-edge .react-flow__edge-path {
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.22));
+}
+.bundle-wire-tie {
+  pointer-events: none;
+}
+.bundle-wire-tie rect {
+  fill: #060914;
+  stroke: rgba(125, 211, 252, 0.46);
+  stroke-width: 0.8;
+}
+.bundle-wire-tie line {
+  stroke: rgba(219, 234, 254, 0.5);
+  stroke-width: 0.7;
+}
+.arch-flow.is-compact-graph .react-flow__edges {
+  pointer-events: none;
+}
+.arch-flow.is-compact-graph.is-viewport-moving .react-flow__edge-path {
+  opacity: 0.34;
+  vector-effect: non-scaling-stroke;
+}
+.arch-flow.is-compact-graph .react-flow__viewport {
+  will-change: transform;
+}
+.arch-flow.is-compact-graph .react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.arch-flow.is-compact-graph.is-viewport-moving .node-type {
+  display: none;
+}
+.arch-flow.is-compact-graph.is-viewport-moving .react-flow__background,
+.arch-flow.is-compact-graph.is-viewport-moving .react-flow__nodes {
+  pointer-events: none;
 }
 /* The node color classes set background on swatches; for the node we only want
    the accent on the border + glyph, so re-map per kind here. */
@@ -214,7 +309,7 @@
 
 /* ---------- Animation states ---------- */
 
-/* processing — soft pulsing glow */
+/* processing: soft pulsing glow */
 .arch-node.anim-processing {
   animation: node-pulse 1.1s ease-in-out infinite;
 }
@@ -228,14 +323,14 @@
   }
 }
 
-/* scanning — bright trace highlight, like a packet passing through */
+/* scanning: bright trace highlight, like a packet passing through */
 .arch-node.anim-scanning {
   border-color: var(--color-accent);
   box-shadow: 0 0 22px 2px var(--color-accent-soft);
   transform: scale(1.04);
 }
 
-/* error — flash then hold red, with a warning badge */
+/* error: flash then hold red, with a warning badge */
 .arch-node.anim-error {
   border-color: var(--sev-critical);
   border-left-color: var(--sev-critical);
@@ -267,7 +362,7 @@
   }
 }
 
-/* stress — ramp green -> yellow -> red under simulated load */
+/* stress: ramp green to yellow to red under simulated load */
 .arch-node.anim-stress {
   animation: node-stress 0.7s ease-in-out forwards;
 }
@@ -286,7 +381,7 @@
   }
 }
 
-/* success — brief green glow then back to normal */
+/* success: brief green glow then back to normal */
 .arch-node.anim-success {
   border-color: var(--state-green);
   box-shadow: 0 0 18px 1px color-mix(in oklch, var(--state-green), transparent 50%);
@@ -380,19 +475,19 @@
 }
 /* Shown only when a selected node culls non-incident edges on a huge graph. */
 .canvas-cull-indicator {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
   z-index: 6;
   background: rgba(9, 9, 11, 0.82);
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   color: var(--color-text-dim, #94a3b8);
   font-family: var(--font-mono);
   font-size: 11px;
-  padding: 5px 12px;
+  padding: 0 12px;
+  height: 28px;
   pointer-events: none;
+  box-sizing: border-box;
 }
 .btn-auto-arrange {
   background: var(--color-surface);

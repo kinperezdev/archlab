@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
+  BaseEdge,
   Controls,
   MiniMap,
   MarkerType,
+  getSmoothStepPath,
   useNodesState,
   useEdgesState,
   useReactFlow,
 } from 'reactflow';
-import type { CanvasGraph, CanvasNode, Diagnostic, MissingInfraPattern } from '@archlab/shared';
+import type { EdgeProps } from 'reactflow';
+import type { CanvasEdge, CanvasGraph, CanvasNode, Diagnostic, MissingInfraPattern } from '@archlab/shared';
 import { isEntryFile } from '@archlab/shared';
 import { ArchNode, type ArchNodeData, type PortInfo } from './ArchNode.js';
 import { LaneGroup, type LaneVariant, type LaneGroupData } from './LaneGroup.js';
@@ -17,7 +20,103 @@ import { inferOperation, destinationLabel, OPERATION_COLORS } from '../lib/opera
 import type { SimulationResult } from '../simulation/simulationEngine.js';
 import { SmartEmptyState } from './SmartEmptyState.js';
 
+function BundledWireEdge({
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  style,
+  data,
+}: EdgeProps<{ color?: string; tie?: boolean; offset?: number }>) {
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    borderRadius: 18,
+    offset: data?.offset ?? 18,
+  });
+  const color = data?.color ?? String(style?.stroke ?? '#60a5fa');
+
+  return (
+    <g className="wire-edge">
+      <path className="wire-edge-shadow" d={path} />
+      <BaseEdge path={path} markerEnd={markerEnd} style={{ ...style, stroke: color }} />
+      {data?.tie && (
+        <g className="wire-edge-tie" transform={`translate(${labelX} ${labelY}) rotate(-8)`}>
+          <rect x="-7" y="-3" width="14" height="6" rx="2" />
+          <line x1="-5" y1="0" x2="5" y2="0" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+function TiedBundleEdge({
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  style,
+  data,
+}: EdgeProps<{ color?: string; bundleCount?: number }>) {
+  const dx = targetX - sourceX;
+  const dy = targetY - sourceY;
+  const bend = Math.min(18, Math.max(6, Math.abs(dx) / 12));
+  const trunkX = Math.round((sourceX + dx * 0.5) / 48) * 48;
+  const dirX1 = trunkX >= sourceX ? 1 : -1;
+  const dirX2 = targetX >= trunkX ? 1 : -1;
+  const dirY = targetY >= sourceY ? 1 : -1;
+  const canRound = Math.abs(dx) > bend * 3 && Math.abs(dy) > bend * 3;
+  const path = canRound
+    ? [
+        `M ${sourceX},${sourceY}`,
+        `H ${trunkX - dirX1 * bend}`,
+        `Q ${trunkX},${sourceY} ${trunkX},${sourceY + dirY * bend}`,
+        `V ${targetY - dirY * bend}`,
+        `Q ${trunkX},${targetY} ${trunkX + dirX2 * bend},${targetY}`,
+        `H ${targetX}`,
+      ].join(' ')
+    : `M ${sourceX},${sourceY} H ${trunkX} V ${targetY} H ${targetX}`;
+  const color = data?.color ?? String(style?.stroke ?? '#60a5fa');
+  const count = data?.bundleCount ?? 1;
+  const tieCount = Math.min(3, Math.max(1, Math.floor(count / 4)));
+  const ties = Array.from({ length: tieCount }, (_, index) => {
+    const t = (index + 1) / (tieCount + 1);
+    const onSourceRun = index % 2 === 0 || Math.abs(targetX - trunkX) < 80;
+    const x1 = onSourceRun ? sourceX : trunkX;
+    const x2 = onSourceRun ? trunkX : targetX;
+    const y = onSourceRun ? sourceY : targetY;
+    return {
+      x: x1 + (x2 - x1) * t,
+      y,
+    };
+  });
+
+  return (
+    <g className="tied-bundle-edge">
+      <BaseEdge path={path} style={{ ...style, stroke: color }} />
+      {ties.map((tie, index) => (
+        <g
+          key={`${tie.x}:${tie.y}:${index}`}
+          className="bundle-wire-tie"
+          transform={`translate(${tie.x} ${tie.y})`}
+        >
+          <rect x="-6" y="-3" width="12" height="6" rx="2" />
+          <line x1="-4" y1="0" x2="4" y2="0" />
+        </g>
+      ))}
+    </g>
+  );
+}
+
 const nodeTypes = { arch: ArchNode, laneGroup: LaneGroup };
+const edgeTypes = { wire: BundledWireEdge, tiedBundle: TiedBundleEdge };
 
 /** Hex colors per node kind, mirroring the --kind-* tokens, for the minimap. */
 const KIND_COLORS: Record<string, string> = {
@@ -39,70 +138,6 @@ function minimapNodeColor(node: { type?: string; data?: { kind?: string } }): st
   return KIND_COLORS[node.data?.kind ?? 'unknown'] ?? KIND_COLORS.unknown;
 }
 
-/** Build operation-labeled incoming/outgoing connector ports for a backend node. */
-function portsFor(
-  nodeId: string,
-  graph: CanvasGraph,
-  degree: Map<string, number>,
-): { incoming: PortInfo[]; outgoing: PortInfo[] } {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const self = byId.get(nodeId);
-  const incoming: PortInfo[] = [];
-  const outgoing: PortInfo[] = [];
-
-  for (const e of graph.edges) {
-    // Outgoing: this node -> other. Operation reflects what this node does.
-    if (e.source === nodeId) {
-      const other = byId.get(e.target);
-      const operation = inferOperation({
-        otherKind: other?.kind,
-        edgeLabel: e.label,
-        sourceHint: `${self?.label ?? ''} ${self?.filePath ?? ''} ${other?.label ?? ''}`,
-        direction: 'out',
-      });
-      outgoing.push({
-        operation,
-        color: OPERATION_COLORS[operation],
-        destination: destinationLabel(other),
-        direction: 'out',
-        sourceFile: self?.filePath,
-        sourceLabel: self?.label ?? nodeId,
-        impactCount: Math.max(0, (degree.get(e.target) ?? 1) - 1),
-      });
-    }
-    // Incoming: other -> this node. Source is the other node.
-    if (e.target === nodeId) {
-      const other = byId.get(e.source);
-      const operation = inferOperation({
-        otherKind: self?.kind,
-        edgeLabel: e.label,
-        sourceHint: `${other?.label ?? ''} ${other?.filePath ?? ''} ${self?.label ?? ''}`,
-        direction: 'in',
-      });
-      incoming.push({
-        operation,
-        color: OPERATION_COLORS[operation],
-        destination: destinationLabel(self),
-        direction: 'in',
-        sourceFile: other?.filePath,
-        sourceLabel: other?.label ?? e.source,
-        impactCount: Math.max(0, (degree.get(nodeId) ?? 1) - 1),
-      });
-    }
-  }
-  return { incoming, outgoing };
-}
-
-/** Connection degree per node id, for impact estimation. */
-function degreeMap(graph: CanvasGraph): Map<string, number> {
-  const d = new Map<string, number>();
-  for (const e of graph.edges) {
-    d.set(e.source, (d.get(e.source) ?? 0) + 1);
-    d.set(e.target, (d.get(e.target) ?? 0) + 1);
-  }
-  return d;
-}
-
 /** Why an isolated (edge-less) node of a given kind might be a problem. */
 function isolationReasonFor(kind: string): string {
   switch (kind) {
@@ -122,6 +157,11 @@ function isolationReasonFor(kind: string): string {
 // Estimated node footprint, used only to size the swim-lane background boxes.
 const NODE_W = 240;
 const NODE_H = 110;
+const READABLE_COL_W = 250;
+const READABLE_ROW_H = 108;
+const READABLE_MAX_ROWS = 20;
+const LARGE_GRAPH_NODE_THRESHOLD = 140;
+const LARGE_GRAPH_EDGE_THRESHOLD = 220;
 // Above this edge count, a selected node culls non-incident edges while it is
 // highlighted, instead of dimming hundreds of edges (which thrashes paint).
 const EDGE_CULL_THRESHOLD = 300;
@@ -152,6 +192,41 @@ function buildLaneGroup(
     selectable: false,
     zIndex: -1,
   };
+}
+
+/** Keep imported or older analyzer layouts from opening as a thin far-away line. */
+function normalizeForViewport(nodes: CanvasNode[]): CanvasNode[] {
+  if (nodes.length === 0) return nodes;
+
+  const xs = nodes.map((n) => n.position.x);
+  const ys = nodes.map((n) => n.position.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  const isHairlineColumn = height / width > 5 && nodes.length > 20;
+  const isExtremeBounds = height > 2600 || width > 5200;
+  if (!isHairlineColumn && !isExtremeBounds) return nodes;
+
+  const laneOrder: Record<string, number> = { frontend: 0, backend: 1, external: 2 };
+  const sorted = [...nodes].sort((a, b) => {
+    const laneDiff = (laneOrder[a.lane] ?? 9) - (laneOrder[b.lane] ?? 9);
+    if (laneDiff !== 0) return laneDiff;
+    return (a.filePath ?? a.label).localeCompare(b.filePath ?? b.label);
+  });
+  const positionById = new Map<string, { x: number; y: number }>();
+  sorted.forEach((node, index) => {
+    const row = index % READABLE_MAX_ROWS;
+    const col = Math.floor(index / READABLE_MAX_ROWS);
+    positionById.set(node.id, {
+      x: 120 + col * READABLE_COL_W,
+      y: 80 + row * READABLE_ROW_H,
+    });
+  });
+
+  return nodes.map((node) => ({ ...node, position: positionById.get(node.id) ?? node.position }));
 }
 
 interface CanvasProps {
@@ -185,6 +260,83 @@ interface EdgeRef {
   target: string;
 }
 
+interface GraphIndexes {
+  byId: Map<string, CanvasNode>;
+  degree: Map<string, number>;
+  incoming: Map<string, CanvasEdge[]>;
+  outgoing: Map<string, CanvasEdge[]>;
+}
+
+/** One graph pass builds all edge lookups used by render-time helpers. */
+function buildGraphIndexes(graph: CanvasGraph): GraphIndexes {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const degree = new Map<string, number>();
+  const incoming = new Map<string, CanvasEdge[]>();
+  const outgoing = new Map<string, CanvasEdge[]>();
+
+  for (const edge of graph.edges) {
+    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+
+    const out = outgoing.get(edge.source);
+    if (out) out.push(edge);
+    else outgoing.set(edge.source, [edge]);
+
+    const inc = incoming.get(edge.target);
+    if (inc) inc.push(edge);
+    else incoming.set(edge.target, [edge]);
+  }
+
+  return { byId, degree, incoming, outgoing };
+}
+
+/** Build connector ports from indexed edges instead of scanning all edges per node. */
+function portsForIndexed(nodeId: string, indexes: GraphIndexes): { incoming: PortInfo[]; outgoing: PortInfo[] } {
+  const self = indexes.byId.get(nodeId);
+  const incoming: PortInfo[] = [];
+  const outgoing: PortInfo[] = [];
+
+  for (const e of indexes.outgoing.get(nodeId) ?? []) {
+    const other = indexes.byId.get(e.target);
+    const operation = inferOperation({
+      otherKind: other?.kind,
+      edgeLabel: e.label,
+      sourceHint: `${self?.label ?? ''} ${self?.filePath ?? ''} ${other?.label ?? ''}`,
+      direction: 'out',
+    });
+    outgoing.push({
+      operation,
+      color: OPERATION_COLORS[operation],
+      destination: destinationLabel(other),
+      direction: 'out',
+      sourceFile: self?.filePath,
+      sourceLabel: self?.label ?? nodeId,
+      impactCount: Math.max(0, (indexes.degree.get(e.target) ?? 1) - 1),
+    });
+  }
+
+  for (const e of indexes.incoming.get(nodeId) ?? []) {
+    const other = indexes.byId.get(e.source);
+    const operation = inferOperation({
+      otherKind: self?.kind,
+      edgeLabel: e.label,
+      sourceHint: `${other?.label ?? ''} ${other?.filePath ?? ''} ${self?.label ?? ''}`,
+      direction: 'in',
+    });
+    incoming.push({
+      operation,
+      color: OPERATION_COLORS[operation],
+      destination: destinationLabel(self),
+      direction: 'in',
+      sourceFile: other?.filePath,
+      sourceLabel: other?.label ?? e.source,
+      impactCount: Math.max(0, (indexes.degree.get(nodeId) ?? 1) - 1),
+    });
+  }
+
+  return { incoming, outgoing };
+}
+
 export function Canvas({
   graph,
   diagnostics,
@@ -214,6 +366,8 @@ export function Canvas({
   // node (if any) keeps its connections lit.
   const activeNodeId = hoveredNodeId ?? lockedNodeId;
   const [selectedEdges, setSelectedEdges] = useState<Record<string, EdgeRef>>({});
+  const [isViewportMoving, setIsViewportMoving] = useState(false);
+  const viewportMovingRef = useRef(false);
   const { setCenter, fitView } = useReactFlow();
 
   // Perf plumbing for the highlight system:
@@ -223,14 +377,16 @@ export function Canvas({
   const nodeRafRef = useRef<number | null>(null);
   const edgeRafRef = useRef<number | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
+  const viewportIdleTimerRef = useRef<number | null>(null);
   const [edgeCull, setEdgeCull] = useState<{ shown: number; total: number } | null>(null);
+  const graphIndexes = useMemo(() => buildGraphIndexes(graph), [graph]);
 
   // Auto-fit the view when the graph goes from empty to populated, after a short
   // delay so React Flow has finished measuring/rendering the nodes.
   const hasNodes = nodes.length > 0;
   useEffect(() => {
     if (hasNodes) {
-      const id = setTimeout(() => fitView({ padding: 0.08 }), 100);
+      const id = setTimeout(() => fitView({ padding: 0.16, duration: 350 }), 140);
       return () => clearTimeout(id);
     }
   }, [hasNodes, fitView]);
@@ -240,10 +396,10 @@ export function Canvas({
   // Re-fit the view to the newly filtered nodes once they have been laid out.
   useEffect(() => {
     if (nodes.length === 0) return;
-    const id = setTimeout(() => fitView({ padding: 0.08, duration: 400 }), 140);
+    const id = setTimeout(() => fitView({ padding: 0.16, duration: 400 }), 140);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [filter, graph.nodes.length, graph.edges.length]);
 
   // Escape releases the locked node highlight.
   useEffect(() => {
@@ -297,7 +453,7 @@ export function Canvas({
       }
     }
 
-    return graph.nodes.filter((n) => base.has(n.id));
+    return normalizeForViewport(graph.nodes.filter((n) => base.has(n.id)));
   }, [graph.nodes, graph.edges, filter, securityNodeIds]);
 
   // Split the visible nodes into Connected (≥1 edge) and Isolated (no edges).
@@ -338,8 +494,12 @@ export function Canvas({
     return { layoutNodes: laid, isolatedIds: new Set(isolated.map((n) => n.id)) };
   }, [filteredNodes, graph.edges]);
 
+  const isLargeGraph =
+    layoutNodes.length > LARGE_GRAPH_NODE_THRESHOLD || graph.edges.length > LARGE_GRAPH_EDGE_THRESHOLD;
+  const detailNodeId = selectedNodeId ?? lockedNodeId;
+
   // Mind-map branch coloring: every node in the same top-level folder shares one
-  // color, so each folder branch reads as a single colored limb — matching the
+  // color, so each folder branch reads as a single colored limb, matching the
   // folder-based left-to-right layout (like the reference mental-model diagram).
   const branchColorById = useMemo(() => {
     const PALETTE = [
@@ -480,9 +640,9 @@ export function Canvas({
   //    nodes, filter switch). Never on a pipeline animation tick, so nodes are
   //    never cleared or rebuilt mid-run.
   useEffect(() => {
-    const degree = degreeMap(graph);
     const realNodes = layoutNodes.map((n) => {
       const isIsolated = isolatedIds.has(n.id);
+      const shouldShowDetails = !isLargeGraph || n.id === detailNodeId;
       return {
         id: n.id,
         type: 'arch',
@@ -500,8 +660,9 @@ export function Canvas({
           isEntry: entryIds.has(n.id),
           depth: depthByNode.get(n.id),
           branchColor: branchColorById.get(n.id),
+          isLite: !shouldShowDetails,
           // Backend nodes get explicit operation-labeled connector ports.
-          ports: n.lane === 'backend' && !isIsolated ? portsFor(n.id, graph, degree) : undefined,
+          ports: shouldShowDetails && n.lane === 'backend' && !isIsolated ? portsForIndexed(n.id, graphIndexes) : undefined,
         },
       };
     });
@@ -510,7 +671,7 @@ export function Canvas({
     // filteredNodes is captured via structureKey and stable laneGroups to avoid
     // rebuilds on every animation frame; positions/ids are what actually matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structureKey, branchColorById, setNodes]);
+  }, [structureKey, branchColorById, graphIndexes, isLargeGraph, detailNodeId, setNodes]);
 
   // 1b. Patch live animation state onto the EXISTING nodes in place. This is
   //     what the pipeline drives: color/glow updates only, nodes stay mounted.
@@ -575,40 +736,40 @@ export function Canvas({
     clearSim();
     if (!simulationResult) return;
 
-    const timers: number[] = [];
+    const waves = new Map<number, Map<string, NonNullable<ArchNodeData['simState']>>>();
+    const addWave = (atMs: number, nodeId: string, state: NonNullable<ArchNodeData['simState']>) => {
+      const wave = waves.get(atMs);
+      if (wave) wave.set(nodeId, state);
+      else waves.set(atMs, new Map([[nodeId, state]]));
+    };
+
     for (const ns of simulationResult.nodeStates) {
+      addWave(ns.affectedAtMs, ns.nodeId, ns.state);
+      if (ns.recovers && ns.state !== 'healthy' && ns.state !== 'warning') {
+        addWave(ns.affectedAtMs + 1600, ns.nodeId, 'recovering');
+      }
+    }
+
+    const timers: number[] = [];
+    for (const [atMs, wave] of waves) {
       timers.push(
         window.setTimeout(() => {
           setNodes((prev) =>
-            prev.map((node) =>
-              node.id === ns.nodeId && 'kind' in node.data
-                ? { ...node, data: { ...node.data, simState: ns.state } }
-                : node,
-            ),
+            prev.map((node) => {
+              const state = wave.get(node.id);
+              return state && 'kind' in node.data
+                ? { ...node, data: { ...node.data, simState: state } }
+                : node;
+            }),
           );
-        }, ns.affectedAtMs),
+        }, atMs),
       );
-
-      // Resilient nodes recover a beat after they fail.
-      if (ns.recovers && ns.state !== 'healthy' && ns.state !== 'warning') {
-        timers.push(
-          window.setTimeout(() => {
-            setNodes((prev) =>
-              prev.map((node) =>
-                node.id === ns.nodeId && 'kind' in node.data
-                  ? { ...node, data: { ...node.data, simState: 'recovering' } }
-                  : node,
-              ),
-            );
-          }, ns.affectedAtMs + 1600),
-        );
-      }
     }
 
     return () => timers.forEach((t) => clearTimeout(t));
   }, [simulationResult, setNodes]);
 
-  // Fix 1 — the highlight node set is memoized so the BFS over edges only runs
+  // Fix 1: the highlight node set is memoized so the BFS over edges only runs
   // when the active node / hovered edge / selection actually changes, not on
   // every render. Priority: active node (hover or click-lock) beats hovered edge
   // beats click-selected edges.
@@ -636,7 +797,7 @@ export function Canvas({
     };
   }, [activeNodeId, hoveredEdge, selectedEdges, graph.edges]);
 
-  // Fix 2 — set of "active" edge ids (touching the active node, hovered, or
+  // Fix 2: set of "active" edge ids (touching the active node, hovered, or
   // selected). Membership lookups replace the per-click full edge rebuild.
   const activeEdgeIds = useMemo(() => {
     const set = new Set<string>();
@@ -648,7 +809,7 @@ export function Canvas({
     return set;
   }, [graph.edges, hoveredEdgeId, selectedEdges, activeNodeId]);
 
-  // Fix 2 — the STATIC edge structure (color, marker, offset, branch color) is
+  // Fix 2: the STATIC edge structure (color, marker, offset, branch color) is
   // computed once per graph/filter. This is where the expensive `inferOperation`
   // per edge runs, so it is kept off the hover/click hot path entirely.
   const baseEdges = useMemo(() => {
@@ -672,18 +833,57 @@ export function Canvas({
         const n = sourceSeen.get(e.source) ?? 0;
         sourceSeen.set(e.source, n + 1);
         const offset = 12 + (n % 5) * 8;
+        const markerEnd = isLargeGraph
+          ? undefined
+          : { type: MarkerType.ArrowClosed, width: 16, height: 16, color: branchColor };
         return {
           id: e.id,
           source: e.source,
           target: e.target,
-          label: e.label,
+          label: isLargeGraph ? undefined : e.label,
           baseAnimated: e.animated,
           branchColor,
           offset,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: branchColor },
+          tie: !isLargeGraph && n % 3 === 0,
+          markerEnd,
+          bundleCount: 1,
         };
       });
-  }, [graph.edges, graph.nodes, filteredNodes, branchColorById]);
+  }, [graph.edges, graph.nodes, filteredNodes, branchColorById, isLargeGraph]);
+
+  const displayedBaseEdges = useMemo(() => {
+    if (!isLargeGraph || hasActiveHighlight) return baseEdges;
+
+    const posById = new Map(layoutNodes.map((node) => [node.id, node.position]));
+    const bundles = new Map<string, (typeof baseEdges)[number] & { bundleCount: number }>();
+
+    for (const edge of baseEdges) {
+      const source = posById.get(edge.source);
+      const target = posById.get(edge.target);
+      if (!source || !target) continue;
+
+      const sourceCol = Math.round(source.x / 360);
+      const targetCol = Math.round(target.x / 360);
+      const key = `${sourceCol}->${targetCol}`;
+      const existing = bundles.get(key);
+      if (existing) {
+        existing.bundleCount += 1;
+        continue;
+      }
+
+      bundles.set(key, {
+        ...edge,
+        id: `bundle:${key}`,
+        label: undefined,
+        bundleCount: 1,
+      });
+    }
+
+    return [...bundles.values()]
+      .filter((edge) => edge.bundleCount > 1)
+      .sort((a, b) => b.bundleCount - a.bundleCount)
+      .slice(0, 120);
+  }, [baseEdges, hasActiveHighlight, isLargeGraph, layoutNodes]);
 
   // 2. Patch highlight/dim onto existing nodes. Fix 1 (memoized set) + Fix 3
   //    (rAF-batched) + identity short-circuit so only nodes whose state actually
@@ -720,10 +920,10 @@ export function Canvas({
     edgeRafRef.current = requestAnimationFrame(() => {
       // Fix 5: while a node is highlighted on a large graph, render only the
       // edges incident to the highlighted region instead of dimming all of them.
-      const culling = activeNodeId !== null && baseEdges.length > EDGE_CULL_THRESHOLD;
+      const culling = activeNodeId !== null && displayedBaseEdges.length > EDGE_CULL_THRESHOLD;
       const visibleBase = culling
-        ? baseEdges.filter((b) => highlightNodeIds.has(b.source) && highlightNodeIds.has(b.target))
-        : baseEdges;
+        ? displayedBaseEdges.filter((b) => highlightNodeIds.has(b.source) && highlightNodeIds.has(b.target))
+        : displayedBaseEdges;
 
       setEdges((prevEdges) => {
         const prevById = new Map(prevEdges.map((e) => [e.id, e]));
@@ -732,19 +932,29 @@ export function Canvas({
           // Fix 4: during a highlight only the active edges animate; everything
           // else stops flowing. At rest, restore each edge's base flow state.
           const animated = hasActiveHighlight ? isActive : b.baseAnimated;
-          const opacity = hasActiveHighlight ? (isActive ? 1 : 0.15) : 0.5;
-          const strokeWidth = isActive ? 3 : 1.5;
-          const className = animated ? 'edge-flowing' : undefined;
+          const finalAnimated = isLargeGraph ? false : animated;
+          const opacity = hasActiveHighlight ? (isActive ? 1 : 0.18) : (isLargeGraph ? 0.48 : 0.5);
+          const bundledWidth = 1 + Math.min(1.7, Math.log2(Math.max(1, b.bundleCount)) * 0.22);
+          const strokeWidth = isActive ? 3 : (isLargeGraph ? bundledWidth : 1.5);
+          const className = [
+            finalAnimated ? 'edge-flowing' : null,
+            isLargeGraph && b.bundleCount > 1 ? 'edge-bundle' : null,
+          ].filter(Boolean).join(' ') || undefined;
+          const edgeType = isLargeGraph && !hasActiveHighlight ? 'tiedBundle' : isLargeGraph ? 'straight' : 'wire';
+          const vectorEffect = isLargeGraph ? 'non-scaling-stroke' : undefined;
 
           // Reuse the previous edge object when its visible state is unchanged so
           // React Flow can skip re-rendering it.
           const prev = prevById.get(b.id);
           if (
             prev &&
-            prev.animated === animated &&
+            prev.type === edgeType &&
+            prev.label === b.label &&
+            prev.animated === finalAnimated &&
             prev.className === className &&
             prev.style?.strokeWidth === strokeWidth &&
-            prev.style?.opacity === opacity
+            prev.style?.opacity === opacity &&
+            prev.style?.vectorEffect === vectorEffect
           ) {
             return prev;
           }
@@ -753,10 +963,10 @@ export function Canvas({
             source: b.source,
             target: b.target,
             label: b.label,
-            type: 'default',
-            pathOptions: { offset: b.offset },
+            type: edgeType,
+            data: { color: b.branchColor, tie: b.tie, offset: b.offset, bundleCount: b.bundleCount },
             zIndex: 0,
-            animated,
+            animated: finalAnimated,
             className,
             interactionWidth: 0,
             markerEnd: b.markerEnd,
@@ -764,7 +974,8 @@ export function Canvas({
               strokeWidth,
               stroke: b.branchColor,
               opacity,
-              transition: 'stroke-width 0.15s ease, opacity 0.15s ease',
+              vectorEffect,
+              transition: isLargeGraph ? undefined : 'stroke-width 0.15s ease, opacity 0.15s ease',
             },
           };
         });
@@ -772,7 +983,7 @@ export function Canvas({
 
       // Update the cull indicator only when its value actually changes.
       setEdgeCull((prev) => {
-        const nextVal = culling ? { shown: visibleBase.length, total: baseEdges.length } : null;
+        const nextVal = culling ? { shown: visibleBase.length, total: displayedBaseEdges.length } : null;
         if (!prev && !nextVal) return prev;
         if (prev && nextVal && prev.shown === nextVal.shown && prev.total === nextVal.total) return prev;
         return nextVal;
@@ -781,12 +992,13 @@ export function Canvas({
     return () => {
       if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
     };
-  }, [baseEdges, activeEdgeIds, highlightNodeIds, hasActiveHighlight, activeNodeId, setEdges]);
+  }, [displayedBaseEdges, activeEdgeIds, highlightNodeIds, hasActiveHighlight, activeNodeId, isLargeGraph, setEdges]);
 
   // Clean up the debounce timer and any pending rAF when the canvas unmounts.
   useEffect(
     () => () => {
       if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+      if (viewportIdleTimerRef.current !== null) clearTimeout(viewportIdleTimerRef.current);
       if (nodeRafRef.current !== null) cancelAnimationFrame(nodeRafRef.current);
       if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
     },
@@ -814,11 +1026,45 @@ export function Canvas({
           isEntry: entryIds.has(n.id),
           depth: depthByNode.get(n.id),
           branchColor: branchColorById.get(n.id),
+          isLite: isLargeGraph,
         },
       };
     });
     setNodes([...laneGroups, ...realNodes]);
   };
+
+  const renderedNodes = useMemo(
+    () => (isLargeGraph && isViewportMoving ? nodes.filter((node) => node.type !== 'laneGroup') : nodes),
+    [isLargeGraph, isViewportMoving, nodes],
+  );
+
+  const beginViewportMove = useCallback(() => {
+    if (!isLargeGraph) return;
+    if (!viewportMovingRef.current) {
+      viewportMovingRef.current = true;
+      setIsViewportMoving(true);
+    }
+    if (viewportIdleTimerRef.current !== null) clearTimeout(viewportIdleTimerRef.current);
+    viewportIdleTimerRef.current = window.setTimeout(() => {
+      viewportMovingRef.current = false;
+      setIsViewportMoving(false);
+      viewportIdleTimerRef.current = null;
+    }, 180);
+  }, [isLargeGraph]);
+
+  const endViewportMove = useCallback(() => {
+    if (!isLargeGraph) return;
+    if (viewportIdleTimerRef.current !== null) {
+      clearTimeout(viewportIdleTimerRef.current);
+      viewportIdleTimerRef.current = null;
+    }
+    viewportMovingRef.current = false;
+    setIsViewportMoving(false);
+  }, [isLargeGraph]);
+
+  const markWheelViewportMove = useCallback(() => {
+    beginViewportMove();
+  }, [beginViewportMove]);
 
   return (
     <div className="canvas-wrap">
@@ -834,24 +1080,33 @@ export function Canvas({
       ) : (
         <>
           <ReactFlow
-            nodes={nodes}
+            className={`arch-flow${isLargeGraph ? ' is-compact-graph' : ''}${
+              isLargeGraph && isViewportMoving ? ' is-viewport-moving' : ''
+            }`}
+            nodes={renderedNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             /* Tight padding so nodes fill the viewport; wide zoom range so large
                projects fit and you can still zoom in to read. */
-            fitViewOptions={{ padding: 0.08 }}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
-            minZoom={0.03}
+            fitViewOptions={{ padding: 0.16 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.85 }}
+            minZoom={0.14}
             maxZoom={2}
             /* Drop per-node focus/elevation overhead so panning large graphs
-               stays smooth. (onlyRenderVisibleElements is intentionally NOT set:
-               our nodes are CSS-measured, and it can hide unmeasured nodes.) */
+               stays smooth. Keep all nodes mounted so React Flow can measure
+               edges correctly even when a connection leaves the viewport. */
             elevateNodesOnSelect={false}
             nodesFocusable={false}
             edgesFocusable={false}
+            onlyRenderVisibleElements={false}
+            onMoveStart={beginViewportMove}
+            onMove={beginViewportMove}
+            onMoveEnd={endViewportMove}
+            onWheelCapture={markWheelViewportMove}
             onNodeClick={(_e, node) => {
               if (node.type === 'laneGroup') return;
               onSelectNode(node.id);
@@ -869,6 +1124,7 @@ export function Canvas({
             onNodeMouseEnter={(_e, node) => {
               // Lane backgrounds are not interactive targets.
               if (node.type === 'laneGroup') return;
+              if (isLargeGraph) return;
               // Fix 6: debounce hover by 80ms so a fast mouse sweep across many
               // nodes does not fire a highlight recompute for each one.
               if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
@@ -901,6 +1157,7 @@ export function Canvas({
               onSelectNode(null);
             }}
             onEdgeMouseEnter={(_e, edge) => {
+              if (isLargeGraph) return;
               setHoveredEdgeId(edge.id);
               setHoveredEdge({ source: edge.source, target: edge.target });
             }}
@@ -913,8 +1170,8 @@ export function Canvas({
             {/* Subtle dot grid on the dark canvas (24px, very low opacity). */}
             <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(255,255,255,0.03)" />
             {/* The MiniMap renders every node, so it's a bottleneck on huge
-                graphs — only show it below a threshold. */}
-            {nodes.length <= 800 && (
+                graphs, only show it below a threshold. */}
+            {nodes.length <= LARGE_GRAPH_NODE_THRESHOLD && (
               <MiniMap
                 pannable
                 zoomable
@@ -929,7 +1186,7 @@ export function Canvas({
           </ReactFlow>
           {simulationMode && !simulationResult && (
             <div className="sim-canvas-banner">
-              ⚡ Simulation Mode — click any node to simulate a failure
+              ⚡ Simulation Mode: click any node to simulate a failure
             </div>
           )}
           {edgeCull && (
