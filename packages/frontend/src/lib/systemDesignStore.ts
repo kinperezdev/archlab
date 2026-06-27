@@ -1,7 +1,7 @@
 /**
  * System Design (Design Mode) persistence, backed by brain/system-design.json.
  * Falls back to localStorage if the backend is unreachable so plans are never
- * lost. Mirrors the ideasStore pattern.
+ * lost. Uses the same local fallback pattern.
  */
 
 import { PORTS } from '@archlab/shared';

@@ -74,14 +74,6 @@ export function TabIcon({ tab }: { tab: ArchTab }) {
           <path d="M9 17v2M15 17v2M7 21h10" />
         </svg>
       );
-    case 'blueprint': // layout template (Lucide LayoutTemplate)
-      return (
-        <svg {...COMMON} className="tab-icon" aria-hidden="true">
-          <rect x="3" y="3" width="18" height="7" rx="1" />
-          <rect x="3" y="14" width="9" height="7" rx="1" />
-          <rect x="16" y="14" width="5" height="7" rx="1" />
-        </svg>
-      );
     default:
       return null;
   }

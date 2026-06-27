@@ -12,7 +12,6 @@ import ReactFlow, {
   type Edge,
   type Node,
 } from 'reactflow';
-import { appendToIdeas } from '../lib/ideasStore.js';
 import { loadSchema, saveSchema } from '../lib/schemaStore.js';
 import {
   parseSqlSchema,
@@ -417,7 +416,6 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const [tables, setTables] = useState<DbTable[]>([]);
   const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [sentToIdeas, setSentToIdeas] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
   const [pendingRename, setPendingRename] = useState<PendingRename | null>(null);
@@ -678,19 +676,6 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
     [tables, applyTables]
   );
 
-  const sendToIdeas = async () => {
-    const base = Date.now();
-    const newNodes: Node[] = tables.map((t, i) => ({
-      id: `idea_db_${base + i}`,
-      type: 'idea',
-      position: { x: 120 + (i % 3) * 220, y: 120 + Math.floor(i / 3) * 160 },
-      data: { label: t.name, ideaKind: 'database-table' },
-    }));
-    await appendToIdeas(newNodes);
-    setSentToIdeas(true);
-    setTimeout(() => setSentToIdeas(false), 1800);
-  };
-
   const hasInferred = useMemo(() => {
     return tables.some((t) => t.isInferred || t.columns.some((c) => c.isInferred));
   }, [tables]);
@@ -758,9 +743,6 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
                 }
                 label="Copy Prompt"
               />
-              <button className="btn" onClick={sendToIdeas}>
-                {sentToIdeas ? 'Added ✓' : 'Add to Blueprint'}
-              </button>
             </div>
           </div>
 

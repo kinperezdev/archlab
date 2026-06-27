@@ -9,11 +9,10 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
     'Full Flow',
     'Frontend Filter',
     'Backend Filter',
-    'Database Designer',
     'API Filter',
     'Security Controls',
+    'Database Designer',
     'System Design',
-    'Blueprint',
   ];
 
   return (
@@ -40,7 +39,7 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
               <tr style={{ borderBottom: '1px solid var(--color-border-dim)' }}>
                 <td style={{ padding: '10px 0', fontSize: 'var(--text-sm)' }}>Toggle Left Sidebar</td>
                 <td style={{ padding: '10px 0', textAlign: 'right' }}>
-                  <kbd className="shortcut-kbd">⌘ B</kbd> or <kbd className="shortcut-kbd">Ctrl B</kbd> or <kbd className="shortcut-kbd">B</kbd>
+                  <kbd className="shortcut-kbd">L</kbd>
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--color-border-dim)' }}>
@@ -52,7 +51,7 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
               <tr style={{ borderBottom: '1px solid var(--color-border-dim)' }}>
                 <td style={{ padding: '10px 0', fontSize: 'var(--text-sm)' }}>Toggle Bottom Panel / Terminal</td>
                 <td style={{ padding: '10px 0', textAlign: 'right' }}>
-                  <kbd className="shortcut-kbd">⌘ J</kbd> or <kbd className="shortcut-kbd">Ctrl J</kbd> or <kbd className="shortcut-kbd">M</kbd>
+                  <kbd className="shortcut-kbd">⌘ J</kbd> or <kbd className="shortcut-kbd">Ctrl J</kbd> or <kbd className="shortcut-kbd">B</kbd>
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--color-border-dim)' }}>

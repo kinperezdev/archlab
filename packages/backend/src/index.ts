@@ -326,31 +326,7 @@ app.post('/terminal/upload-batch', (req, res) => {
   }
 });
 
-// ---- Blueprint canvas persistence (brain/blueprint.json) ----------------------
-const IDEAS_FILE = path.join(BRAIN_DIR, 'blueprint.json');
 const SCHEMA_FILE = path.join(BRAIN_DIR, 'schema.json');
-
-app.get('/blueprint', (_req, res) => {
-  try {
-    if (!fs.existsSync(IDEAS_FILE)) return res.json({ ok: true, nodes: [], edges: [] });
-    const data = JSON.parse(fs.readFileSync(IDEAS_FILE, 'utf8'));
-    return res.json({ ok: true, nodes: data.nodes ?? [], edges: data.edges ?? [] });
-  } catch {
-    return res.json({ ok: true, nodes: [], edges: [] });
-  }
-});
-
-app.post('/blueprint', (req, res) => {
-  const nodes = Array.isArray(req.body?.nodes) ? req.body.nodes : [];
-  const edges = Array.isArray(req.body?.edges) ? req.body.edges : [];
-  try {
-    fs.mkdirSync(path.dirname(IDEAS_FILE), { recursive: true });
-    fs.writeFileSync(IDEAS_FILE, JSON.stringify({ nodes, edges }, null, 2), 'utf8');
-    return res.json({ ok: true });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: String(err) });
-  }
-});
 
 // ---- System Design (Design Mode) persistence (brain/system-design.json) ----
 const SYSTEM_DESIGN_FILE = path.join(BRAIN_DIR, 'system-design.json');

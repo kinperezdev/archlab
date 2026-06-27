@@ -35,7 +35,7 @@ function makeResizeHandler(current: number, set: (n: number) => void) {
     document.addEventListener('mouseup', onUp);
   };
 }
-import type { PipelineStepId } from '@archlab/shared';
+import type { CanvasGraph, CanvasNode, Diagnostic, PipelineStepId } from '@archlab/shared';
 import { PORTS } from '@archlab/shared';
 import { TopBar } from './components/TopBar.js';
 import { Sidebar } from './components/Sidebar.js';
@@ -52,7 +52,6 @@ import { SystemDesign, type TabMode } from './systemdesign/SystemDesign.js';
 import { AgentTeam } from './agents/AgentTeam.js';
 import { TeamReview } from './team/TeamReview.js';
 import { DatabaseDesigner } from './database/DatabaseDesigner.js';
-import { IdeasCanvas } from './ideas/IdeasCanvas.js';
 import { Docs } from './docs/Docs.js';
 import { SimulationPanel } from './simulation/SimulationPanel.js';
 import { SimulationReport } from './simulation/SimulationReport.js';
@@ -72,13 +71,56 @@ export type ArchTab =
   | 'api'
   | 'security'
   | 'systemdesign'
-  | 'blueprint'
   | 'docs'
   | 'archco'
   | 'agentteam';
 
-/** Tabs that render the architecture canvas (vs. the Database/Blueprint surfaces). */
+/** Tabs that render the architecture canvas (vs. the Database and System Design surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
+
+function isNodeVisibleInCanvasTab(
+  node: CanvasNode,
+  tab: ArchTab,
+  graph: CanvasGraph,
+  diagnostics: Diagnostic[],
+): boolean {
+  if (tab === 'all') return true;
+  if (tab === 'frontend') return node.lane === 'frontend';
+  if (tab === 'backend') return node.lane === 'backend' || node.lane === 'external';
+  if (tab === 'api') {
+    if (node.kind === 'route' || node.kind === 'endpoint') return true;
+    return graph.edges.some((edge) => {
+      if (edge.source === node.id) {
+        const target = graph.nodes.find((n) => n.id === edge.target);
+        return target?.kind === 'route' || target?.kind === 'endpoint';
+      }
+      if (edge.target === node.id) {
+        const source = graph.nodes.find((n) => n.id === edge.source);
+        return source?.kind === 'route' || source?.kind === 'endpoint';
+      }
+      return false;
+    });
+  }
+  if (tab === 'security') {
+    const securityIds = new Set<string>();
+    for (const d of diagnostics) {
+      if (d.step === 'security-checks' || d.severity === 'critical' || d.severity === 'high') {
+        for (const id of d.relatedNodeIds) securityIds.add(id);
+      }
+    }
+    if (node.kind === 'auth' || node.kind === 'middleware' || securityIds.has(node.id)) return true;
+    return graph.edges.some((edge) => {
+      const neighborId = edge.source === node.id ? edge.target : edge.target === node.id ? edge.source : null;
+      if (!neighborId) return false;
+      const neighbor = graph.nodes.find((n) => n.id === neighborId);
+      return Boolean(
+        neighbor &&
+          (neighbor.kind === 'auth' || neighbor.kind === 'middleware' || securityIds.has(neighbor.id)),
+      );
+    });
+  }
+  return false;
+}
 
 export function App() {
   const {
@@ -146,24 +188,51 @@ export function App() {
   const [bottomHeight, setBottomHeight] = useState(200);
   // One-shot command pushed into the active terminal (e.g. cd into a chosen folder).
   const [termCommand, setTermCommand] = useState<{ id: number; text: string } | null>(null);
+  const [choosingFolder, setChoosingFolder] = useState(false);
+  const [folderError, setFolderError] = useState<string | null>(null);
   const [tab, setTab] = useState<ArchTab>('all');
 
   // "Choose Folder": open the native picker, analyze the canvas, and cd the
   // terminal into it (the focused terminal's cwd also drives the canvas).
   const chooseFolder = async () => {
+    if (choosingFolder) return;
+    setChoosingFolder(true);
+    setFolderError(null);
     try {
       const res = await fetch(`http://127.0.0.1:${PORTS.backend}/api/pick-folder`, { method: 'POST' });
       const data = await res.json();
-      if (!data?.ok || !data.path) return;
-      const folder = String(data.path);
-      setTermCommand({ id: Date.now(), text: `cd "${folder.replace(/"/g, '\\"')}"\n` });
+      let folder = data?.ok && data.path ? String(data.path) : '';
+      if (!folder) {
+        folder = window.prompt('Paste the absolute path to your project folder:')?.trim() ?? '';
+      }
+      if (!folder) {
+        setFolderError('No folder selected.');
+        return;
+      }
+      const quotedFolder = folder.replace(/"/g, '\\"');
+      setTermCommand({ id: Date.now(), text: `cd "${quotedFolder}"\n` });
       fetch(`http://127.0.0.1:${PORTS.backend}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rootPath: folder }),
       }).catch(() => {});
-    } catch {
-      /* picker cancelled or backend unavailable */
+    } catch (err) {
+      const folder = window.prompt('Folder picker is unavailable. Paste the absolute project path:')?.trim() ?? '';
+      if (!folder) {
+        setFolderError('Folder picker is unavailable. Try again or paste a project path.');
+        return;
+      }
+      const quotedFolder = folder.replace(/"/g, '\\"');
+      setTermCommand({ id: Date.now(), text: `cd "${quotedFolder}"\n` });
+      fetch(`http://127.0.0.1:${PORTS.backend}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rootPath: folder }),
+      }).catch(() => {
+        setFolderError('Could not analyze that folder.');
+      });
+    } finally {
+      setChoosingFolder(false);
     }
   };
   // Architecture canvas tabs map straight to a canvas filter; others fall to all.
@@ -182,17 +251,35 @@ export function App() {
   const [codeWidth, setCodeWidth] = usePersistentNumber('archlab:codeWidth', 480, 300, 800);
   const [rightWidth, setRightWidth] = usePersistentNumber('archlab:rightWidth', 340, 200, 500);
 
-  // Keyboard shortcuts: B toggles left sidebar, R toggles right sidebar, M toggles bottom panel, 1-8 switches tabs.
+  // Keyboard shortcuts: L toggles left sidebar, R toggles right sidebar, B toggles bottom panel, 1-9 switches tabs.
   // Ignored while typing into the terminal or any text field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isMod = e.ctrlKey || e.metaKey;
 
+      // Escape unwinds the currently open UI surface. Child controls such as
+      // the code finder handle Escape first and mark the event as handled.
+      if (e.key === 'Escape') {
+        if (e.defaultPrevented) return;
+        if (brainOpen) setBrainOpen(false);
+        else if (shortcutsOpen) setShortcutsOpen(false);
+        else if (apiKeysOpen) setApiKeysOpen(false);
+        else if (codeNodeId) setCodeNodeId(null);
+        else if (simulationMode || simulationResult) {
+          setSimulationMode(false);
+          setSimulationResult(null);
+        } else if (showRightSidebar) setShowRightSidebar(false);
+        else if (selectedNodeId) setSelectedNodeId(null);
+        else return;
+        e.preventDefault();
+        return;
+      }
+
       // 1. Modifier-based shortcuts (should work even inside inputs/terminal)
       if (isMod) {
         if (e.key.toLowerCase() === 'b') {
           e.preventDefault();
-          toggleLeftSidebar();
+          toggleBottom();
           return;
         } else if (e.key.toLowerCase() === 'j') {
           e.preventDefault();
@@ -208,13 +295,13 @@ export function App() {
       
       // 3. Raw-key shortcuts
       if (e.altKey) return;
-      if (e.key === 'b' || e.key === 'B') {
+      if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
         toggleLeftSidebar();
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         setShowRightSidebar((p) => !p);
-      } else if (e.key === 'm' || e.key === 'M') {
+      } else if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         toggleBottom();
       } else if (e.key === 's' || e.key === 'S') {
@@ -226,7 +313,7 @@ export function App() {
         });
       } else if (e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key, 10) - 1;
-        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'database', 'api', 'security', 'systemdesign', 'blueprint', 'docs', 'archco', 'agentteam'];
+        const targetTabs: ArchTab[] = ['all', 'frontend', 'backend', 'api', 'security', 'database', 'systemdesign', 'docs', 'archco'];
         if (targetTabs[index]) {
           e.preventDefault();
           setTab(targetTabs[index]);
@@ -235,7 +322,18 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleLeftSidebar, toggleBottom, setShowRightSidebar, setTab]);
+  }, [
+    apiKeysOpen,
+    brainOpen,
+    codeNodeId,
+    selectedNodeId,
+    shortcutsOpen,
+    showRightSidebar,
+    simulationMode,
+    simulationResult,
+    toggleLeftSidebar,
+    toggleBottom,
+  ]);
 
   const selectedNode = useMemo(
     () => state.canvas.nodes.find((n) => n.id === selectedNodeId) ?? null,
@@ -257,7 +355,7 @@ export function App() {
 
   // The architecture canvas tabs: the only surfaces with node counts and
   // findings that make the left (Canvas Status) and right (Findings) sidebars
-  // meaningful. Database, System Design, and Blueprint each render their own
+  // meaningful. Database and System Design each render their own
   // full-width layout, so the sidebars are not rendered at all there — they
   // would only steal width and show irrelevant information.
   const isCanvasTab =
@@ -291,6 +389,11 @@ export function App() {
   // Always open it (even without a file) so the panel can explain why it cannot
   // load the source, including the full path it attempted.
   const handleOpenCode = (id: string) => {
+    const node = state.canvas.nodes.find((n) => n.id === id);
+    if (node && !isNodeVisibleInCanvasTab(node, tab, state.canvas, state.diagnostics)) {
+      setTab('all');
+    }
+    setSelectedNodeId(id);
     setCodeNodeId(id);
   };
 
@@ -309,12 +412,12 @@ export function App() {
     }
   };
   const resetSimulation = () => setSimulationResult(null);
-  const toggleSimulation = () =>
-    setSimulationMode((m) => {
-      const next = !m;
-      if (!next) setSimulationResult(null); // leaving the mode clears the run
-      return next;
-    });
+  const openFindingsPanel = () => {
+    setShowRightSidebar(true);
+    window.setTimeout(() => {
+      document.getElementById('findings-panel-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
 
   // What the right sidebar shows while simulating: the report once a run exists,
   // otherwise the control panel for the selected node.
@@ -343,6 +446,60 @@ export function App() {
     [hasApiKey, agentTeamHasRun, lastAgentRunAt],
   );
 
+  const securitySidebarContent =
+    tab === 'security' ? (
+      <section className="panel-block security-sidebar-panel">
+        <h3 className="panel-title">Security Controls</h3>
+        <div className="security-sidebar-actions">
+          <button
+            className="btn btn-sm"
+            disabled={!state.projectId || !state.connected || state.reanalyzing}
+            onClick={reanalyzeProject}
+            title="Force a fresh full scan of the current project"
+          >
+            {state.reanalyzing ? (
+              <>
+                <FlickerLoader size={13} /> Re-analyzing...
+              </>
+            ) : (
+              'Re-analyze'
+            )}
+          </button>
+          <button
+            className="btn btn-sm"
+            disabled={!state.projectId || !state.connected}
+            onClick={runChecks}
+          >
+            Run Checks
+          </button>
+        </div>
+
+        <div className="security-sidebar-nudge">
+          {!hasApiKey ? (
+            <NudgeText tone="amber" onClick={() => setTab('agentteam')}>
+              Static analysis only. Run Agent Team for AI-powered findings
+            </NudgeText>
+          ) : !agentTeamHasRun ? (
+            <NudgeText tone="muted" onClick={() => setTab('agentteam')}>
+              Run Agent Team for deeper analysis
+            </NudgeText>
+          ) : (
+            <NudgeText tone="green">
+              AI-enhanced. Last run {formatRunTimestamp(lastAgentRunAt)}
+            </NudgeText>
+          )}
+        </div>
+
+        <PipelineTags
+          isVertical
+          steps={state.steps}
+          diagnostics={state.diagnostics}
+          activeStep={securityStep}
+          onSelect={setSecurityStep}
+        />
+      </section>
+    ) : null;
+
   // Layer 1: a locked brain blocks the entire app at launch until unlocked.
   if (access?.locked) {
     return <LockScreen onUnlocked={setAccess} />;
@@ -362,7 +519,9 @@ export function App() {
         findingsCount={state.diagnostics.length}
         hasApiKey={hasApiKey}
         onOpenKeys={() => setApiKeysOpen(true)}
+        onOpenFindings={openFindingsPanel}
         onChooseFolder={chooseFolder}
+        choosingFolder={choosingFolder}
       />
 
       <div className="app-body">
@@ -381,6 +540,7 @@ export function App() {
             onOpenBrain={() => setBrainOpen(true)}
             onOpenShortcuts={() => setShortcutsOpen(true)}
             onOpenKeys={() => setApiKeysOpen(true)}
+            onToggle={toggleLeftSidebar}
           />
         )}
 
@@ -392,20 +552,21 @@ export function App() {
             <button
               className="panel-reveal-tab on-left"
               onClick={toggleLeftSidebar}
-              title="Show navigation (B)"
+              title="Show navigation (L)"
             >
               ▶
             </button>
           )}
           {isCanvasTab && !showRightSidebar && (
             <button
-               className="panel-reveal-tab on-right"
-               onClick={() => setShowRightSidebar((p) => !p)}
-               title="Show right sidebar (R)"
-             >
-               ◀
-             </button>
-           )}
+              className={`panel-reveal-tab on-right${showCodePanel ? ' beside-code-panel' : ''}`}
+              style={showCodePanel ? { right: codeWidth } : undefined}
+              onClick={() => setShowRightSidebar((p) => !p)}
+              title="Show right sidebar (R)"
+            >
+              ◀
+            </button>
+          )}
 
           {tab === 'systemdesign' ? (
             <SystemDesign
@@ -419,8 +580,6 @@ export function App() {
               onOpenApiKeys={() => setApiKeysOpen(true)}
               onSubModeChange={setSystemDesignMode}
             />
-          ) : tab === 'blueprint' ? (
-            <IdeasCanvas />
           ) : tab === 'docs' ? (
             <Docs hasApiKey={hasApiKey} apiKeys={apiKeys} />
           ) : tab === 'database' ? (
@@ -446,64 +605,6 @@ export function App() {
             />
           ) : (
             <ReactFlowProvider>
-              {tab === 'security' && (
-                <div className="canvas-left-overlay">
-                  <div className="security-pipeline-overlay">
-                    {/* Single flat row: ghost action buttons then the 7 step pills. */}
-                    <div className="security-pipeline-actions">
-                      <button
-                        className="btn btn-sm"
-                        disabled={!state.projectId || !state.connected || state.reanalyzing}
-                        onClick={reanalyzeProject}
-                        title="Force a fresh full scan of the current project"
-                      >
-                        {state.reanalyzing ? (
-                          <>
-                            <FlickerLoader size={13} /> Re-analyzing…
-                          </>
-                        ) : (
-                          '▶ Re-analyze'
-                        )}
-                      </button>
-                      <button
-                        className="btn btn-sm"
-                        disabled={!state.projectId || !state.connected}
-                        onClick={runChecks}
-                      >
-                        ✔ Run Checks
-                      </button>
-
-                      <span className="pipeline-confidence-nudge">
-                        {!hasApiKey ? (
-                          <NudgeText tone="amber" onClick={() => setTab('agentteam')}>
-                            Static analysis only · ⚡ Run Agent Team for AI-powered findings
-                          </NudgeText>
-                        ) : !agentTeamHasRun ? (
-                          <NudgeText tone="muted" onClick={() => setTab('agentteam')}>
-                            ⚡ Run Agent Team for deeper analysis
-                          </NudgeText>
-                        ) : (
-                          <NudgeText tone="green">
-                            ✓ AI-enhanced · last run {formatRunTimestamp(lastAgentRunAt)}
-                          </NudgeText>
-                        )}
-                      </span>
-                    </div>
-
-                    <PipelineTags
-                      steps={state.steps}
-                      diagnostics={state.diagnostics}
-                      activeStep={securityStep}
-                      onSelect={setSecurityStep}
-                      simulationMode={simulationMode}
-                      hasSimulationResult={Boolean(simulationResult)}
-                      onToggleSimulate={toggleSimulation}
-                      onResetSimulation={resetSimulation}
-                    />
-                  </div>
-                </div>
-              )}
-
               {state.projectId && tab === 'security' && (
                 <button className="agent-team-promo" onClick={() => setTab('agentteam')}>
                   <span className="agent-team-promo-glyph">⬡</span>
@@ -548,8 +649,11 @@ export function App() {
             onResizeStart={makeResizeHandler(rightWidth, setRightWidth)}
             stepFilter={tab === 'security' ? securityStep : null}
             onClearStepFilter={() => setSecurityStep(null)}
+            headerContent={securitySidebarContent}
             simulationContent={simulationContent}
             onOpenCode={handleOpenCode}
+            enrichment={state.enrichment}
+            infra={state.infra}
           />
         )}
 
@@ -569,10 +673,10 @@ export function App() {
         <button
           className="bottom-reveal-btn"
           onClick={toggleBottom}
-          title="Show bottom panel (M)"
+          title="Show bottom panel (B)"
           style={isAnyModalOpen ? { display: 'none' } : undefined}
         >
-          ▲ Pipeline &amp; Terminal
+          ▲
         </button>
       )}
 
@@ -602,6 +706,14 @@ export function App() {
         <div className="report-toast" role="status">
           ✓ Report saved to project root
           <span className="report-toast-path">{reportToast.split('/').pop()}</span>
+        </div>
+      )}
+      {folderError && (
+        <div className="report-toast folder-error-toast" role="status">
+          {folderError}
+          <button type="button" onClick={() => setFolderError(null)} aria-label="Dismiss folder error">
+            ✕
+          </button>
         </div>
       )}
       {shortcutsOpen && <ShortcutsPanel onClose={() => setShortcutsOpen(false)} />}
