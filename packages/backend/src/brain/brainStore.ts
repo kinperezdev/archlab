@@ -431,8 +431,20 @@ export function absorbAgentTeamFindings(
 
 const ARCHCO_EMPLOYEES_DIR = path.join(BRAIN_DIR, 'archco', 'employees');
 
+/**
+ * Employee ids become filenames, so they must be a strict safe slug. This
+ * blocks path traversal (e.g. `../../api_keys`) that would otherwise let a
+ * crafted id read or overwrite arbitrary brain files.
+ */
+function isSafeEmployeeId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(id);
+}
+
 /** Persist one employee's complete living data to its own JSON file. */
 export function saveEmployeeLivingData(employeeId: string, data: unknown): void {
+  if (!isSafeEmployeeId(employeeId)) {
+    throw new Error(`Invalid employee id: ${employeeId}`);
+  }
   fs.mkdirSync(ARCHCO_EMPLOYEES_DIR, { recursive: true });
   const file = path.join(ARCHCO_EMPLOYEES_DIR, `${employeeId}.json`);
   const tmp = `${file}.tmp`;
@@ -443,6 +455,7 @@ export function saveEmployeeLivingData(employeeId: string, data: unknown): void 
 
 /** Load one employee's living data, or null if none saved yet. */
 export function loadEmployeeLivingData(employeeId: string): unknown | null {
+  if (!isSafeEmployeeId(employeeId)) return null;
   const file = path.join(ARCHCO_EMPLOYEES_DIR, `${employeeId}.json`);
   if (!fs.existsSync(file)) return null;
   try {
@@ -451,7 +464,6 @@ export function loadEmployeeLivingData(employeeId: string): unknown | null {
     return null;
   }
 }
-
 /** Load every saved employee's living data, keyed by employee id. */
 export function loadAllEmployeeLivingData(): Record<string, unknown> {
   fs.mkdirSync(ARCHCO_EMPLOYEES_DIR, { recursive: true });
@@ -462,4 +474,35 @@ export function loadAllEmployeeLivingData(): Record<string, unknown> {
     if (data) result[id] = data;
   }
   return result;
+}
+
+/** Save Live Data check summary to the brain. */
+export function saveLiveDataSummary(
+  projectName: string,
+  summary: {
+    checkedAt: number;
+    outdatedCount: number;
+    vulnerabilityCount: number;
+    criticalVulns: string[];
+  },
+): void {
+  const file = path.join(BRAIN_DIR, 'live-data-cache-summaries.json');
+  try {
+    const data = readJsonFile<Record<string, any>>(file, {});
+    data[projectName.toLowerCase()] = summary;
+    writeJsonFile(file, data);
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Get Live Data check summary from the brain. */
+export function getLiveDataSummary(projectName: string): any {
+  const file = path.join(BRAIN_DIR, 'live-data-cache-summaries.json');
+  try {
+    const data = readJsonFile<Record<string, any>>(file, {});
+    return data[projectName.toLowerCase()] || null;
+  } catch {
+    return null;
+  }
 }

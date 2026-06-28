@@ -15,6 +15,7 @@ import type { AffectedFile, DiffHunk, ImpactAnalysis, ApplyResult } from '@archl
 import type { AnalysisResult } from './analyzer.js';
 import { readFileForIntel, findReferences } from './codeIntel.js';
 import { BRAIN_DIR } from '../brain/paths.js';
+import { resolveWithin } from '../security/paths.js';
 
 /** Leading whitespace of a line, so inserted code matches its surroundings. */
 function indentOf(line: string): string {
@@ -312,7 +313,12 @@ export function applyImpact(analysis: AnalysisResult, impact: ImpactAnalysis): A
 
   try {
     for (const file of impact.affected) {
-      const abs = path.join(analysis.rootPath, file.path);
+      // Reject any affected path that resolves outside the project root: the
+      // impact payload comes from the client and must never write elsewhere.
+      const abs = resolveWithin(analysis.rootPath, file.path);
+      if (!abs) {
+        return { ok: false, backupDir, written, error: `Path traversal rejected: ${file.path}` };
+      }
       if (!fs.existsSync(abs)) continue;
       const original = fs.readFileSync(abs, 'utf8');
 

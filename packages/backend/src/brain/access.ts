@@ -96,9 +96,21 @@ export function verifyPassword(password: string): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+/**
+ * The unlock sentinel holds a value bound to the current password (hash + salt),
+ * not just "a file exists". This stops a stray local process from unlocking the
+ * brain by simply creating an empty `.unlocked` file, and auto-invalidates the
+ * unlock whenever the password changes. (A process that can READ access.json
+ * could still recompute it — true isolation isn't possible on a single-user box,
+ * but this raises the bar from "touch a file" to "read secrets + hash them".)
+ */
+function expectedUnlockToken(cfg: AccessConfig): string {
+  return crypto.createHash('sha256').update(`${cfg.passwordHash}:${cfg.salt}`).digest('hex');
+}
+
 export function unlock(): void {
   fs.mkdirSync(BRAIN_DIR, { recursive: true });
-  fs.writeFileSync(UNLOCK_FILE, new Date().toISOString(), 'utf8');
+  fs.writeFileSync(UNLOCK_FILE, expectedUnlockToken(loadAccess()), { mode: 0o600 });
 }
 
 export function lock(): void {
@@ -109,9 +121,16 @@ export function lock(): void {
   }
 }
 
-/** Locked when a password is set and the session has not been unlocked. */
+/** Locked when a password is set and the sentinel does not match the password. */
 export function isLocked(): boolean {
-  return hasPassword() && !fs.existsSync(UNLOCK_FILE);
+  const cfg = loadAccess();
+  if (!cfg.passwordHash) return false; // no password set: always open
+  try {
+    const token = fs.readFileSync(UNLOCK_FILE, 'utf8').trim();
+    return token !== expectedUnlockToken(cfg);
+  } catch {
+    return true; // no sentinel (or unreadable) = locked
+  }
 }
 
 export function getPermissions(): BrainPermissions {

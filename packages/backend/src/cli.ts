@@ -13,8 +13,19 @@
  *   archlab --check         analyze + immediately run the 7-step pipeline
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { PORTS } from '@archlab/shared';
+import { BRAIN_DIR } from './brain/paths.js';
+
+/** Read the running backend's session token from its local file (0600). */
+function readSessionToken(): string {
+  try {
+    return fs.readFileSync(path.join(BRAIN_DIR, '.session-token'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -28,7 +39,7 @@ async function main(): Promise<void> {
   try {
     res = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-archlab-token': readSessionToken() },
       body: JSON.stringify({ rootPath, runChecks }),
     });
   } catch {

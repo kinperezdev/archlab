@@ -6,7 +6,11 @@ interface ApiKeysModalProps {
 }
 
 export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
+  // `keys` holds only what the user types this session — secrets are never sent
+  // back from the server, so the inputs always start empty. `present` tracks
+  // which providers already have a key configured (booleans from the server).
   const [keys, setKeys] = useState({ anthropic: '', openai: '', gemini: '' });
+  const [present, setPresent] = useState({ anthropic: false, openai: false, gemini: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -16,7 +20,11 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
       .then((res) => res.json())
       .then((data) => {
         if (data.ok && data.keys) {
-          setKeys(data.keys);
+          setPresent({
+            anthropic: Boolean(data.keys.anthropic),
+            openai: Boolean(data.keys.openai),
+            gemini: Boolean(data.keys.gemini),
+          });
         }
       })
       .catch((err) => console.error('Failed to load keys:', err))
@@ -28,10 +36,16 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
     setSaving(true);
     setMessage('');
     try {
+      // Only send fields the user actually typed. Empty fields are left
+      // untouched server-side so editing one key never wipes the others.
+      const changed: Record<string, string> = {};
+      if (keys.anthropic) changed.anthropic = keys.anthropic;
+      if (keys.openai) changed.openai = keys.openai;
+      if (keys.gemini) changed.gemini = keys.gemini;
       const res = await fetch(`http://127.0.0.1:${PORTS.backend}/api/keys`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keys }),
+        body: JSON.stringify({ keys: changed }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -69,8 +83,8 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label htmlFor="anthropic-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Anthropic API Key (Claude)</label>
-                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: keys.anthropic ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: keys.anthropic ? '#34d399' : '#f87171', fontWeight: 500 }}>
-                  {keys.anthropic ? 'Active' : 'Not Configured'}
+                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.anthropic || keys.anthropic) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.anthropic || keys.anthropic) ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                  {(present.anthropic || keys.anthropic) ? 'Active' : 'Not Configured'}
                 </span>
               </div>
               <input
@@ -78,7 +92,7 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
                 type="password"
                 value={keys.anthropic}
                 onChange={(e) => setKeys({ ...keys, anthropic: e.target.value })}
-                placeholder="sk-ant-..."
+                placeholder={present.anthropic ? '•••••••• saved — type to replace' : 'sk-ant-...'}
                 className="input"
                 style={{ width: '100%', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '8px 12px', color: 'var(--color-text)', outline: 'none' }}
               />
@@ -87,8 +101,8 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label htmlFor="openai-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>OpenAI API Key (ChatGPT)</label>
-                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: keys.openai ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: keys.openai ? '#34d399' : '#f87171', fontWeight: 500 }}>
-                  {keys.openai ? 'Active' : 'Not Configured'}
+                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.openai || keys.openai) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.openai || keys.openai) ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                  {(present.openai || keys.openai) ? 'Active' : 'Not Configured'}
                 </span>
               </div>
               <input
@@ -96,7 +110,7 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
                 type="password"
                 value={keys.openai}
                 onChange={(e) => setKeys({ ...keys, openai: e.target.value })}
-                placeholder="sk-proj-..."
+                placeholder={present.openai ? '•••••••• saved — type to replace' : 'sk-proj-...'}
                 className="input"
                 style={{ width: '100%', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '8px 12px', color: 'var(--color-text)', outline: 'none' }}
               />
@@ -105,8 +119,8 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label htmlFor="gemini-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Gemini API Key (Google AI)</label>
-                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: keys.gemini ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: keys.gemini ? '#34d399' : '#f87171', fontWeight: 500 }}>
-                  {keys.gemini ? 'Active' : 'Not Configured'}
+                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.gemini || keys.gemini) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.gemini || keys.gemini) ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                  {(present.gemini || keys.gemini) ? 'Active' : 'Not Configured'}
                 </span>
               </div>
               <input
@@ -114,7 +128,7 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
                 type="password"
                 value={keys.gemini}
                 onChange={(e) => setKeys({ ...keys, gemini: e.target.value })}
-                placeholder="AIzaSy..."
+                placeholder={present.gemini ? '•••••••• saved — type to replace' : 'AIzaSy...'}
                 className="input"
                 style={{ width: '100%', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '8px 12px', color: 'var(--color-text)', outline: 'none' }}
               />

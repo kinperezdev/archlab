@@ -8,6 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import type { BrainPermissions } from '@archlab/shared';
 
@@ -43,6 +44,7 @@ const DEFAULT_PERMISSIONS: BrainPermissions = {
 
 interface AccessConfig {
   passwordHash: string | null;
+  salt: string | null;
   permissions: BrainPermissions;
 }
 
@@ -51,16 +53,29 @@ function loadAccess(): AccessConfig {
     const raw = JSON.parse(fs.readFileSync(ACCESS_FILE, 'utf8'));
     return {
       passwordHash: typeof raw.passwordHash === 'string' ? raw.passwordHash : null,
+      salt: typeof raw.salt === 'string' ? raw.salt : null,
       permissions: { ...DEFAULT_PERMISSIONS, ...(raw.permissions ?? {}) },
     };
   } catch {
-    return { passwordHash: null, permissions: { ...DEFAULT_PERMISSIONS } };
+    return { passwordHash: null, salt: null, permissions: { ...DEFAULT_PERMISSIONS } };
   }
 }
 
-/** Locked when a password is set and the brain has not been unlocked. */
+/** Must match the backend's `expectedUnlockToken` exactly. */
+function expectedUnlockToken(cfg: AccessConfig): string {
+  return crypto.createHash('sha256').update(`${cfg.passwordHash}:${cfg.salt}`).digest('hex');
+}
+
+/** Locked when a password is set and the sentinel does not match the password. */
 export function isLocked(): boolean {
-  return Boolean(loadAccess().passwordHash) && !fs.existsSync(UNLOCK_FILE);
+  const cfg = loadAccess();
+  if (!cfg.passwordHash) return false;
+  try {
+    const token = fs.readFileSync(UNLOCK_FILE, 'utf8').trim();
+    return token !== expectedUnlockToken(cfg);
+  } catch {
+    return true;
+  }
 }
 
 /** Global MCP kill switch: when disabled, every tool returns nothing. */

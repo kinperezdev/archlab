@@ -43,10 +43,13 @@ import { RightSidebar } from './components/RightSidebar.js';
 import { BottomPanel } from './components/BottomPanel.js';
 import { PipelineTags } from './components/PipelineTags.js';
 import { LockScreen } from './components/LockScreen.js';
+import { SessionGate } from './components/SessionGate.js';
 import { fetchAccessStatus } from './lib/brainAccess.js';
 import type { BrainAccessStatus } from '@archlab/shared';
 import { BrainPanel } from './components/BrainPanel.js';
 import { Canvas } from './canvas/Canvas.js';
+import { capabilityBus } from './canvas/capabilityBus.js';
+import type { CapabilityDetail } from './canvas/nodeRecommendations.js';
 import { CodeIntelPanel } from './components/CodeIntelPanel.js';
 import { SystemDesign, type TabMode } from './systemdesign/SystemDesign.js';
 import { AgentTeam } from './agents/AgentTeam.js';
@@ -58,6 +61,7 @@ import { SimulationReport } from './simulation/SimulationReport.js';
 import { runSimulation, type SimulationResult, type SimulationScenario } from './simulation/simulationEngine.js';
 import { ShortcutsPanel } from './components/ShortcutsPanel.js';
 import { ApiKeysModal } from './components/ApiKeysModal.js';
+import { DoctorPanel } from './components/DoctorPanel.js';
 import { ApiKeyContext } from './state/apiKeyContext.js';
 import { NudgeText } from './components/ConfidenceNudge.js';
 import { FlickerLoader } from './components/FlickerLoader.js';
@@ -77,6 +81,17 @@ export type ArchTab =
 
 /** Tabs that render the architecture canvas (vs. the Database and System Design surfaces). */
 export type CanvasFilter = 'all' | 'frontend' | 'backend' | 'api' | 'security';
+
+/** Node kinds that make up the security attack surface, always shown in the
+ *  Security view so it never blanks out while checks are running. */
+const SECURITY_SURFACE_KINDS = new Set<string>([
+  'auth',
+  'middleware',
+  'database',
+  'endpoint',
+  'external-service',
+  'config',
+]);
 
 function isNodeVisibleInCanvasTab(
   node: CanvasNode,
@@ -108,15 +123,16 @@ function isNodeVisibleInCanvasTab(
         for (const id of d.relatedNodeIds) securityIds.add(id);
       }
     }
-    if (node.kind === 'auth' || node.kind === 'middleware' || securityIds.has(node.id)) return true;
+    // The security attack surface is always visible (auth, data stores, entry
+    // points, integrations, config) so the canvas never goes blank while checks
+    // run and the diagnostics list is momentarily empty.
+    const isSecuritySurface = (kind: string) => SECURITY_SURFACE_KINDS.has(kind);
+    if (isSecuritySurface(node.kind) || securityIds.has(node.id)) return true;
     return graph.edges.some((edge) => {
       const neighborId = edge.source === node.id ? edge.target : edge.target === node.id ? edge.source : null;
       if (!neighborId) return false;
       const neighbor = graph.nodes.find((n) => n.id === neighborId);
-      return Boolean(
-        neighbor &&
-          (neighbor.kind === 'auth' || neighbor.kind === 'middleware' || securityIds.has(neighbor.id)),
-      );
+      return Boolean(neighbor && (isSecuritySurface(neighbor.kind) || securityIds.has(neighbor.id)));
     });
   }
   return false;
@@ -153,6 +169,7 @@ export function App() {
   const [brainOpen, setBrainOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
+  const [doctorOpen, setDoctorOpen] = useState(false);
   // Whether an Anthropic key is configured — drives Agent Team nudges in the
   // Enterprise Audit. Re-checked whenever the API Keys modal closes.
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -194,6 +211,18 @@ export function App() {
 
   // "Choose Folder": open the native picker, analyze the canvas, and cd the
   // terminal into it (the focused terminal's cwd also drives the canvas).
+  // Send a chosen folder to the canvas + terminal. One place so both the native
+  // picker and the paste fallback share it.
+  const analyzeFolder = (folder: string) => {
+    const quotedFolder = folder.replace(/"/g, '\\"');
+    setTermCommand({ id: Date.now(), text: `cd "${quotedFolder}"\n` });
+    fetch(`http://127.0.0.1:${PORTS.backend}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rootPath: folder }),
+    }).catch(() => setFolderError('Could not analyze that folder.'));
+  };
+
   const chooseFolder = async () => {
     if (choosingFolder) return;
     setChoosingFolder(true);
@@ -201,36 +230,19 @@ export function App() {
     try {
       const res = await fetch(`http://127.0.0.1:${PORTS.backend}/api/pick-folder`, { method: 'POST' });
       const data = await res.json();
-      let folder = data?.ok && data.path ? String(data.path) : '';
-      if (!folder) {
-        folder = window.prompt('Paste the absolute path to your project folder:')?.trim() ?? '';
-      }
-      if (!folder) {
-        setFolderError('No folder selected.');
+      if (data?.ok && data.path) {
+        analyzeFolder(String(data.path));
         return;
       }
-      const quotedFolder = folder.replace(/"/g, '\\"');
-      setTermCommand({ id: Date.now(), text: `cd "${quotedFolder}"\n` });
-      fetch(`http://127.0.0.1:${PORTS.backend}/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rootPath: folder }),
-      }).catch(() => {});
-    } catch (err) {
-      const folder = window.prompt('Folder picker is unavailable. Paste the absolute project path:')?.trim() ?? '';
-      if (!folder) {
-        setFolderError('Folder picker is unavailable. Try again or paste a project path.');
-        return;
-      }
-      const quotedFolder = folder.replace(/"/g, '\\"');
-      setTermCommand({ id: Date.now(), text: `cd "${quotedFolder}"\n` });
-      fetch(`http://127.0.0.1:${PORTS.backend}/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rootPath: folder }),
-      }).catch(() => {
-        setFolderError('Could not analyze that folder.');
-      });
+      // The user cancelled the native dialog — do nothing, no extra prompt.
+      if (data?.reason === 'canceled') return;
+      // Picker genuinely unavailable (e.g. not macOS): offer the paste fallback.
+      const pasted = window.prompt('Folder picker unavailable. Paste the absolute project path:')?.trim() ?? '';
+      if (pasted) analyzeFolder(pasted);
+    } catch {
+      // Backend unreachable: last-resort paste fallback.
+      const pasted = window.prompt('Folder picker unavailable. Paste the absolute project path:')?.trim() ?? '';
+      if (pasted) analyzeFolder(pasted);
     } finally {
       setChoosingFolder(false);
     }
@@ -241,6 +253,14 @@ export function App() {
   // Collapsible panels. Left sidebar and bottom panel persist across refreshes.
   const [showLeftSidebar, , toggleLeftSidebar] = usePersistentBoolean('archlab:leftSidebar', true);
   const [showRightSidebar, setShowRightSidebar] = useState(true);
+  // Capability chip → dedicated detail panel in the right sidebar.
+  const [selectedCapability, setSelectedCapability] = useState<CapabilityDetail | null>(null);
+  useEffect(() => {
+    return capabilityBus.subscribe((cap) => {
+      setSelectedCapability(cap);
+      setShowRightSidebar(true);
+    });
+  }, []);
   const [bottomCollapsed, , toggleBottom] = usePersistentBoolean('archlab:bottomCollapsed', false);
   // The Code Intelligence Panel: which locked node (with a source file) it shows.
   const [codeNodeId, setCodeNodeId] = useState<string | null>(null);
@@ -264,6 +284,7 @@ export function App() {
         if (brainOpen) setBrainOpen(false);
         else if (shortcutsOpen) setShortcutsOpen(false);
         else if (apiKeysOpen) setApiKeysOpen(false);
+        else if (doctorOpen) setDoctorOpen(false);
         else if (codeNodeId) setCodeNodeId(null);
         else if (simulationMode || simulationResult) {
           setSimulationMode(false);
@@ -324,6 +345,7 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [
     apiKeysOpen,
+    doctorOpen,
     brainOpen,
     codeNodeId,
     selectedNodeId,
@@ -429,7 +451,7 @@ export function App() {
 
   // True whenever a full-screen overlay is showing. The bottom-panel toggle is
   // hidden while this is true so it never floats on top of a modal.
-  const isAnyModalOpen = brainOpen || shortcutsOpen || apiKeysOpen;
+  const isAnyModalOpen = brainOpen || shortcutsOpen || apiKeysOpen || doctorOpen;
 
   // Confidence context: has the Agent Team run, and when. Shared app-wide so
   // every surface can show honest static-vs-AI indicators without prop drilling.
@@ -500,6 +522,15 @@ export function App() {
       </section>
     ) : null;
 
+  // ArchBench session gate (mock), shown only when the URL carries `?session`.
+  // Isolated from normal launch so it never affects the real app flow.
+  if (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('session')
+  ) {
+    return <SessionGate />;
+  }
+
   // Layer 1: a locked brain blocks the entire app at launch until unlocked.
   if (access?.locked) {
     return <LockScreen onUnlocked={setAccess} />;
@@ -519,6 +550,7 @@ export function App() {
         findingsCount={state.diagnostics.length}
         hasApiKey={hasApiKey}
         onOpenKeys={() => setApiKeysOpen(true)}
+        onOpenDoctor={() => setDoctorOpen(true)}
         onOpenFindings={openFindingsPanel}
         onChooseFolder={chooseFolder}
         choosingFolder={choosingFolder}
@@ -560,7 +592,6 @@ export function App() {
           {isCanvasTab && !showRightSidebar && (
             <button
               className={`panel-reveal-tab on-right${showCodePanel ? ' beside-code-panel' : ''}`}
-              style={showCodePanel ? { right: codeWidth } : undefined}
               onClick={() => setShowRightSidebar((p) => !p)}
               title="Show right sidebar (R)"
             >
@@ -617,6 +648,8 @@ export function App() {
 
               <Canvas
                 graph={state.canvas}
+                nodeAnimations={state.nodeAnimations}
+                edgeAnimations={state.edgeAnimations}
                 diagnostics={state.diagnostics}
                 onSelectNode={handleSelectNode}
                 onOpenCode={handleOpenCode}
@@ -643,6 +676,8 @@ export function App() {
             graph={state.canvas}
             diagnostics={state.diagnostics}
             selectedNode={selectedNode}
+            capability={selectedCapability}
+            onClearCapability={() => setSelectedCapability(null)}
             intelligence={state.intelligence}
             onCollapse={() => setShowRightSidebar((p) => !p)}
             width={rightWidth}
@@ -718,6 +753,7 @@ export function App() {
       )}
       {shortcutsOpen && <ShortcutsPanel onClose={() => setShortcutsOpen(false)} />}
       {apiKeysOpen && <ApiKeysModal onClose={() => setApiKeysOpen(false)} />}
+      {doctorOpen && <DoctorPanel onClose={() => setDoctorOpen(false)} />}
     </div>
     </ApiKeyContext.Provider>
   );

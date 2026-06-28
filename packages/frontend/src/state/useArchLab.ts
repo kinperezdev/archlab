@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PORTS,
   type CanvasGraph,
+  type NodeAnimationState,
   type Diagnostic,
   type DiagnosticReport,
   type PipelineStep,
@@ -27,7 +28,9 @@ import {
   type AgentRunSummary,
   type TeamReport,
   type PersistentIssue,
+  type InternetConnectionsSummary,
 } from '@archlab/shared';
+import { getSessionToken } from '../lib/session.js';
 
 /** Per-agent live state in the Agent Team panel. */
 export interface AgentState {
@@ -110,6 +113,12 @@ export interface ArchLabState {
   /** True while a forced re-analysis is in flight (drives the button spinner). */
   reanalyzing: boolean;
   canvas: CanvasGraph;
+  /** Live per-node animation state from the pipeline, kept OUT of `canvas.nodes`
+   *  so streaming animation ticks never change the structural array identity
+   *  (which would rebuild the whole canvas on every frame). */
+  nodeAnimations: Record<string, NodeAnimationState>;
+  /** Live per-edge "flowing" flag, kept out of `canvas.edges` for the same reason. */
+  edgeAnimations: Record<string, boolean>;
   steps: PipelineStep[];
   diagnostics: Diagnostic[];
   intelligence: ProjectIntelligence | null;
@@ -126,14 +135,31 @@ export interface ArchLabState {
   missingPatterns: MissingInfraPattern[];
   /** Detected tech stack labels, e.g. ["React", "TypeScript"]. */
   techStack: string[];
+  /** Outbound internet connections summary. */
+  internetConnections: InternetConnectionsSummary | null;
+  /** Live Data Enrichment results. */
+  enrichment: any | null;
   /** Agent Team live state. */
   agentTeam: AgentTeamState;
 }
 
 const EMPTY_CANVAS: CanvasGraph = { nodes: [], edges: [] };
+const LAST_PROJECT_PATH_KEY = 'archlab:lastProjectPath';
+
+function getLastProjectPath(): string | null {
+  try {
+    const path = localStorage.getItem(LAST_PROJECT_PATH_KEY)?.trim();
+    return path || null;
+  } catch {
+    return null;
+  }
+}
 
 export function useArchLab() {
   const wsRef = useRef<WebSocket | null>(null);
+  // A reconnect must not restart a potentially expensive scan. Restore the
+  // remembered project once per browser session, after the first socket opens.
+  const restoredProjectRef = useRef(false);
   const [state, setState] = useState<ArchLabState>({
     connected: false,
     projectId: null,
@@ -142,6 +168,8 @@ export function useArchLab() {
     analyzedAt: null,
     reanalyzing: false,
     canvas: EMPTY_CANVAS,
+    nodeAnimations: {},
+    edgeAnimations: {},
     steps: [],
     diagnostics: [],
     intelligence: null,
@@ -154,6 +182,8 @@ export function useArchLab() {
     dependencies: [],
     missingPatterns: [],
     techStack: [],
+    internetConnections: null,
+    enrichment: null,
     agentTeam: {
       running: false,
       agents: emptyAgents(),
@@ -184,6 +214,8 @@ export function useArchLab() {
           analyzedAt: Date.now(),
           reanalyzing: false,
           canvas: msg.canvas,
+          nodeAnimations: {},
+          edgeAnimations: {},
           diagnostics: [],
           report: null,
           intelligence: null,
@@ -192,31 +224,34 @@ export function useArchLab() {
           dependencies: msg.dependencies ?? [],
           missingPatterns: msg.missingInfraPatterns ?? [],
           techStack: msg.techStack ?? [],
+          internetConnections: msg.internetConnections ?? null,
+          enrichment: {
+            status: 'checking',
+            outdatedPackages: [],
+            vulnerabilities: [],
+            stackBestPractices: [],
+          },
         };
 
       case 'canvas-update':
-        return { ...prev, canvas: msg.canvas };
+        // A fresh structure: reset live animation state so stale flags from the
+        // previous graph don't bleed onto re-used node/edge ids.
+        return { ...prev, canvas: msg.canvas, nodeAnimations: {}, edgeAnimations: {} };
 
       case 'node-animate':
+        // Animation lives in a side map, NOT in canvas.nodes, so the structural
+        // array keeps its identity and the canvas is never rebuilt per tick.
+        if (prev.nodeAnimations[msg.nodeId] === msg.state) return prev;
         return {
           ...prev,
-          canvas: {
-            ...prev.canvas,
-            nodes: prev.canvas.nodes.map((n) =>
-              n.id === msg.nodeId ? { ...n, animation: msg.state } : n,
-            ),
-          },
+          nodeAnimations: { ...prev.nodeAnimations, [msg.nodeId]: msg.state },
         };
 
       case 'edge-animate':
+        if (prev.edgeAnimations[msg.edgeId] === msg.animated) return prev;
         return {
           ...prev,
-          canvas: {
-            ...prev.canvas,
-            edges: prev.canvas.edges.map((e) =>
-              e.id === msg.edgeId ? { ...e, animated: msg.animated } : e,
-            ),
-          },
+          edgeAnimations: { ...prev.edgeAnimations, [msg.edgeId]: msg.animated },
         };
 
       case 'pipeline-init':
@@ -335,10 +370,28 @@ export function useArchLab() {
       case 'agent-runs':
         return { ...prev, agentTeam: { ...prev.agentTeam, runs: msg.runs } };
 
+      case 'enrichment-complete':
+        return {
+          ...prev,
+          diagnostics: [...prev.diagnostics, ...msg.diagnostics],
+          enrichment: msg.enrichment,
+        };
+
       default:
         return prev;
     }
   }, []);
+
+  // Keep the last successfully analyzed folder local to this browser. The path
+  // is used on the next page load to rebuild the canvas automatically.
+  useEffect(() => {
+    if (!state.projectPath) return;
+    try {
+      localStorage.setItem(LAST_PROJECT_PATH_KEY, state.projectPath);
+    } catch {
+      /* private browsing or full storage: the current session still works */
+    }
+  }, [state.projectPath]);
 
   // Connect once on mount, with simple auto-reconnect.
   useEffect(() => {
@@ -346,12 +399,18 @@ export function useArchLab() {
     let retry: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
-      const ws = new WebSocket(`ws://127.0.0.1:${PORTS.backend}`);
+      // The backend's WS handshake requires the same session token as HTTP.
+      const ws = new WebSocket(`ws://127.0.0.1:${PORTS.backend}?token=${encodeURIComponent(getSessionToken())}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setState((p) => ({ ...p, connected: true }));
         ws.send(JSON.stringify({ type: 'term-init' }));
+        if (!restoredProjectRef.current) {
+          restoredProjectRef.current = true;
+          const rootPath = getLastProjectPath();
+          if (rootPath) ws.send(JSON.stringify({ type: 'analyze-project', rootPath }));
+        }
       };
       ws.onclose = () => {
         setState((p) => ({ ...p, connected: false }));

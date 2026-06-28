@@ -23,6 +23,7 @@ import { CopyPromptButton } from '../components/CopyPromptButton.js';
 import { promptForSchema } from '../lib/prompts.js';
 import { neighborSet, highlightClass } from '../lib/highlight.js';
 import { SchemaTableNode, type SchemaNodeData } from './SchemaTableNode.js';
+import { DbTableDetail } from './DbTableDetail.js';
 import {
   GroupContainer,
   RelationshipEdge,
@@ -358,9 +359,18 @@ function groupBox(positions: { x: number; y: number }[]): {
   };
 }
 
+/**
+ * Columns for a group's grid. Scales with table count (roughly square, capped)
+ * so a big group lays out wide-and-short instead of one very tall strip.
+ */
+function gridCols(count: number): number {
+  if (count <= 3) return 1;
+  return Math.min(6, Math.ceil(Math.sqrt(count)));
+}
+
 /** Default grid position for a table within its group column. */
 function defaultPos(originX: number, index: number, count: number): { x: number; y: number } {
-  const cols = count <= 3 ? 1 : 2;
+  const cols = gridCols(count);
   const c = index % cols;
   const r = Math.floor(index / cols);
   return {
@@ -399,19 +409,7 @@ function mergeSchemas(explicit: DbTable[], inferred: DbTable[]): DbTable[] {
   return merged;
 }
 
-function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: string | null; hasProject: boolean }) {
-  if (!hasProject) {
-    return (
-      <div className="db-designer-empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 'var(--space-3)', color: 'var(--color-text-dim)', textAlign: 'center', background: 'var(--color-surface)', padding: 'var(--space-6)' }}>
-        <span style={{ fontSize: '48px', marginBottom: '8px' }}>📂</span>
-        <h3 style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--text-lg)' }}>No Active Project</h3>
-        <p style={{ margin: 0, fontSize: 'var(--text-sm)', maxWidth: '400px' }}>
-          Please load a project directory via the terminal below or run the <code>archlab</code> CLI in your terminal to start designing its database schema.
-        </p>
-      </div>
-    );
-  }
-
+function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) {
   const [sql, setSql] = useState<string>('');
   const [tables, setTables] = useState<DbTable[]>([]);
   const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNodeData>([]);
@@ -432,6 +430,24 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const nodesRef = useRef<Node<SchemaNodeData>[]>([]);
   nodesRef.current = nodes;
 
+  // Debounce hover so a fast mouse sweep across tables doesn't fire a highlight
+  // update for every node it crosses.
+  const hoverTimerRef = useRef<number | null>(null);
+  const hoverTable = useCallback((id: string | null) => {
+    if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+    if (id === null) {
+      setHoveredNodeId(null);
+      return;
+    }
+    hoverTimerRef.current = window.setTimeout(() => setHoveredNodeId(id), 60);
+  }, []);
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+    },
+    [],
+  );
+
   // Load saved SQL schema and merge with inferredSql
   useEffect(() => {
     loadSchema(SAMPLE_SQL).then((savedSql) => {
@@ -442,7 +458,6 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
       
       setSql(mergedSql);
       setTables(merged);
-      console.log('DatabaseDesigner: initial load & merge parsed tables:', merged);
     });
   }, [inferredSql]);
 
@@ -502,16 +517,18 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const canLoadMore =
     LARGE_SCHEMA && !showAll && dbFilter === 'all' && !search.trim() && visibleTables.length < resolvedTables.length;
 
-  // Sync React Flow nodes/edges with tables whenever they or selection changes.
+  // Build the React Flow nodes/edges ONLY when the schema structure changes.
+  // Highlight state (hover/lock) is intentionally NOT a dependency here — it is
+  // patched onto the existing nodes by the effect below — so hovering a table
+  // never rebuilds the whole graph (which is what made it flicker).
   useEffect(() => {
     const computedEdges = buildEdges(visibleTables);
-    const neighbors = activeNodeId ? neighborSet(activeNodeId, computedEdges) : null;
 
     const confirmed = visibleTables.filter((t) => !isInferredTable(t));
     const inferred = visibleTables.filter((t) => isInferredTable(t));
 
     // Confirmed group sits on the left; inferred to its right.
-    const confCols = confirmed.length <= 3 ? 1 : 2;
+    const confCols = gridCols(confirmed.length);
     const confWidth = GROUP_PAD * 2 + (confCols - 1) * COL_PITCH + NODE_W;
     const inferredOriginX = confirmed.length > 0 ? confWidth + GROUP_GAP : 0;
 
@@ -563,7 +580,6 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
       type: 'schemaTable',
       position,
       zIndex: 1,
-      className: highlightClass(table.name, activeNodeId, neighbors),
       data: {
         table,
         allTables: resolvedTables,
@@ -580,7 +596,27 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
     setNodes([...groupNodes, ...tableNodes] as Node<SchemaNodeData>[]);
     setEdges(computedEdges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleTables, resolvedTables, activeNodeId, setNodes, setEdges]);
+  }, [visibleTables, resolvedTables, setNodes, setEdges]);
+
+  // Patch the hover/lock highlight onto the EXISTING nodes in place. Only the
+  // className changes, and only for nodes whose state actually flips, so a hover
+  // re-renders a couple of nodes instead of rebuilding the entire canvas.
+  useEffect(() => {
+    const neighbors = activeNodeId ? neighborSet(activeNodeId, edges) : null;
+    setNodes((prev) => {
+      let changed = false;
+      const next = prev.map((node) => {
+        // Group backdrops are never highlighted.
+        if (node.type === 'dbGroup') return node;
+        const cls = highlightClass(node.id, activeNodeId, neighbors);
+        const normalized = cls || undefined;
+        if ((node.className ?? undefined) === normalized) return node;
+        changed = true;
+        return { ...node, className: normalized };
+      });
+      return changed ? next : prev;
+    });
+  }, [activeNodeId, edges, setNodes]);
 
   // Escape releases the locked highlight.
   useEffect(() => {
@@ -595,14 +631,12 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
   const onSqlChange = (value: string) => {
     setSql(value);
     const parsed = parseSqlSchema(value);
-    console.log('DatabaseDesigner: input changed parsed tables:', parsed);
     setTables(parsed);
     saveSchema(value);
   };
 
   // Canvas -> SQL.
   const applyTables = useCallback((next: DbTable[]) => {
-    console.log('DatabaseDesigner: canvas updated applying tables:', next);
     setTables(next);
     const nextSql = serializeSqlSchema(next);
     setSql(nextSql);
@@ -680,6 +714,13 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
     return tables.some((t) => t.isInferred || t.columns.some((c) => c.isInferred));
   }, [tables]);
 
+  // The table whose node is selected — its detail opens in the right panel,
+  // matching the full-flow Canvas pattern. Group backdrops never match a table.
+  const selectedTable = useMemo(
+    () => (lockedNodeId ? tables.find((t) => t.name === lockedNodeId) ?? null : null),
+    [lockedNodeId, tables],
+  );
+
   const acceptSuggestions = () => {
     const cleanTables = tables.map((t) => ({
       ...t,
@@ -690,11 +731,21 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
     setSql(cleanSql);
     setTables(cleanTables);
     saveSchema(cleanSql);
-    console.log('DatabaseDesigner: Accepted and saved suggestions to backend schema.');
   };
 
   return (
-    <div className="db-designer" style={{ gridTemplateColumns: showEditor ? 'minmax(280px, 33%) 1fr' : '1fr' }}>
+    <div
+      className="db-designer"
+      style={{
+        gridTemplateColumns: [
+          showEditor ? 'minmax(280px, 33%)' : null,
+          '1fr',
+          selectedTable ? 'minmax(300px, 340px)' : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      }}
+    >
       {/* 1/3 Width SQL Editor Panel */}
       {showEditor && (
         <div className="db-editor-panel">
@@ -845,9 +896,21 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
           edgeTypes={edgeTypes}
           fitView
           minZoom={0.2}
-          onNodeMouseEnter={(_e, n) => setHoveredNodeId(n.id)}
-          onNodeMouseLeave={() => setHoveredNodeId(null)}
-          onNodeClick={(_e, n) => setLockedNodeId(n.id)}
+          /* Perf: don't elevate/focus nodes, and on large schemas only mount the
+             tables inside the viewport so zoom/pan stays smooth. */
+          elevateNodesOnSelect={false}
+          nodesFocusable={false}
+          edgesFocusable={false}
+          onlyRenderVisibleElements={LARGE_SCHEMA}
+          onNodeMouseEnter={(_e, n) => {
+            if (n.type === 'dbGroup') return; // hovering the backdrop isn't a table
+            hoverTable(n.id);
+          }}
+          onNodeMouseLeave={() => hoverTable(null)}
+          onNodeClick={(_e, n) => {
+            if (n.type === 'dbGroup') return;
+            setLockedNodeId(n.id);
+          }}
           onPaneClick={() => setLockedNodeId(null)}
           proOptions={{ hideAttribution: true }}
         >
@@ -886,6 +949,15 @@ function DatabaseDesignerInner({ inferredSql, hasProject }: { inferredSql: strin
           </div>
         )}
       </div>
+
+      {/* Right detail panel: edit the selected table's columns + keys. */}
+      {selectedTable && (
+        <DbTableDetail
+          table={selectedTable}
+          onCommit={updateTable}
+          onClose={() => setLockedNodeId(null)}
+        />
+      )}
 
       {/* Rename confirmation: list every FK reference that will auto-update. */}
       {pendingRename && (
@@ -932,9 +1004,26 @@ interface DatabaseDesignerProps {
 }
 
 export function DatabaseDesigner({ inferredSql, hasProject }: DatabaseDesignerProps) {
+  // Gate the empty state here so the inner component (with all its hooks) only
+  // mounts once a project exists. Returning early from inside the inner
+  // component would change its hook count when a project loads and crash it.
+  if (!hasProject) {
+    return (
+      <div
+        className="db-designer-empty-state"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 'var(--space-3)', color: 'var(--color-text-dim)', textAlign: 'center', background: 'var(--color-surface)', padding: 'var(--space-6)' }}
+      >
+        <span style={{ fontSize: '48px', marginBottom: '8px' }}>📂</span>
+        <h3 style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--text-lg)' }}>No Active Project</h3>
+        <p style={{ margin: 0, fontSize: 'var(--text-sm)', maxWidth: '400px' }}>
+          Please load a project directory via the terminal below or run the <code>archlab</code> CLI in your terminal to start designing its database schema.
+        </p>
+      </div>
+    );
+  }
   return (
     <ReactFlowProvider>
-      <DatabaseDesignerInner inferredSql={inferredSql} hasProject={hasProject} />
+      <DatabaseDesignerInner inferredSql={inferredSql} />
     </ReactFlowProvider>
   );
 }

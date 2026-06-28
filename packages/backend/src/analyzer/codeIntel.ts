@@ -24,6 +24,7 @@ import type {
 } from '@archlab/shared';
 import type { AnalysisResult } from './analyzer.js';
 import { trackScopes, framesAtLine, type Frame } from './scopeTracker.js';
+import { resolveWithin } from '../security/paths.js';
 
 /**
  * Read a file's raw text from disk. The node only carries a path relative to
@@ -32,20 +33,18 @@ import { trackScopes, framesAtLine, type Frame } from './scopeTracker.js';
  * fails (e.g. the file moved since the scan).
  */
 export function readFileForIntel(analysis: AnalysisResult, relPath: string): string | null {
-  // The node path may already be absolute (starts with "/"); otherwise join it
-  // onto the analyzed project's root to get the absolute path.
-  const abs = relPath.startsWith('/') ? relPath : path.join(analysis.rootPath, relPath);
-  // eslint-disable-next-line no-console
-  console.log(`[code-intel] reading file: ${abs}`);
-  try {
-    if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
-      return fs.readFileSync(abs, 'utf8');
+  // Resolve against the project root and reject anything that escapes it, so a
+  // crafted relative or absolute path cannot read files outside the project.
+  const abs = resolveWithin(analysis.rootPath, relPath);
+  if (abs) {
+    try {
+      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
+        return fs.readFileSync(abs, 'utf8');
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[code-intel] read failed for ${relPath}: ${String(err)}`);
     }
-    // eslint-disable-next-line no-console
-    console.log(`[code-intel] not found on disk: ${abs}`);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(`[code-intel] read failed for ${abs}: ${String(err)}`);
   }
   // Fall back to scanned content if we captured it earlier.
   const file = analysis.scan.files.find((f) => f.relPath === relPath);

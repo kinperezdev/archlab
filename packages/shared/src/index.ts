@@ -8,6 +8,7 @@ export * from './systemdesign.js';
 export * from './agents.js';
 export * from './ws.js';
 export * from './entrypoints.js';
+export * from './doctor.js';
 
 /** Default localhost ports used across the system. */
 export const PORTS = {

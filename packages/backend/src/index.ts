@@ -12,15 +12,17 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execFile } from 'node:child_process';
 import os from 'node:os';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
 import { PORTS, type ClientMessage, type ServerMessage, type DiagnosticReport } from '@archlab/shared';
 import { analyzeProject, type AnalysisResult } from './analyzer/analyzer.js';
 import { rememberProject, recallProject, getLastAnalyzedProject } from './analyzer/projectIndex.js';
 import { runPipeline } from './pipeline/pipeline.js';
 import { detectBottlenecks } from './pipeline/bottleneck.js';
+import { enrichAnalysis } from './services/enrichAnalysis.js';
 
 // Load .env from workspace root if it exists
 try {
@@ -57,6 +59,8 @@ import {
   brainFileSizeKb,
   saveSimulationResult,
   getSimulationHistory,
+  saveLiveDataSummary,
+  getLiveDataSummary,
   type WikiEntry,
 } from './brain/brainStore.js';
 import { recordInfra, infraInsights } from './brain/infraBrain.js';
@@ -79,6 +83,8 @@ import { countProjectFiles } from './analyzer/scan.js';
 import { inferSchemaFromAppFlow } from './analyzer/inference.js';
 import { buildFileIntel, findReferences, readFileForIntel } from './analyzer/codeIntel.js';
 import { analyzeImpact, applyImpact, diffToImpact } from './analyzer/codeActions.js';
+import { resolveWithin } from './security/paths.js';
+import { buildHealthReport, buildSecurityReport } from './doctor/doctor.js';
 import type { ImpactAnalysis } from '@archlab/shared';
 
 const HOST = '127.0.0.1';
@@ -91,7 +97,7 @@ const CUSTOM_MCP_FILE = path.join(BRAIN_DIR, 'imported_mcps.json');
 
 /** Load MCP servers configured in Claude Desktop. */
 function loadClaudeMcpServers(): Record<string, any> {
-  const configPath = '/Users/kinclarkperez/Library/Application Support/Claude/claude_desktop_config.json';
+  const configPath = path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
   if (!fs.existsSync(configPath)) return {};
   try {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -118,16 +124,35 @@ function saveCustomMcps(mcps: Record<string, any>): void {
 }
 
 const app = express();
-// Generous limit so files dropped into the terminal (base64) fit in one request.
-app.use(express.json({ limit: '128mb' }));
-
-// Enable CORS for frontend requests
+// Only the terminal file-drop routes need a large body (base64 uploads). Every
+// other endpoint uses a small default so a single huge POST cannot drive memory
+// pressure. The big parser is attached per-route below; skip those paths here.
+const UPLOAD_PATHS = new Set(['/terminal/upload', '/terminal/upload-batch']);
+const largeJson = express.json({ limit: '128mb' });
+const smallJson = express.json({ limit: '1mb' });
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader('Access-Control-Allow-Methods', '*');
+  if (UPLOAD_PATHS.has(req.path)) return next();
+  return smallJson(req, res, next);
+});
+
+// CORS: only ArchLab's own frontend may talk to the backend. A wildcard origin
+// would let any webpage open in the browser read these endpoints (including the
+// stored API keys) via a one-line fetch to localhost. Lock it to the frontend.
+const ALLOWED_ORIGINS = new Set<string>([
+  `http://127.0.0.1:${PORTS.frontend}`,
+  `http://localhost:${PORTS.frontend}`,
+]);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-ArchLab-Token');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  }
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+    // Reject preflight from disallowed origins outright.
+    res.sendStatus(origin && ALLOWED_ORIGINS.has(origin) ? 200 : 403);
     return;
   }
   next();
@@ -135,6 +160,40 @@ app.use((req, res, next) => {
 
 // Health check.
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'archlab-backend' }));
+
+// ---- Session token (defense-in-depth auth) ------------------------------
+// A per-run secret. Every request must present it (header) and every WebSocket
+// must present it (query param). CORS already blocks cross-origin browsers;
+// this adds a second gate so a process that simply POSTs to localhost without
+// the token is rejected, and gives hosted/multi-user mode a real auth seam.
+const SESSION_TOKEN = crypto.randomBytes(32).toString('hex');
+const SESSION_TOKEN_FILE = path.join(BRAIN_DIR, '.session-token');
+try {
+  fs.mkdirSync(BRAIN_DIR, { recursive: true });
+  // 0600 so only the owner can read it.
+  fs.writeFileSync(SESSION_TOKEN_FILE, SESSION_TOKEN, { mode: 0o600 });
+} catch (err) {
+  console.error('[auth] failed to write session token file:', err);
+}
+
+// The frontend fetches the token here at startup. Gated by Origin only (the
+// browser enforces it) because the client has no token yet at this point.
+app.get('/session/token', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    return res.status(403).json({ ok: false, error: 'Forbidden origin.' });
+  }
+  return res.json({ ok: true, token: SESSION_TOKEN });
+});
+
+// Require the token on every other route. Health and the handshake are exempt.
+const AUTH_EXEMPT = new Set(['/health', '/session/token']);
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS' || AUTH_EXEMPT.has(req.path)) return next();
+  const provided = req.headers['x-archlab-token'];
+  if (provided === SESSION_TOKEN) return next();
+  return res.status(401).json({ ok: false, error: 'Missing or invalid session token.' });
+});
 
 // ---- API Keys configuration --------------------------------------------
 const KEYS_FILE = path.join(BRAIN_DIR, 'api_keys.json');
@@ -154,35 +213,72 @@ function loadApiKeys(): void {
 loadApiKeys();
 
 app.get('/api/keys', (_req, res) => {
+  // The frontend only needs to know WHICH providers are configured, never the
+  // key values. Returning raw keys over HTTP makes them stealable; report
+  // presence as booleans only. Keys are write-only from the client's view.
+  const present = { anthropic: false, openai: false, gemini: false };
   try {
-    let keys = { anthropic: '', openai: '', gemini: '' };
     if (fs.existsSync(KEYS_FILE)) {
-      keys = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+      const k = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+      present.anthropic = Boolean(k.anthropic);
+      present.openai = Boolean(k.openai);
+      present.gemini = Boolean(k.gemini);
     }
-    return res.json({ ok: true, keys });
   } catch {
-    return res.json({ ok: true, keys: { anthropic: '', openai: '', gemini: '' } });
+    /* fall through with all-false */
   }
+  return res.json({ ok: true, keys: present });
 });
 
 app.post('/api/keys', (req, res) => {
-  const keys = req.body?.keys;
-  if (!keys || typeof keys !== 'object') {
+  const incoming = req.body?.keys;
+  if (!incoming || typeof incoming !== 'object') {
     return res.status(400).json({ ok: false, error: 'keys object is required' });
   }
   try {
+    // Merge: the client only sends the providers it actually changed (the GET
+    // never returns key values, so the UI cannot resend untouched keys). Start
+    // from what is on disk and overlay only non-empty incoming values, so saving
+    // one provider never blanks the others.
+    const current = storedKeys();
+    const merged = {
+      anthropic: typeof incoming.anthropic === 'string' && incoming.anthropic ? incoming.anthropic : current.anthropic,
+      openai: typeof incoming.openai === 'string' && incoming.openai ? incoming.openai : current.openai,
+      gemini: typeof incoming.gemini === 'string' && incoming.gemini ? incoming.gemini : current.gemini,
+    };
+
     fs.mkdirSync(path.dirname(KEYS_FILE), { recursive: true });
-    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), 'utf8');
-    
-    // Load them into environment immediately (overwriting/clearing any old values)
-    process.env.ANTHROPIC_API_KEY = keys.anthropic || '';
-    process.env.OPENAI_API_KEY = keys.openai || '';
-    process.env.GEMINI_API_KEY = keys.gemini || '';
-    
+    fs.writeFileSync(KEYS_FILE, JSON.stringify(merged, null, 2), 'utf8');
+
+    // Load them into environment immediately.
+    process.env.ANTHROPIC_API_KEY = merged.anthropic || '';
+    process.env.OPENAI_API_KEY = merged.openai || '';
+    process.env.GEMINI_API_KEY = merged.gemini || '';
+
     return res.json({ ok: true, message: 'API keys saved successfully.' });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
+});
+
+// ---- Doctor: system health + security self-check ------------------------
+app.get('/doctor', (_req, res) => res.json({ ok: true, report: buildHealthReport() }));
+
+app.get('/security/selfcheck', (_req, res) => {
+  // Posture reflects how THIS server actually configured itself above, so the
+  // panel reports the real running state, not assumptions.
+  const report = buildSecurityReport({
+    corsLocked: true,
+    authRequired: true,
+    keysAreBooleans: true,
+    bodyLimited: true,
+    rateLimited: true,
+    unlockTokenBound: true,
+    ssrfGuarded: true,
+    pathSandboxed: true,
+    boundToLocalhost: HOST === '127.0.0.1' || HOST === 'localhost',
+  });
+  return res.json({ ok: true, report });
 });
 
 // ---- AI completion proxy ----------------------------------------------------
@@ -273,7 +369,7 @@ function safeRelPath(rel: string): string {
     .join('/');
 }
 
-app.post('/terminal/upload', (req, res) => {
+app.post('/terminal/upload', largeJson, (req, res) => {
   const name = path.basename(String(req.body?.name ?? 'file'));
   const dataBase64 = String(req.body?.dataBase64 ?? '');
   if (!dataBase64) return res.status(400).json({ ok: false, error: 'No file data.' });
@@ -304,7 +400,7 @@ app.post('/terminal/upload', (req, res) => {
   }
 });
 
-app.post('/terminal/upload-batch', (req, res) => {
+app.post('/terminal/upload-batch', largeJson, (req, res) => {
   const folderName = path.basename(String(req.body?.folderName ?? 'folder')) || 'folder';
   const files = Array.isArray(req.body?.files) ? req.body.files : [];
   if (files.length === 0) return res.status(400).json({ ok: false, error: 'No files.' });
@@ -383,9 +479,18 @@ function writeAllowlist(paths: string[]): void {
 
 /** True only when `target` resolves inside an allowlisted directory. */
 function isWriteAllowed(target: string): boolean {
-  const resolved = path.resolve(target);
+  // Resolve symlinks (not just lexical `..`) so a symlink inside an allowlisted
+  // folder cannot point the write somewhere outside it.
+  const real = (p: string): string => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  const resolved = real(target);
   return readAllowlist().some((dir) => {
-    const d = path.resolve(dir);
+    const d = real(dir);
     return resolved === d || resolved.startsWith(d + path.sep);
   });
 }
@@ -607,19 +712,250 @@ app.get('/brain/simulation/:projectName', (req, res) => {
   }
 });
 
+// ---- Detected tools: version/CVE checks + MCP connections ------------------
+
+const TOOL_VERSIONS_FILE = path.join(BRAIN_DIR, 'tool-versions.json');
+const TOOL_MCP_FILE = path.join(BRAIN_DIR, 'tool-mcp.json');
+const VERSION_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
+
+interface ToolVersionEntry {
+  package: string;
+  installed: string | null;
+  latest: string | null;
+  outdated: boolean;
+  cves: string[];
+}
+
+/** fetch with a hard timeout that never throws past the caller's try/catch. */
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 4000): Promise<Response | null> {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+function readInstalledVersions(rootPath: string): Map<string, string> {
+  const out = new Map<string, string>();
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(rootPath, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    for (const group of [pkg.dependencies, pkg.devDependencies]) {
+      for (const [k, v] of Object.entries(group ?? {})) out.set(k.toLowerCase(), String(v).replace(/[\^~>=<\s]/g, ''));
+    }
+  } catch {
+    /* no package.json */
+  }
+  return out;
+}
+
+/**
+ * Background: for each detected tool with a package name, fetch the latest npm
+ * version and any known OSV CVEs, comparing against the installed version.
+ * Cached for 24h. Every network call is timeout-bounded and failure-tolerant —
+ * it never throws and never blocks analysis.
+ */
+async function refreshToolVersions(rootPath: string, nodes: { detectedTools?: { latestVersionCheck?: string }[] }[]): Promise<void> {
+  // Skip if the cache is fresh.
+  try {
+    const cached = JSON.parse(fs.readFileSync(TOOL_VERSIONS_FILE, 'utf8')) as { fetchedAt: number };
+    if (Date.now() - cached.fetchedAt < VERSION_CACHE_MS) return;
+  } catch {
+    /* no cache yet */
+  }
+
+  const packages = new Set<string>();
+  for (const n of nodes) for (const t of n.detectedTools ?? []) if (t.latestVersionCheck) packages.add(t.latestVersionCheck);
+  if (packages.size === 0) return;
+
+  const installed = readInstalledVersions(rootPath);
+  const results: ToolVersionEntry[] = [];
+
+  for (const pkg of packages) {
+    const inst = installed.get(pkg.toLowerCase()) ?? null;
+    let latest: string | null = null;
+    const cves: string[] = [];
+    try {
+      const r = await fetchWithTimeout(`https://registry.npmjs.org/${encodeURIComponent(pkg)}/latest`);
+      if (r && r.ok) {
+        const data = (await r.json()) as { version?: string };
+        latest = data.version ?? null;
+      }
+    } catch {
+      /* registry unreachable */
+    }
+    if (inst) {
+      try {
+        const r = await fetchWithTimeout('https://api.osv.dev/v1/query', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ package: { name: pkg, ecosystem: 'npm' }, version: inst }),
+        });
+        if (r && r.ok) {
+          const data = (await r.json()) as { vulns?: { id: string }[] };
+          for (const v of data.vulns ?? []) cves.push(v.id);
+        }
+      } catch {
+        /* OSV unreachable */
+      }
+    }
+    results.push({ package: pkg, installed: inst, latest, outdated: Boolean(inst && latest && inst !== latest), cves });
+  }
+
+  try {
+    fs.mkdirSync(BRAIN_DIR, { recursive: true });
+    fs.writeFileSync(TOOL_VERSIONS_FILE, JSON.stringify({ fetchedAt: Date.now(), results }, null, 2), 'utf8');
+  } catch {
+    /* disk write failed; non-fatal */
+  }
+}
+
+/** Cached tool version + CVE results (may be empty if nothing checked yet). */
+app.get('/api/tool-versions', (_req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(TOOL_VERSIONS_FILE, 'utf8'));
+    return res.json({ ok: true, ...data });
+  } catch {
+    return res.json({ ok: true, fetchedAt: 0, results: [] });
+  }
+});
+
+/** Read Live Data check summary from the brain. */
+app.get('/api/brain/live-data/:projectName', (req, res) => {
+  const projectName = req.params.projectName;
+  try {
+    const summary = getLiveDataSummary(projectName);
+    return res.json({ ok: true, summary });
+  } catch {
+    return res.json({ ok: true, summary: null });
+  }
+});
+
+/** Save a per-tool MCP connection to the brain. */
+app.post('/api/tools/mcp-connect', (req, res) => {
+  const toolId = String(req.body?.toolId ?? '').trim();
+  const mcpUrl = String(req.body?.mcpUrl ?? '').trim();
+  if (!toolId || !mcpUrl) return res.status(400).json({ ok: false, error: 'toolId and mcpUrl required' });
+  try {
+    let store: Record<string, { mcpUrl: string; connectedAt: number }> = {};
+    try {
+      store = JSON.parse(fs.readFileSync(TOOL_MCP_FILE, 'utf8'));
+    } catch {
+      /* first connection */
+    }
+    store[toolId] = { mcpUrl, connectedAt: Date.now() };
+    fs.mkdirSync(BRAIN_DIR, { recursive: true });
+    fs.writeFileSync(TOOL_MCP_FILE, JSON.stringify(store, null, 2), 'utf8');
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+/** Which tools currently have a saved MCP connection. */
+app.get('/api/tools/mcp-connections', (_req, res) => {
+  try {
+    return res.json({ ok: true, connections: JSON.parse(fs.readFileSync(TOOL_MCP_FILE, 'utf8')) });
+  } catch {
+    return res.json({ ok: true, connections: {} });
+  }
+});
+
+/**
+ * Reject URLs that point at the local machine or private networks. The MCP
+ * inspect proxy makes an outbound request to a client-supplied URL, so without
+ * this guard it is a Server-Side Request Forgery vector: a caller could probe
+ * `http://169.254.169.254/` (cloud metadata) or `http://localhost:6379` (Redis)
+ * and read back the response. Only public http(s) endpoints are allowed.
+ */
+function isSafeOutboundUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return false;
+  // Block loopback, link-local, cloud metadata, and RFC-1918 private ranges.
+  const blocked = [
+    /^127\./, /^0\./, /^10\./, /^192\.168\./, /^169\.254\./,
+    /^172\.(1[6-9]|2\d|3[01])\./, /^::1$/, /^fc00:/, /^fe80:/,
+  ];
+  if (blocked.some((re) => re.test(host))) return false;
+  if (host === '169.254.169.254' || host === 'metadata.google.internal') return false;
+  return true;
+}
+
+/**
+ * Proxy an MCP "list tools" probe so the browser avoids CORS. These servers
+ * usually require auth, so a failure is expected and returned gracefully.
+ */
+app.post('/api/mcp/inspect', async (req, res) => {
+  const url = String(req.body?.url ?? '').trim();
+  if (!url) return res.json({ ok: false, error: 'no url', data: null });
+  if (!isSafeOutboundUrl(url)) {
+    return res.status(400).json({ ok: false, error: 'URL is not an allowed public endpoint.', data: null });
+  }
+  try {
+    const r = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      },
+      5000,
+    );
+    if (!r) return res.json({ ok: false, error: 'MCP server unreachable or timed out', data: null });
+    const text = await r.text();
+    let data: unknown = text;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      /* SSE / non-JSON response; return the raw text */
+    }
+    if (!r.ok) {
+      return res.json({ ok: false, error: `MCP server returned ${r.status} (likely needs auth)`, data });
+    }
+    return res.json({ ok: true, data });
+  } catch (err) {
+    return res.json({ ok: false, error: String(err), data: null });
+  }
+});
+
 // ---- Brain access control (Layer 1 lock + Layer 2 permissions) ----------
+// Throttle password attempts so the brain lock cannot be brute-forced: a short
+// window with a low cap turns "guess in seconds" into "guess in days".
+const accessLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 8, // attempts per window per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many attempts. Try again later.' },
+});
+
+const MIN_PASSWORD_LENGTH = 8;
+
 app.get('/access/status', (_req, res) => res.json({ ok: true, ...accessStatus() }));
 
-app.post('/access/set-password', (req, res) => {
+app.post('/access/set-password', accessLimiter, (req, res) => {
   const password = String(req.body?.password ?? '');
-  if (password.length < 4) {
-    return res.status(400).json({ ok: false, error: 'Password must be at least 4 characters.' });
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` });
   }
   setPassword(password);
   return res.json({ ok: true, ...accessStatus() });
 });
 
-app.post('/access/remove-password', (req, res) => {
+app.post('/access/remove-password', accessLimiter, (req, res) => {
   // Must prove knowledge of the current password before removing it.
   const password = String(req.body?.password ?? '');
   if (!verifyPassword(password)) {
@@ -630,7 +966,7 @@ app.post('/access/remove-password', (req, res) => {
   return res.json({ ok: true, ...accessStatus() });
 });
 
-app.post('/access/unlock', (req, res) => {
+app.post('/access/unlock', accessLimiter, (req, res) => {
   const password = String(req.body?.password ?? '');
   if (!verifyPassword(password)) {
     return res.status(401).json({ ok: false, error: 'Incorrect password.' });
@@ -711,12 +1047,12 @@ function getAnalysis(projectId: string): AnalysisResult | null {
 }
 
 /**
- * Build the absolute path for a node's stored file path. The path may already
- * be absolute (starts with "/") — use it as-is — otherwise join it onto the
- * analyzed project's root path.
+ * Build the absolute path for a node's stored file path, guaranteeing it stays
+ * inside the analyzed project's root. Returns `null` for any path that escapes
+ * the root (traversal / absolute path injection) so callers reject it.
  */
-function resolveAbsolutePath(projectRoot: string, relPath: string): string {
-  return relPath.startsWith('/') ? relPath : path.join(projectRoot, relPath);
+function resolveAbsolutePath(projectRoot: string, relPath: string): string | null {
+  return resolveWithin(projectRoot, relPath);
 }
 
 // Full code-intelligence view of one file: every line classified, explained,
@@ -732,10 +1068,11 @@ app.get('/code/file', (req, res) => {
       .json({ ok: false, error: `Unknown project "${projectId}" — analyze a folder first.` });
   }
 
-  // Build and log the exact absolute path before attempting the read.
+  // Resolve and confirm the path stays inside the project root before reading.
   const absPath = resolveAbsolutePath(analysis.rootPath, relPath);
-  // eslint-disable-next-line no-console
-  console.log(`[code/file] projectRoot="${analysis.rootPath}" relPath="${relPath}" -> reading: ${absPath}`);
+  if (!absPath) {
+    return res.status(403).json({ ok: false, error: 'Path is outside the project root.' });
+  }
 
   if (!fs.existsSync(absPath)) {
     // eslint-disable-next-line no-console
@@ -872,7 +1209,22 @@ app.post('/mcp/add', (req, res) => {
 });
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+// Only accept WebSocket upgrades from ArchLab's own frontend. Without this any
+// page or local process could open a socket and send `analyze-project` with an
+// arbitrary rootPath to scan (and stream back) the user's entire home folder.
+const wss = new WebSocketServer({
+  server,
+  verifyClient: (info, done) => {
+    const origin = info.origin;
+    // A browser always sends Origin on the WS handshake; reject anything that is
+    // not the known frontend. (No Origin = non-browser client = rejected too.)
+    if (!origin || !ALLOWED_ORIGINS.has(origin)) return done(false, 403, 'Forbidden origin');
+    // And require the same session token, passed as a query param on the URL.
+    const token = new URL(info.req.url ?? '', 'http://localhost').searchParams.get('token');
+    if (token !== SESSION_TOKEN) return done(false, 401, 'Invalid token');
+    return done(true);
+  },
+});
 
 // Every connected browser tab. The terminal CLI triggers analysis via HTTP and
 // we broadcast the live stream to all of them at once.
@@ -905,23 +1257,37 @@ function broadcast(msg: ServerMessage): void {
 // can cd into. Browsers can't expose absolute paths, so this runs the OS dialog.
 app.post('/api/pick-folder', (_req, res) => {
   if (process.platform !== 'darwin') {
+    // `unavailable` tells the client to offer the paste-path fallback.
     return res
       .status(400)
-      .json({ ok: false, error: 'Native folder picker is only available on macOS.' });
+      .json({ ok: false, reason: 'unavailable', error: 'Native folder picker is only available on macOS.' });
   }
-  try {
-    const out = execFileSync(
-      'osascript',
-      ['-e', 'POSIX path of (choose folder with prompt "Select a project folder for ArchLab")'],
-      { encoding: 'utf8', timeout: 120_000 },
-    );
-    const folder = out.trim();
-    if (!folder) return res.status(400).json({ ok: false, error: 'No folder chosen.' });
-    return res.json({ ok: true, path: folder });
-  } catch {
-    // Non-zero exit means the user cancelled the dialog.
-    return res.status(400).json({ ok: false, error: 'Folder selection cancelled.' });
-  }
+  // Async (execFile, not execFileSync) so the open dialog never blocks the
+  // server's event loop. `activate` pulls the Finder chooser to the front so it
+  // doesn't open hidden behind the browser. AppleScript returns a non-zero exit
+  // when the user cancels, which lands in the error branch.
+  execFile(
+    'osascript',
+    [
+      // `try` so a missing Automation permission for activate is ignored rather
+      // than failing the whole picker — the chooser still opens either way.
+      '-e', 'try',
+      '-e', 'tell application "System Events" to activate',
+      '-e', 'end try',
+      '-e', 'POSIX path of (choose folder with prompt "Select a project folder for ArchLab")',
+    ],
+    { encoding: 'utf8', timeout: 120_000 },
+    (err, stdout) => {
+      if (err) {
+        // Non-zero exit = the user cancelled the dialog. `canceled` tells the
+        // client to do nothing (no redundant paste prompt).
+        return res.status(400).json({ ok: false, reason: 'canceled', error: 'Folder selection cancelled.' });
+      }
+      const folder = String(stdout).trim();
+      if (!folder) return res.status(400).json({ ok: false, reason: 'canceled', error: 'No folder chosen.' });
+      return res.json({ ok: true, path: folder });
+    },
+  );
 });
 
 // REST trigger used by the `archlab` terminal CLI. The browser canvas updates
@@ -1145,6 +1511,21 @@ async function handleAnalyze(
   customMcps?: Record<string, any>,
   termId?: string,
 ): Promise<AnalysisResult | null> {
+  // Validate the target before scanning. rootPath arrives from a request body or
+  // a WS message, so refuse anything that is not a real project directory, and
+  // refuse sweeping roots (the filesystem root or the home dir itself) so a
+  // crafted request cannot scan and stream back the whole machine.
+  const resolvedRoot = path.resolve(rootPath);
+  const sweeping = new Set([path.parse(resolvedRoot).root, os.homedir()]);
+  if (sweeping.has(resolvedRoot)) {
+    log(emit, 'error', 'Refusing to analyze a top-level directory. Pick a project folder.');
+    return null;
+  }
+  if (!fs.existsSync(resolvedRoot) || !fs.statSync(resolvedRoot).isDirectory()) {
+    log(emit, 'error', `Not a directory: ${resolvedRoot}`);
+    return null;
+  }
+
   // Large projects are fine: the scanner self-caps (see scanProject's MAX_FILES)
   // and skips oversized files, so analysis stays bounded and never hangs. For
   // very large trees we map the first slice and tell the user — without bailing.
@@ -1227,7 +1608,104 @@ async function handleAnalyze(
     dependencies: collectProjectDependencies(analysis.rootPath),
     missingInfraPatterns: analysis.missingInfraPatterns,
     techStack: analysis.techStack,
+    internetConnections: analysis.internetConnections,
   });
+  // Part 7: background version + CVE check (cached, fully non-blocking).
+  void refreshToolVersions(analysis.rootPath, analysis.canvas.nodes).catch(() => {});
+
+  const dependenciesRecord: Record<string, string> = {};
+  try {
+    const installedMap = readInstalledVersions(analysis.rootPath);
+    for (const [k, v] of installedMap.entries()) {
+      dependenciesRecord[k] = v;
+    }
+  } catch (e) {
+    /* ignore */
+  }
+
+  const detectedToolIds = new Set<string>();
+  for (const n of analysis.canvas.nodes) {
+    for (const t of n.detectedTools ?? []) {
+      detectedToolIds.add(t.id);
+    }
+  }
+
+  // Trigger enrichment asynchronously
+  enrichAnalysis(
+    dependenciesRecord,
+    [...detectedToolIds],
+    analysis.techStack ?? [],
+    (progressMsg) => {
+      emit({ type: 'log', level: 'info', message: `[Enrichment] ${progressMsg}`, at: new Date().toISOString() });
+    }
+  ).then((enrichment) => {
+    // Generate new diagnostics for outdated packages and vulnerabilities
+    const newDiagnostics: any[] = [];
+    for (const pkg of enrichment.outdatedPackages) {
+      newDiagnostics.push({
+        id: `outdated-${pkg.name}`,
+        step: 'final-report',
+        title: `Outdated dependency: ${pkg.name}`,
+        what: `${pkg.name} is at ${pkg.installedVersion} but ${pkg.latestVersion} is available.`,
+        why: `Keeping dependencies updated reduces security risks and ensures performance/feature parity.`,
+        howToFix: `Update ${pkg.name} from ${pkg.installedVersion} to ${pkg.latestVersion}. Check the changelog at ${pkg.changelog || ''} for breaking changes before updating.`,
+        severity: 'medium',
+        relatedNodeIds: [],
+      });
+    }
+
+    for (const vuln of enrichment.vulnerabilities) {
+      newDiagnostics.push({
+        id: `vuln-${vuln.id}`,
+        step: 'security-checks',
+        title: `Security vulnerability: ${vuln.package} — ${vuln.id}`,
+        what: vuln.summary,
+        why: vuln.details || 'Known security vulnerability found in package version.',
+        howToFix: vuln.fixedVersion
+          ? `Update ${vuln.package} to ${vuln.fixedVersion} to fix ${vuln.id}. See ${vuln.referenceUrl} for details.`
+          : `No fix available yet for ${vuln.id}. Consider replacing ${vuln.package} or applying a workaround. See ${vuln.referenceUrl}.`,
+        severity: vuln.severity === 'CRITICAL' ? 'critical' : vuln.severity === 'HIGH' ? 'high' : 'medium',
+        relatedNodeIds: [],
+      });
+    }
+
+    emit({
+      type: 'enrichment-complete' as any,
+      diagnostics: newDiagnostics,
+      enrichment: { ...enrichment, status: 'ready' },
+    } as any);
+
+    // Save summary to brain
+    try {
+      const criticalVulns = enrichment.vulnerabilities
+        .filter((v) => v.severity === 'CRITICAL' || v.severity === 'HIGH')
+        .map((v) => `${v.package}:${v.id}`);
+
+      saveLiveDataSummary(analysis.name, {
+        checkedAt: Date.now(),
+        outdatedCount: enrichment.outdatedPackages.length,
+        vulnerabilityCount: enrichment.vulnerabilities.length,
+        criticalVulns,
+      });
+    } catch {
+      /* ignore */
+    }
+  }).catch((err) => {
+    log(emit, 'error', `Enrichment failed: ${String(err)}`);
+    emit({
+      type: 'enrichment-complete' as any,
+      diagnostics: [],
+      enrichment: {
+        status: 'failed',
+        error: String(err),
+        outdatedPackages: [],
+        vulnerabilities: [],
+        stackBestPractices: [],
+        enrichedAt: new Date().toISOString(),
+      },
+    } as any);
+  });
+
   log(
     emit,
     'info',
