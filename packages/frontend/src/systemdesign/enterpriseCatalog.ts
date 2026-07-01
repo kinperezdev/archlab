@@ -104,7 +104,10 @@ export interface CardDef {
    * Any match forces Critical Gap — presence is the risk, never proof.
    */
   negativeKeywords?: string[];
-  /** Absence is itself a security/reliability risk → Critical Gap when missing. */
+  /**
+   * Legacy catalog priority. The audit never turns an absence of proof into a
+   * gap: it requires a matching diagnostic or risky source pattern.
+   */
   criticalIfMissing?: boolean;
   /**
    * Operational/process capability that cannot be proven by static code scan.
@@ -154,7 +157,7 @@ export const ENTERPRISE_SECTIONS: SectionDef[] = [
         label: 'API Gateway',
         icon: DoorOpen,
         nodeTypes: ['api-gateway'],
-        keywords: ['gateway', 'express', 'fastify', 'kong'],
+        keywords: ['kong', 'apigateway', 'api gateway', 'gateway config'],
         what: 'A single entry point that handles routing, rate limiting, and request shaping.',
         why: 'Centralizes cross-cutting concerns instead of scattering them across services.',
         fix: 'Introduce an API gateway that owns routing, auth verification, and rate limiting before traffic reaches services.',
@@ -798,6 +801,38 @@ export const ENTERPRISE_SECTIONS: SectionDef[] = [
         what: 'A safe, versioned process for schema changes.',
         why: 'Ad-hoc schema edits cause downtime and data loss.',
         fix: 'Use versioned, reversible migrations (Prisma/Flyway) applied through CI, with expand-then-contract for breaking changes.',
+      },
+      {
+        id: 'vector-search-rag',
+        label: 'Vector Search & RAG',
+        icon: Search,
+        keywords: [
+          'pgvector',
+          'pinecone',
+          'qdrant',
+          'weaviate',
+          'milvus',
+          'chromadb',
+          'chroma-client',
+          'langchain',
+          'llamaindex',
+          'vector search',
+          'vector database',
+          'embeddings',
+          'rag',
+        ],
+        packages: [
+          '@pinecone-database/pinecone',
+          '@langchain/core',
+          'langchain',
+          'llamaindex',
+          'chromadb',
+          'weaviate-client',
+          '@zilliz/milvus2-sdk-node',
+        ],
+        what: 'Methods and databases optimized for storing, indexing, and querying high-dimensional vector embeddings for Retrieval-Augmented Generation (RAG).',
+        why: 'Standard database queries cannot perform semantic search, which is essential for LLM reasoning and custom context retrieval.',
+        fix: 'Integrate a vector database (such as pgvector, Pinecone, Weaviate, Qdrant, or Chroma) and set up an ingestion pipeline for document chunking, embedding generation, and semantic search retrieval.',
       },
     ],
   },

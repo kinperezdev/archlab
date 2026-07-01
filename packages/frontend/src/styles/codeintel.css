@@ -120,13 +120,18 @@
 }
 
 .code-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: var(--space-2) var(--space-3);
   background: var(--code-bg-2);
   border-bottom: 1px solid var(--code-border);
   flex-shrink: 0;
 }
 .code-nav-select {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 180px;
   background: var(--code-bg-3);
   color: var(--code-fg);
   border: 1px solid var(--code-border);
@@ -482,14 +487,31 @@
 
 /* ---- Find in file (in-panel search bar) ---- */
 .code-find-bar {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  background: #0F0F1A;
-  border-bottom: 1px solid #2D2D3E;
+  flex: 0 0 auto;
+  min-width: 0;
+  background: transparent;
+}
+.code-find-bar.is-open {
+  flex: 0 1 420px;
+  max-width: 48%;
 }
 .code-find-icon { color: #64748b; flex-shrink: 0; }
+.code-find-toggle {
+  height: 30px;
+  width: 30px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--code-border);
+  background: var(--code-bg-3);
+}
+.code-find-toggle.active {
+  color: #e2e8f0;
+  border-color: #6366f1;
+  background: #111124;
+}
 .code-find-input {
   flex: 1;
   min-width: 0;

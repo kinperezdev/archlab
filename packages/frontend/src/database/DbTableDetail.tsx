@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, KeyRound, Link2, X } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Link2, X, ShieldCheck, ShieldAlert, ShieldQuestion } from 'lucide-react';
 import { serializeSqlSchema, type DbColumn, type DbTable } from '../lib/sqlSchema.js';
 import { CopyPromptButton } from '../components/CopyPromptButton.js';
 
@@ -90,6 +90,8 @@ Please review this and suggest optimizations for performance, indexing strategy,
         <CopyPromptButton prompt={copyPromptText} label="Copy Prompt" />
       </div>
 
+      <RlsRow table={table} />
+
       <ul className="db-detail-cols">
         {table.columns.map((col, i) => (
           <li key={i} className="db-detail-col">
@@ -155,6 +157,57 @@ Please review this and suggest optimizations for performance, indexing strategy,
         <Plus size={13} strokeWidth={2} /> Add column
       </button>
     </aside>
+  );
+}
+
+/**
+ * Row Level Security status for the table. Honest by design: an inferred schema
+ * has no policy info, so it reports "unknown" rather than falsely "insecure".
+ */
+function RlsRow({ table }: { table: DbTable }) {
+  const policies = table.rls?.policies.length ?? 0;
+  const enabled = Boolean(table.rls?.enabled);
+
+  let tone: 'ok' | 'warn' | 'unknown';
+  let Icon = ShieldQuestion;
+  let label: string;
+  let detail: string;
+
+  if (table.isInferred) {
+    tone = 'unknown';
+    Icon = ShieldQuestion;
+    label = 'RLS unknown';
+    detail = 'Inferred schema — open the real migration to confirm row-level security.';
+  } else if (enabled && policies > 0) {
+    tone = 'ok';
+    Icon = ShieldCheck;
+    label = `Protected — ${policies} ${policies === 1 ? 'policy' : 'policies'}`;
+    detail = 'Row Level Security is on and scoped by policies.';
+  } else if (enabled) {
+    tone = 'ok';
+    Icon = ShieldCheck;
+    label = 'RLS on — 0 policies';
+    detail = 'RLS enabled with no policies denies all access by default.';
+  } else if (policies > 0) {
+    tone = 'warn';
+    Icon = ShieldAlert;
+    label = `${policies} ${policies === 1 ? 'policy' : 'policies'}, RLS not enabled`;
+    detail = 'Policies exist but RLS is not enabled, so they are not enforced.';
+  } else {
+    tone = 'warn';
+    Icon = ShieldAlert;
+    label = 'No RLS';
+    detail = 'No row-level security — the public/anon key can read every row.';
+  }
+
+  return (
+    <div className={`db-detail-rls tone-${tone}`} title={detail}>
+      <Icon size={14} strokeWidth={1.9} aria-hidden="true" />
+      <div className="db-detail-rls-text">
+        <span className="db-detail-rls-label">{label}</span>
+        <span className="db-detail-rls-detail">{detail}</span>
+      </div>
+    </div>
   );
 }
 

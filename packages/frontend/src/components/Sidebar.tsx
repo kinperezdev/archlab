@@ -22,7 +22,6 @@ import RouterIcon from './ui/router-icon.js';
 import ShieldCheck from './ui/shield-check.js';
 import Stack3Icon from './ui/stack-3-icon.js';
 import LayersIcon from './ui/layers-icon.js';
-import PenIcon from './ui/pen-icon.js';
 import BookIcon from './ui/book-icon.js';
 import UsersIcon from './ui/users-icon.js';
 import HotelIcon from './ui/hotel-icon.js';
@@ -62,7 +61,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'database', label: 'Database', Icon: Stack3Icon },
       { id: 'systemdesign', label: 'System Design', Icon: LayersIcon },
-      { id: 'blueprint', label: 'Blueprint', Icon: PenIcon },
       { id: 'docs', label: 'Docs', Icon: BookIcon },
     ],
   },
@@ -82,6 +80,7 @@ interface SidebarProps {
   onOpenBrain: () => void;
   onOpenShortcuts: () => void;
   onOpenKeys: () => void;
+  onToggle: () => void;
 }
 
 /** A nav row whose hover drives the animated icon's start/stop handle. */
@@ -123,6 +122,7 @@ export function Sidebar({
   onOpenBrain,
   onOpenShortcuts,
   onOpenKeys,
+  onToggle,
 }: SidebarProps) {
   // Only one nav item is highlighted at a time. The Agent Team panel overlays
   // whatever tab is showing, so while it's open it takes the active highlight
@@ -136,6 +136,14 @@ export function Sidebar({
           <span className="nav-logo-name">ArchLab</span>
           <span className="nav-logo-sub">Engineering Command Center</span>
         </div>
+        <button
+          className="nav-collapse-btn"
+          onClick={onToggle}
+          title="Hide navigation (L)"
+          aria-label="Hide navigation"
+        >
+          ◀
+        </button>
       </div>
 
       <nav className="nav-scroll" aria-label="Primary">

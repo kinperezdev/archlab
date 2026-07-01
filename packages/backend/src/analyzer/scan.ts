@@ -13,6 +13,7 @@ import path from 'node:path';
 const IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
+  'brain', // ArchLab's generated local state, never source evidence for an analyzed project.
   'dist',
   'build',
   '.next',

@@ -42,3 +42,18 @@ export interface MissingInfraPattern {
   /** Full, project-specific implementation prompt. */
   generatedPrompt: string;
 }
+
+/** Summary of the project's outbound internet connections via detected tools. */
+export interface InternetConnectionsSummary {
+  totalConnectedNodes: number;
+  externalServices: {
+    toolId: string;
+    toolName: string;
+    nodeCount: number;
+    securityNotes: string[];
+  }[];
+  /** fetch() / axios calls with no recognized tool behind them. */
+  unverifiedFetchCalls: number;
+  /** Files that appear to send data externally without apparent auth. */
+  potentialDataLeaks: string[];
+}

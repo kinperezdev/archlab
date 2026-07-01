@@ -21,10 +21,19 @@ export interface DbColumn {
   fkUnresolved?: boolean;
 }
 
+/** Row Level Security state for a table, parsed from the SQL (display-only). */
+export interface DbRls {
+  /** An `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` was found for this table. */
+  enabled: boolean;
+  /** Names of `CREATE POLICY ... ON <table>` statements targeting this table. */
+  policies: string[];
+}
+
 export interface DbTable {
   name: string;
   columns: DbColumn[];
   isInferred?: boolean;
+  rls?: DbRls;
 }
 
 /** Parse standard SQL `CREATE TABLE` statements into tables. */
@@ -120,7 +129,36 @@ export function parseSqlSchema(content: string): DbTable[] {
     tables.push({ name: tableName, columns, isInferred: isTableInferred });
   }
 
+  applyRowLevelSecurity(content, tables);
   return tables;
+}
+
+/**
+ * Scan the SQL for Row Level Security and attach it to the matching tables.
+ * Detects `ALTER TABLE x ENABLE ROW LEVEL SECURITY` and `CREATE POLICY p ON x`.
+ * Table refs may be schema-qualified (e.g. `public.users`) — we match on the
+ * final identifier. Display-only: never serialized back out.
+ */
+function applyRowLevelSecurity(content: string, tables: DbTable[]): void {
+  const byName = new Map(tables.map((t) => [t.name.toLowerCase(), t]));
+  const resolve = (ref: string): DbTable | undefined => {
+    const name = ref.replace(/["'`]/g, '').split('.').pop()?.toLowerCase() ?? '';
+    return byName.get(name);
+  };
+  const ensure = (t: DbTable): DbRls => (t.rls ??= { enabled: false, policies: [] });
+
+  const enableRe = /alter\s+table\s+(?:if\s+exists\s+)?([\w."'`]+)\s+enable\s+row\s+level\s+security/gi;
+  let m: RegExpExecArray | null;
+  while ((m = enableRe.exec(content)) !== null) {
+    const t = resolve(m[1]);
+    if (t) ensure(t).enabled = true;
+  }
+
+  const policyRe = /create\s+policy\s+["'`]?([^"'`\n]+?)["'`]?\s+on\s+([\w."'`]+)/gi;
+  while ((m = policyRe.exec(content)) !== null) {
+    const t = resolve(m[2]);
+    if (t) ensure(t).policies.push(m[1].trim());
+  }
 }
 
 /** Serialize a table model back into clean PostgreSQL CREATE TABLE statements. */

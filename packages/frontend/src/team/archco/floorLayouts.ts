@@ -22,7 +22,7 @@ export const FLOOR_CONFIGS: Record<Floor, FloorConfig> = {
     floor: 1,
     name: 'Ground Floor',
     description: 'Reception, Leadership & Operations',
-    backgroundColor: '#8F5E36', // Cozy oak wooden floor
+    backgroundColor: '#7B5435', // Cozy oak wooden floor
     accentColor: '#F59E0B',
     wallColor: '#5A3E25', // Warm mahogany trim wall
     zones: ['reception', 'executive-offices', 'finops-desk', 'main-lobby', 'meeting-room-a'],
@@ -32,7 +32,7 @@ export const FLOOR_CONFIGS: Record<Floor, FloorConfig> = {
     floor: 2,
     name: 'Engineering Floor',
     description: 'Backend, Frontend & SRE',
-    backgroundColor: '#1E2D3D', // Saturated steel slate blue floor
+    backgroundColor: '#213244', // Saturated steel slate blue floor
     accentColor: '#38BDF8',
     wallColor: '#121B24', // Iron dark lab wall
     zones: ['backend-wing', 'frontend-wing', 'sre-corner', 'engineering-meeting-room', 'code-review-station'],
@@ -42,9 +42,9 @@ export const FLOOR_CONFIGS: Record<Floor, FloorConfig> = {
     floor: 3,
     name: 'Product & Design Floor',
     description: 'Product Management, Design & UX Research',
-    backgroundColor: '#6D28D9', // Deep royal purple floor
+    backgroundColor: '#36466F', // Indigo studio floor
     accentColor: '#F472B6',
-    wallColor: '#4C1D95', // Rich dark violet wall
+    wallColor: '#25304D', // Deep studio wall
     zones: ['product-wing', 'design-studio', 'ux-research-lab', 'user-testing-room'],
     specialFeatures: ['design-wall', 'user-journey-maps', 'prototype-displays', 'mood-board'],
   },
@@ -52,7 +52,7 @@ export const FLOOR_CONFIGS: Record<Floor, FloorConfig> = {
     floor: 4,
     name: 'Security & QA Floor',
     description: 'Security War Room & Quality Assurance',
-    backgroundColor: '#7F1D1D', // Deep blood crimson floor
+    backgroundColor: '#6E2730', // Security war-room floor
     accentColor: '#F87171',
     wallColor: '#4C0519', // Dark burgundy war-room wall
     zones: ['security-war-room', 'qa-testing-lab', 'penetration-testing-station', 'compliance-desk'],
@@ -62,7 +62,7 @@ export const FLOOR_CONFIGS: Record<Floor, FloorConfig> = {
     floor: 5,
     name: 'Executive Suite',
     description: 'CTO Office & Company Overview',
-    backgroundColor: '#D97706', // Polished amber/gold cedar floor
+    backgroundColor: '#8A5A24', // Polished amber cedar floor
     accentColor: '#FBBF24',
     wallColor: '#78350F', // Warm dark chestnut wall
     zones: ['cto-office', 'board-room', 'company-dashboard', 'roof-terrace'],
@@ -72,7 +72,7 @@ export const FLOOR_CONFIGS: Record<Floor, FloorConfig> = {
     floor: 6,
     name: 'Founder Penthouse',
     description: 'Kin\'s Command Center & Global AI Brain',
-    backgroundColor: '#065F46', // Deep zen forest moss green floor
+    backgroundColor: '#0A5A48', // Deep zen forest floor
     accentColor: '#34D399',
     wallColor: '#064E3B', // Dark evergreen panels
     zones: ['founders-desk', 'ai-command-station', 'coffee-bar', 'zen-balcony'],

@@ -20,6 +20,20 @@ export interface ReviewQueueItem {
   type: string;
   severity: Severity;
   title: string;
+  /** Local work lifecycle, shown in the command queue and office badges. */
+  status?: WorkStatus;
+}
+
+type WorkStatus = 'queued' | 'working' | 'blocked' | 'done';
+
+const WORK_STATUS_ORDER: WorkStatus[] = ['queued', 'working', 'blocked', 'done'];
+
+function workStatus(item: ReviewQueueItem): WorkStatus {
+  return item.status ?? 'queued';
+}
+
+function nextWorkStatus(status: WorkStatus): WorkStatus {
+  return WORK_STATUS_ORDER[(WORK_STATUS_ORDER.indexOf(status) + 1) % WORK_STATUS_ORDER.length];
 }
 
 export interface ReviewSession {
@@ -73,6 +87,7 @@ export function buildTaskBadges(
   const assignedCount: Record<string, number> = {};
 
   for (const item of queue) {
+    if (workStatus(item) === 'done') continue;
     const candidates = EMPLOYEES.filter((e) =>
       matchesSpecialization(item.type, e.specialization),
     );
@@ -92,6 +107,22 @@ export function buildTaskBadges(
   }
 
   return badges;
+}
+
+/** Use the same specialization-aware balancing as office task badges. */
+function buildTaskOwners(queue: ReviewQueueItem[]): Record<string, string> {
+  const ownerByItem: Record<string, string> = {};
+  const assignedCount: Record<string, number> = {};
+  for (const item of queue) {
+    const candidates = EMPLOYEES.filter((e) => matchesSpecialization(item.type, e.specialization));
+    const pool = candidates.length > 0 ? candidates : EMPLOYEES;
+    const chosen = pool.reduce((best, e) =>
+      (assignedCount[e.id] ?? 0) < (assignedCount[best.id] ?? 0) ? e : best,
+    );
+    assignedCount[chosen.id] = (assignedCount[chosen.id] ?? 0) + 1;
+    ownerByItem[item.id] = chosen.id;
+  }
+  return ownerByItem;
 }
 
 /**
@@ -193,6 +224,7 @@ export function TeamReview({
   const [reviewMode, setReviewMode] = useState<'ai' | 'docs'>('ai');
   const [tokensUsed, setTokensUsed] = useState(0);
   const [tokenBudget, setTokenBudget] = useState(5000);
+  const [queueCollapsed, setQueueCollapsed] = useState(false);
 
   useEffect(() => {
     if (session?.queue) {
@@ -210,14 +242,15 @@ export function TeamReview({
         type: d.step || 'General',
         severity: d.severity,
         title: d.title,
+        status: 'queued',
       }));
     }
     if (allowMocks) {
       return [
-        { id: 'mock-1', type: 'security', severity: 'critical', title: 'Verify public S3 write permissions' },
-        { id: 'mock-2', type: 'performance', severity: 'bottleneck', title: 'Optimize database connection pool' },
-        { id: 'mock-3', type: 'api', severity: 'medium', title: 'Audit auth middleware token validation' },
-        { id: 'mock-4', type: 'frontend', severity: 'low', title: 'Refactor layout bundle chunk size' },
+        { id: 'mock-1', type: 'security', severity: 'critical', title: 'Verify public S3 write permissions', status: 'queued' },
+        { id: 'mock-2', type: 'performance', severity: 'bottleneck', title: 'Optimize database connection pool', status: 'queued' },
+        { id: 'mock-3', type: 'api', severity: 'medium', title: 'Audit auth middleware token validation', status: 'queued' },
+        { id: 'mock-4', type: 'frontend', severity: 'low', title: 'Refactor layout bundle chunk size', status: 'queued' },
       ];
     }
     return [];
@@ -279,6 +312,7 @@ export function TeamReview({
   // otherwise, and their churn re-created the `presentIds` set inside ArchCo,
   // resetting the floor each render. Memoizing keeps the office stable.
   const taskBadges = useMemo(() => buildTaskBadges(queue), [queue]);
+  const taskOwners = useMemo(() => buildTaskOwners(queue), [queue]);
   const threatLevel = useMemo(() => deriveThreatLevel(diagnostics), [diagnostics]);
   // Surface each assigned employee's current item as their recent-work history.
   const recentTasksByEmployee = useMemo(() => {
@@ -298,6 +332,12 @@ export function TeamReview({
     }
   };
 
+  const advanceTaskStatus = (id: string) => {
+    setLocalQueue((items) => items.map((item) =>
+      item.id === id ? { ...item, status: nextWorkStatus(workStatus(item)) } : item,
+    ));
+  };
+
   const body = (
     <>
         <ArchCo
@@ -311,10 +351,19 @@ export function TeamReview({
           projectContext={projectContext}
         />
 
-        <section className="team-review-queue">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-3)' }}>
+        <section className={`team-review-queue${queueCollapsed ? ' is-collapsed' : ''}`}>
+          <div className="team-review-queue-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-3)' }}>
             <h3 className="team-review-queue-title" style={{ margin: 0 }}>Review Queue · {queue.length}</h3>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <button
+                className="btn btn-sm"
+                onClick={() => setQueueCollapsed((value) => !value)}
+                title={queueCollapsed ? 'Show review queue' : 'Hide review queue'}
+                aria-expanded={!queueCollapsed}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--color-border)' }}
+              >
+                {queueCollapsed ? 'Show Queue' : 'Hide Queue'}
+              </button>
               <label style={{ fontSize: '11px', color: 'var(--color-text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 Budget
                 <input
@@ -362,13 +411,26 @@ export function TeamReview({
             </p>
           ) : (
             <ul className="team-review-queue-list">
-              {queue.map((item) => (
-                <li key={item.id} className="team-review-queue-item" data-sev={item.severity}>
+              {queue.map((item) => {
+                const owner = EMPLOYEES.find((employee) => employee.id === taskOwners[item.id]);
+                const status = workStatus(item);
+                return (
+                <li key={item.id} className="team-review-queue-item" data-sev={item.severity} data-status={status}>
                   <span className="team-review-queue-sev">{item.severity}</span>
                   <span className="team-review-queue-name">{item.title}</span>
                   <span className="team-review-queue-type">{item.type}</span>
+                  {owner && <span className="team-review-queue-owner">{owner.name}</span>}
+                  <button
+                    className="team-review-task-status"
+                    data-status={status}
+                    onClick={() => advanceTaskStatus(item.id)}
+                    title={`Set status to ${nextWorkStatus(status)}`}
+                  >
+                    {status}
+                  </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
 

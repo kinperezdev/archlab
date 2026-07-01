@@ -13,6 +13,7 @@ import { NudgeText } from './ConfidenceNudge.js';
 interface BrainPanelProps {
   brain: BrainSummary;
   persistentIssues?: PersistentIssue[];
+  projectName?: string;
   onClose: () => void;
 }
 
@@ -25,7 +26,7 @@ const AGENT_LABEL: Record<string, string> = {
   orchestrator: 'Orchestrator',
 };
 
-export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanelProps) {
+export function BrainPanel({ brain, persistentIssues = [], projectName = '', onClose }: BrainPanelProps) {
   const { agentTeamHasRun, openAgentTeam } = useApiKeyContext();
   const [copied, setCopied] = useState(false);
   const [pasteConfig, setPasteConfig] = useState('');
@@ -39,9 +40,38 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
   // shows only stale React state if a WebSocket "brain" message was missed.
   const [liveBrain, setLiveBrain] = useState<BrainSummary | null>(null);
 
+  const [liveSummary, setLiveSummary] = useState<any>(null);
+
   useEffect(() => {
     fetchAccessStatus().then(setAccess).catch(() => setAccess(null));
   }, []);
+
+  useEffect(() => {
+    if (!projectName) return;
+    let cancelled = false;
+    fetch(`http://127.0.0.1:${PORTS.backend}/api/brain/live-data/${encodeURIComponent(projectName)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled && data.ok && data.summary) {
+          setLiveSummary(data.summary);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [projectName]);
+
+  function timeAgo(ms: number): string {
+    const diff = Date.now() - ms;
+    if (diff < 60000) return 'just now';
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  }
 
   // Fetch the authoritative brain snapshot from the backend when the panel
   // mounts. Re-fetches once the brain is unlocked (locked → empty payload).
@@ -205,6 +235,29 @@ export function BrainPanel({ brain, persistentIssues = [], onClose }: BrainPanel
 
         {tab === 'insights' && (
           <>
+          {liveSummary && (
+            <div
+              style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                border: '1px solid rgba(16, 185, 129, 0.15)',
+                borderRadius: '4px',
+                padding: '10px',
+                margin: '15px var(--space-4)',
+                fontSize: '12px',
+                color: 'var(--color-text)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>🌐</span>
+              <div>
+                <strong>Last live check:</strong> {timeAgo(liveSummary.checkedAt)} —{' '}
+                {liveSummary.outdatedCount} outdated package{liveSummary.outdatedCount === 1 ? '' : 's'},{' '}
+                {liveSummary.vulnerabilityCount} vulnerabilit{liveSummary.vulnerabilityCount === 1 ? 'y' : 'ies'}
+              </div>
+            </div>
+          )}
         <section className="brain-section">
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             Proactive insights

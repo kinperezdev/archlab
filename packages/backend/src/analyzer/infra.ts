@@ -46,6 +46,7 @@ interface Probe {
 function gather(files: ScannedFile[], probes: Probe[], cap = 12): InfraEvidence[] {
   const out: InfraEvidence[] = [];
   for (const file of files) {
+    if (!isRuntimeEvidenceFile(file)) continue;
     for (const probe of probes) {
       const target = probe.path ? file.relPath : file.content;
       if (!target) continue;
@@ -65,6 +66,47 @@ function gather(files: ScannedFile[], probes: Probe[], cap = 12): InfraEvidence[
   return out;
 }
 
+/**
+ * Documentation, fixtures, and the detector's own regex source describe a
+ * capability, but they are not evidence that the scanned project deploys it.
+ */
+function isRuntimeEvidenceFile(file: ScannedFile): boolean {
+  const rel = file.relPath.toLowerCase();
+  if (/\.(md|txt)$/i.test(rel)) return false;
+  if (/(^|\/)(docs?|examples?|fixtures?|__tests__|test|tests)(\/|$)/.test(rel)) return false;
+  // ArchLab can analyze itself. Its capability catalogs and simulation maps
+  // contain vendor names by design, so they must never become deployment proof.
+  if (/function detectinfrastructure\(/i.test(file.content) && /const gw = gather/i.test(file.content)) return false;
+  if (/export const ENTERPRISE_SECTIONS/.test(file.content)) return false;
+  if (/function normalizeSimType\(/.test(file.content)) return false;
+  if (/detectionPatterns\s*:\s*\[/.test(file.content)) return false;
+  // These ArchLab files contain examples, prompts, and type descriptions for
+  // infrastructure. Their vocabulary must not be mistaken for live services.
+  if (/(^|\/)(systemdesign\/systemdesign|team\/teamdebaterunner|team\/archco\/companydata)\.(ts|tsx)$/.test(rel)) return false;
+  if (/(^|\/)packages\/shared\/src\/(canvas|systemdesign)\.ts$/.test(rel)) return false;
+  return true;
+}
+
+/**
+ * ArchLab contains its own infrastructure vocabulary, detector rules, and UI
+ * examples. When it analyzes itself, those implementation files must not be
+ * mistaken for the infrastructure that ArchLab actually deploys.
+ */
+function isArchLabAnalysisDefinitionFile(file: ScannedFile): boolean {
+  const rel = file.relPath.toLowerCase();
+  return [
+    /^packages\/backend\/src\/analyzer\//,
+    /^packages\/backend\/src\/pipeline\//,
+    /^packages\/backend\/src\/services\/enrichanalysis\.ts$/,
+    /^packages\/frontend\/src\/systemdesign\//,
+    /^packages\/frontend\/src\/lib\/operations\.ts$/,
+    /^packages\/frontend\/src\/lib\/sqlschema\.ts$/,
+    /^packages\/frontend\/src\/team\/archco\/companydata\.ts$/,
+    /^packages\/frontend\/src\/team\/teamdebaterunner\.ts$/,
+    /^packages\/shared\/src\/(canvas|systemdesign)\.ts$/,
+  ].some((pattern) => pattern.test(rel));
+}
+
 /** The full trimmed line containing the match position. */
 function lineAround(content: string, index: number): string {
   const start = content.lastIndexOf('\n', index) + 1;
@@ -82,7 +124,10 @@ export function detectInfrastructure(
   readme?: string | null,
 ): SystemDesignMap {
   counter = 0;
-  const files = scan.files;
+  const isArchLabSelfAudit = scan.name.toLowerCase() === 'archlab';
+  const files = isArchLabSelfAudit
+    ? scan.files.filter((file) => !isArchLabAnalysisDefinitionFile(file))
+    : scan.files;
   const nodes: InfraNode[] = [];
 
   // Track placement per layer so columns never overlap.
@@ -129,17 +174,18 @@ export function detectInfrastructure(
   ]);
   if (lb.length) add('load-balancer', 'edge', 'Load Balancer', lb);
 
+  // A web framework is not automatically an API gateway. Only a dedicated
+  // gateway or edge proxy counts as evidence for this infrastructure layer.
   const gw = gather(files, [
-    { re: /express\(\)|express\.Router\(\)/i, describe: () => 'Express router / app' },
-    { re: /\bfastify\b/i, describe: () => 'Fastify server' },
     { re: /\bkong\b/i, describe: () => 'Kong gateway reference' },
     { re: /apigateway|client-api-gateway/i, describe: () => 'AWS API Gateway reference' },
+    { re: /gateway\s*:\s*['\"]|api[-_ ]gateway/i, describe: () => 'Dedicated API gateway configuration' },
   ]);
   if (gw.length) add('api-gateway', 'edge', 'API Gateway', gw);
 
   // ---- Application layer ------------------------------------------------
   // Microservices: each file that boots a server is a deployable unit.
-  const serviceFiles = files.filter((f) =>
+  const serviceFiles = files.filter(isRuntimeEvidenceFile).filter((f) =>
     /\.listen\s*\(|createServer\s*\(|app\.listen|fastify\(|http\.ListenAndServe|http\.Serve|uvicorn\.run|gunicorn|create_app\(\)|@SpringBootApplication|SpringApplication\.run|fn main\(\).*HttpServer|actix_web::main|WebApplication\.CreateBuilder|app\.Run\(\)|App\.shared\.run\(\)/.test(
       f.content,
     ),
@@ -416,6 +462,7 @@ function detectDatabase(
 /** Heuristic: is data-at-rest encryption configured anywhere? */
 function encryptionAtRest(files: ScannedFile[]): EncryptionState {
   for (const f of files) {
+    if (!isRuntimeEvidenceFile(f)) continue;
     if (/encryptionAtRest|StorageEncrypted|sse\s*[:=]|ServerSideEncryption|pgcrypto/i.test(f.content)) {
       return 'encrypted';
     }
@@ -441,6 +488,7 @@ function detectBucket(
   let access: 'direct' | 'signed-url' | 'open' = 'direct';
   let sensitive = false;
   for (const f of files) {
+    if (!isRuntimeEvidenceFile(f)) continue;
     if (/public-read|publicRead|makePublic|getPublicUrl|ACL:\s*['"]public/i.test(f.content)) {
       isPublic = true;
       access = 'open';

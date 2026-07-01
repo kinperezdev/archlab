@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { CanvasNode, NodeKind, Lane } from '@archlab/shared';
 import { isEntryFile } from '@archlab/shared';
 import type { ScannedFile, ScanResult } from './scan.js';
+import { detectToolsInFile, toToolSummary } from './toolCatalog.js';
 
 /**
  * Backend framework / server signals across ecosystems. Matched case-insensitively
@@ -20,6 +21,14 @@ const BACKEND_FRAMEWORK_RE =
 /** Endpoint / route-handler signals across web frameworks. */
 const ENDPOINT_RE =
   /route|controller|endpoint|handler|\.(?:get|post|put|delete)\(|r\.(?:GET|POST|PUT|DELETE)\(|@(?:Get|Post|Put|Delete)Mapping|@RequestMapping|router\.(?:get|post|put|delete)|Route::(?:get|post|put|delete)|(?:get|post)\s+'\/|app\.MapGet|app\.MapPost|\.(?:get|post)\(path:/i;
+
+/** Database library signals that should create database nodes outside model folders too. */
+const DATABASE_LIBRARY_RE =
+  /\b(?:PrismaClient|mongoose|MongoClient|getFirestore|database\/sql|sqlx\.|gorm\.|SQLAlchemy|create_engine|session\.query|DB::|Schema::|knex\(|drizzle\(|sequelize|typeorm|DataSource|Repository<|EntityManager|redis\.|ioredis|UpstashRedis|Pool\()\b|@supabase\/supabase-js|@prisma\/client|firebase\/firestore|from\(['"`][\w-]+['"`]\)\.(?:select|insert|update|delete|upsert)\(/i;
+
+/** Raw SQL query signals, used only inside likely database files to avoid catching docs. */
+const DATABASE_QUERY_RE =
+  /\b(?:SELECT\s+.+\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/i;
 
 export interface Classification {
   nodes: CanvasNode[];
@@ -37,6 +46,12 @@ function classifyFile(file: ScannedFile): { lane: Lane; kind: NodeKind } | null 
   if (/(^|\/)\.env/.test(p)) return { lane: 'external', kind: 'config' };
   if (/(^|\/)(prisma\/schema\.prisma|schema\.sql)$/.test(p) || file.ext === '.sql') {
     return { lane: 'external', kind: 'database' };
+  }
+  const likelyDatabasePath =
+    /(^|\/)(db|database|databases|data|models|schema|schemas|repositories|repository|migrations)\//.test(p) ||
+    /\.(model|schema|entity|repository)\.[\w.]+$/.test(p);
+  if (likelyDatabasePath || DATABASE_LIBRARY_RE.test(c) || (looksLikeBackendPath(p) && DATABASE_QUERY_RE.test(c))) {
+    return { lane: looksLikeBackendPath(p) ? 'backend' : 'external', kind: 'database' };
   }
   if (/docker-compose|\.tf$/.test(p)) return { lane: 'external', kind: 'config' };
   if (/(^|\/)mcp(-server)?\//.test(p) || /@modelcontextprotocol\/sdk|mcpServer/i.test(c + p)) {
@@ -99,6 +114,10 @@ function classifyFile(file: ScannedFile): { lane: Lane; kind: NodeKind } | null 
   }
 
   return null; // Not a meaningful architecture node (e.g. css, json config).
+}
+
+function looksLikeBackendPath(p: string): boolean {
+  return /(^|\/)(server|backend|api|routes|controllers|services|middleware|models|handlers|cmd|internal|app\/http|repositories|repository)\//.test(p);
 }
 
 /** Detect a coarse tech-stack fingerprint from filenames + package.json. */
@@ -197,6 +216,9 @@ export function classify(scan: ScanResult): Classification {
       }
     }
 
+    // Detect third-party tools/services referenced in this file (deduped).
+    const tools = file.content ? detectToolsInFile(file.content, file.relPath).map(toToolSummary) : [];
+
     nodes.push({
       id,
       kind: decision.kind,
@@ -206,6 +228,7 @@ export function classify(scan: ScanResult): Classification {
       animation: 'idle',
       position: { x: 0, y: 0 }, // Filled in by the layout pass.
       meta,
+      detectedTools: tools.length > 0 ? tools : undefined,
     });
     fileToNode.set(file.relPath, id);
   }

@@ -15,6 +15,9 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
   // Which row's inline foreign-key picker is open (always-available, not just in
   // the expanded editor).
   const [fkPickerRow, setFkPickerRow] = useState<number | null>(null);
+  // Search query for the foreign-key picker, so a huge schema is filterable
+  // instead of an endless scroll.
+  const [fkQuery, setFkQuery] = useState('');
 
   // Sync state if table name changes externally
   useEffect(() => {
@@ -36,16 +39,20 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
     onUpdateTable({ ...table, columns });
   };
 
-  // Reference options from other tables. Primary keys are listed first since
-  // they are the natural foreign-key targets.
+  // Reference options from other tables. A foreign key almost always points to a
+  // table's primary key, so we only list PK columns — this keeps the picker short
+  // (one entry per table instead of every column of every table). Tables with no
+  // PK fall back to all their columns so they stay referenceable.
   const getReferenceOptions = () => {
     const options: { value: string; label: string; table: string; col: string; isPk: boolean }[] = [];
     for (const t of allTables) {
       if (t.name === table.name) continue; // Don't self-reference in simple designer
-      for (const col of t.columns) {
+      const pks = t.columns.filter((c) => c.isPk);
+      const targets = pks.length > 0 ? pks : t.columns;
+      for (const col of targets) {
         options.push({
           value: `${t.name}.${col.name}`,
-          label: `${t.name}.${col.name} ${col.isPk ? '(PK)' : ''}`,
+          label: `${t.name}.${col.name}${col.isPk ? ' (PK)' : ''}`,
           table: t.name,
           col: col.name,
           isPk: Boolean(col.isPk),
@@ -56,6 +63,10 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
   };
 
   const refOptions = getReferenceOptions();
+  const fkQ = fkQuery.trim().toLowerCase();
+  const filteredRefOptions = fkQ
+    ? refOptions.filter((o) => o.value.toLowerCase().includes(fkQ))
+    : refOptions;
 
   /** Apply a reference selection (or clear) to a column by index. */
   const setReference = (index: number, value: string) => {
@@ -68,6 +79,7 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
       }
     }
     setFkPickerRow(null);
+    setFkQuery('');
   };
 
   // The node is a compact, readable card: up to 6 columns, then "+N more".
@@ -164,6 +176,7 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
                   title={col.isFk ? 'Change / clear foreign key reference' : 'Set foreign key reference'}
                   onClick={(e) => {
                     e.stopPropagation();
+                    setFkQuery('');
                     setFkPickerRow(fkPickerRow === i ? null : i);
                   }}
                 >
@@ -171,25 +184,59 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
                 </button>
               </div>
 
-              {/* Inline foreign-key picker (available without expanding the node) */}
+              {/* Inline foreign-key picker — searchable + height-capped so a big
+                  schema is filterable instead of an endless native dropdown. */}
               {fkPickerRow === i && (
                 <div className="schema-fk-picker" onClick={(e) => e.stopPropagation()}>
-                  <label>References</label>
-                  <select
+                  <input
+                    className="schema-fk-search"
                     autoFocus
-                    value={col.isFk && col.fkRelation ? `${col.fkRelation.parentTable}.${col.fkRelation.parentColumn}` : 'NONE'}
-                    onChange={(e) => setReference(i, e.target.value)}
-                  >
-                    <option value="NONE">No reference</option>
-                    {refOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  {refOptions.length === 0 && (
-                    <span className="schema-fk-empty">Add another table to link to.</span>
-                  )}
+                    placeholder="Search tables…"
+                    value={fkQuery}
+                    onChange={(e) => setFkQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setFkPickerRow(null);
+                        setFkQuery('');
+                      }
+                    }}
+                  />
+                  <div className="schema-fk-list">
+                    {(() => {
+                      const current =
+                        col.isFk && col.fkRelation
+                          ? `${col.fkRelation.parentTable}.${col.fkRelation.parentColumn}`
+                          : 'NONE';
+                      return (
+                        <>
+                          {!fkQ && (
+                            <button
+                              type="button"
+                              className={`schema-fk-opt${current === 'NONE' ? ' sel' : ''}`}
+                              onClick={() => setReference(i, 'NONE')}
+                            >
+                              No reference
+                            </button>
+                          )}
+                          {filteredRefOptions.map((opt) => (
+                            <button
+                              type="button"
+                              key={opt.value}
+                              className={`schema-fk-opt${current === opt.value ? ' sel' : ''}`}
+                              onClick={() => setReference(i, opt.value)}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                          {filteredRefOptions.length === 0 && (
+                            <span className="schema-fk-empty">
+                              {refOptions.length === 0 ? 'Add another table to link to.' : 'No matching table.'}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
 

@@ -10,11 +10,13 @@
 
 import type { CanvasNode, CanvasEdge } from '@archlab/shared';
 
-const COL_WIDTH = 220; // horizontal gap between folder depth levels
-const ROW_GAP = 60; // vertical gap between sibling files
+const COL_WIDTH = 340; // horizontal gap between folder depth levels
+const ROW_GAP = 82; // vertical gap between sibling files
 const GROUP_GAP = 22; // extra gap between distinct folders
 const LEFT = 80;
 const TOP = 40; // keep entry/top nodes near the top with a small padding
+const MAX_ROWS_PER_COLUMN = 18;
+const WRAP_COL_WIDTH = 330;
 
 interface TrieNode {
   children: Map<string, TrieNode>;
@@ -88,9 +90,22 @@ export function layout(nodes: CanvasNode[], _edges: CanvasEdge[] = []): CanvasNo
 
   return nodes.map((n) => ({
     ...n,
-    position: {
-      x: LEFT + (depthOf.get(n.id) ?? 0) * COL_WIDTH,
-      y: TOP + (yById.get(n.id) ?? 0),
-    },
+    position: compactPosition(depthOf.get(n.id) ?? 0, yById.get(n.id) ?? 0),
   }));
+}
+
+/**
+ * Large repositories can have hundreds of files under one folder depth. A pure
+ * vertical tree becomes a several-thousand-pixel column that opens as a hairline
+ * when React Flow fits the full bounds. Wrap those long rows into readable
+ * columns while preserving the folder-depth signal left to right.
+ */
+function compactPosition(depth: number, rawY: number): { x: number; y: number } {
+  const row = Math.max(0, Math.round(rawY / ROW_GAP));
+  const wrap = Math.floor(row / MAX_ROWS_PER_COLUMN);
+  const wrappedRow = row % MAX_ROWS_PER_COLUMN;
+  return {
+    x: LEFT + depth * COL_WIDTH + wrap * WRAP_COL_WIDTH,
+    y: TOP + wrappedRow * ROW_GAP,
+  };
 }

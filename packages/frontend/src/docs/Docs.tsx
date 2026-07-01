@@ -20,9 +20,28 @@ interface DocsProps {
   hasApiKey?: boolean;
   /** Provider keys (Anthropic/OpenAI/Gemini) for the Ask Claude modal. */
   apiKeys?: ProviderKeys;
+  /** Fresh, source-linked results from the project's background enrichment. */
+  enrichment?: LiveDocumentationData | null;
 }
 
-export function Docs({ hasApiKey, apiKeys = {} }: DocsProps) {
+interface LiveDocumentationData {
+  outdatedPackages?: Array<{
+    name: string;
+    installedVersion: string;
+    latestVersion: string;
+    changelog?: string;
+  }>;
+  vulnerabilities?: Array<{
+    id: string;
+    package: string;
+    severity: string;
+    referenceUrl: string;
+  }>;
+  stackBestPractices?: Array<{ tool: string; tip: string; url: string }>;
+  enrichedAt?: number;
+}
+
+export function Docs({ hasApiKey, apiKeys = {}, enrichment = null }: DocsProps) {
   const [selectedId, setSelectedId] = useState<string>(DOC_ARTICLES[0]?.id ?? '');
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<DocCategory>>(new Set());
@@ -123,6 +142,7 @@ export function Docs({ hasApiKey, apiKeys = {} }: DocsProps) {
       <div className="docs-main" ref={scrollRef} onScroll={onScroll}>
         <div className="docs-progress" style={{ width: `${progress}%` }} />
         <div className="docs-column">
+          <LiveDocumentationUpdates enrichment={enrichment} />
           {selected && (
             <DocArticle
               article={selected}
@@ -141,6 +161,63 @@ export function Docs({ hasApiKey, apiKeys = {} }: DocsProps) {
         <AskClaude article={askArticle} apiKeys={apiKeys} onClose={() => setAskArticle(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * The article library remains curated and offline. This separate block makes
+ * current project-specific research visible with a source link, rather than
+ * silently folding unverified web text into an authored article.
+ */
+function LiveDocumentationUpdates({ enrichment }: { enrichment: LiveDocumentationData | null }) {
+  const updates = enrichment?.outdatedPackages ?? [];
+  const vulnerabilities = enrichment?.vulnerabilities ?? [];
+  const practices = enrichment?.stackBestPractices ?? [];
+  if (updates.length === 0 && vulnerabilities.length === 0 && practices.length === 0) return null;
+
+  const timestamp = enrichment?.enrichedAt
+    ? new Date(enrichment.enrichedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+    : null;
+
+  return (
+    <section className="docs-live-updates" aria-label="Live project documentation updates">
+      <div className="docs-live-heading">
+        <div>
+          <span className="docs-live-eyebrow">Live project research</span>
+          <h2>Updates from verified sources</h2>
+        </div>
+        {timestamp && <span className="docs-live-time">Checked {timestamp}</span>}
+      </div>
+      <p>
+        These updates are discovered automatically when ArchLab analyzes your project. Each item links back to its source.
+      </p>
+      <div className="docs-live-list">
+        {updates.slice(0, 4).map((item) => (
+          <a
+            className="docs-live-item"
+            href={item.changelog || `https://www.npmjs.com/package/${encodeURIComponent(item.name)}`}
+            key={`package-${item.name}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <strong>{item.name}</strong>
+            <span>Update {item.installedVersion} to {item.latestVersion}</span>
+          </a>
+        ))}
+        {vulnerabilities.slice(0, 3).map((item) => (
+          <a className="docs-live-item is-security" href={item.referenceUrl} key={item.id} target="_blank" rel="noreferrer">
+            <strong>{item.package}: {item.id}</strong>
+            <span>{item.severity} security advisory</span>
+          </a>
+        ))}
+        {practices.slice(0, 3).map((item, index) => (
+          <a className="docs-live-item" href={item.url} key={`practice-${index}`} target="_blank" rel="noreferrer">
+            <strong>{item.tool} guidance</strong>
+            <span>{item.tip}</span>
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }
 

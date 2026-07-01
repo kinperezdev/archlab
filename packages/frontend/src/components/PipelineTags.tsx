@@ -20,6 +20,38 @@ const STEP_TITLES: Record<PipelineStepId, string> = {
   'final-report': 'Final Report',
 };
 
+/** Plain-English transparency: what each step actually does and checks. */
+const STEP_DETAILS: Record<PipelineStepId, { summary: string; checks: string[] }> = {
+  'project-intelligence': {
+    summary: 'Reads your README, package manifests, and file structure to understand what the project is.',
+    checks: ['Project purpose & detected stack', 'Dependencies, scripts & configs', 'File and module inventory'],
+  },
+  'architecture-mapping': {
+    summary: 'Builds the dependency graph: which files import which, and how the layers connect.',
+    checks: ['Import / export graph', 'Entry points and layers', 'Connected vs isolated modules'],
+  },
+  'data-flow-tracing': {
+    summary: 'Follows user data from where it enters the app through to where it is stored.',
+    checks: ['Request to handler to store paths', 'Cross-boundary data movement', 'Dead-end or untraced flows'],
+  },
+  'security-checks': {
+    summary: 'Scans the attack surface for common gaps in auth, data access, and config.',
+    checks: ['Exposed secrets / public config', 'Auth & access-control gaps', 'Injection & input-validation risks'],
+  },
+  'performance-checks': {
+    summary: 'Looks for slow patterns and inefficiencies in how the code does work.',
+    checks: ['N+1 and unbounded queries', 'Blocking operations on hot paths', 'Missing caching or pagination'],
+  },
+  'scale-analysis': {
+    summary: 'Flags the bottlenecks that hold up fine now but break as load grows.',
+    checks: ['Single points of failure', 'Choke points and DB hotspots', 'Fragile real-time / render paths'],
+  },
+  'final-report': {
+    summary: 'Aggregates every finding into the production-readiness verdict.',
+    checks: ['Severity rollup', 'Production-readiness score', 'Prioritized action plan'],
+  },
+};
+
 type TagState = 'pending' | 'running' | 'passed' | 'issues';
 
 interface PipelineTagsProps {
@@ -28,14 +60,6 @@ interface PipelineTagsProps {
   activeStep: PipelineStepId | null;
   onSelect: (stepId: PipelineStepId | null) => void;
   isVertical?: boolean;
-  /** Whether failure-simulation mode is active. */
-  simulationMode?: boolean;
-  /** Whether a simulation result currently exists (shows Reset). */
-  hasSimulationResult?: boolean;
-  /** Toggle simulation mode on/off. */
-  onToggleSimulate?: () => void;
-  /** Clear the active simulation. */
-  onResetSimulation?: () => void;
 }
 
 function tagState(
@@ -57,10 +81,6 @@ export function PipelineTags({
   activeStep,
   onSelect,
   isVertical,
-  simulationMode = false,
-  hasSimulationResult = false,
-  onToggleSimulate,
-  onResetSimulation,
 }: PipelineTagsProps) {
   return (
     <>
@@ -75,7 +95,7 @@ export function PipelineTags({
               type="button"
               role="listitem"
               className={`pipeline-tag tag-${state}${isActive ? ' tag-active' : ''}`}
-              title={`${STEP_TITLES[id]}${count > 0 ? ` — ${count} finding(s)` : ''}`}
+              title={`${STEP_TITLES[id]}${count > 0 ? `: ${count} finding(s)` : ''}`}
               onClick={() => onSelect(isActive ? null : id)}
             >
               <span className="pipeline-tag-num">{state === 'passed' ? '✓' : i + 1}</span>
@@ -84,28 +104,40 @@ export function PipelineTags({
             </button>
           );
         })}
-
-        {onToggleSimulate && (
-          <span className="sim-toolbar-group">
-            <button
-              type="button"
-              className={`sim-toggle-btn${simulationMode ? ' active' : ''}`}
-              onClick={onToggleSimulate}
-              title="Toggle failure simulation mode (S)"
-            >
-              ⚡ Simulate
-            </button>
-            {hasSimulationResult && onResetSimulation && (
-              <button type="button" className="sim-reset-btn" onClick={onResetSimulation}>
-                Reset
-              </button>
-            )}
-          </span>
-        )}
       </div>
 
-      {simulationMode && !hasSimulationResult && (
-        <div className="sim-banner">⚡ Simulation Mode — click any node to simulate a failure</div>
+      {/* Transparency: clicking a step reveals what it actually does + checks. */}
+      {activeStep && (
+        <div className="pipeline-detail">
+          <div className="pipeline-detail-head">
+            <span className="pipeline-detail-title">{STEP_TITLES[activeStep]}</span>
+            <button
+              type="button"
+              className="pipeline-detail-close"
+              title="Close"
+              onClick={() => onSelect(null)}
+            >
+              ✕
+            </button>
+          </div>
+          <p className="pipeline-detail-summary">{STEP_DETAILS[activeStep].summary}</p>
+          <span className="pipeline-detail-label">What it checks</span>
+          <ul className="pipeline-detail-list">
+            {STEP_DETAILS[activeStep].checks.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+          <p className="pipeline-detail-result">
+            {(() => {
+              const n = diagnostics.filter((d) => d.step === activeStep).length;
+              const state = tagState(activeStep, steps, diagnostics);
+              if (state === 'running') return 'Running now…';
+              if (n > 0) return `${n} finding${n === 1 ? '' : 's'} below.`;
+              if (state === 'passed') return 'Passed. No issues found.';
+              return 'Not run yet.';
+            })()}
+          </p>
+        </div>
       )}
     </>
   );

@@ -412,6 +412,9 @@ function mergeSchemas(explicit: DbTable[], inferred: DbTable[]): DbTable[] {
 function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) {
   const [sql, setSql] = useState<string>('');
   const [tables, setTables] = useState<DbTable[]>([]);
+  // Last persisted SQL. Edits stay live on the canvas but only this snapshot is
+  // saved; Save updates it, Discard rolls back to it. `sql !== savedSql` = dirty.
+  const [savedSql, setSavedSql] = useState<string>('');
   const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -458,6 +461,7 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
       
       setSql(mergedSql);
       setTables(merged);
+      setSavedSql(mergedSql); // baseline: a freshly loaded schema is not "dirty"
     });
   }, [inferredSql]);
 
@@ -598,6 +602,18 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleTables, resolvedTables, setNodes, setEdges]);
 
+  // Raise the selected node above its neighbors (patched in place, no rebuild) so
+  // an expanded/taller node is never covered by adjacent ones.
+  useEffect(() => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.type === 'dbGroup') return n; // backdrops stay behind everything
+        const z = n.id === lockedNodeId ? 1000 : 1;
+        return n.zIndex === z ? n : { ...n, zIndex: z };
+      }),
+    );
+  }, [lockedNodeId, setNodes]);
+
   // Patch the hover/lock highlight onto the EXISTING nodes in place. Only the
   // className changes, and only for nodes whose state actually flips, so a hover
   // re-renders a couple of nodes instead of rebuilding the entire canvas.
@@ -628,11 +644,11 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
   }, []);
 
   // SQL editor -> canvas.
+  // Edits update live state only — persistence happens on Save (see savedSql).
   const onSqlChange = (value: string) => {
     setSql(value);
     const parsed = parseSqlSchema(value);
     setTables(parsed);
-    saveSchema(value);
   };
 
   // Canvas -> SQL.
@@ -640,7 +656,6 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
     setTables(next);
     const nextSql = serializeSqlSchema(next);
     setSql(nextSql);
-    saveSchema(nextSql);
   }, []);
 
   const updateTable = useCallback(
@@ -730,7 +745,18 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
     const cleanSql = serializeSqlSchema(cleanTables);
     setSql(cleanSql);
     setTables(cleanTables);
-    saveSchema(cleanSql);
+  };
+
+  // Global dirty-state Save / Discard for the whole schema.
+  const isDirty = sql !== savedSql;
+  const saveAll = () => {
+    saveSchema(sql);
+    setSavedSql(sql);
+  };
+  const discardAll = () => {
+    setSql(savedSql);
+    setTables(parseSqlSchema(savedSql));
+    setPendingRename(null);
   };
 
   return (
@@ -850,6 +876,19 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
           >
             ▶
           </button>
+        )}
+
+        {/* Unsaved-changes bar: edits stay live, but only persist on Save. */}
+        {isDirty && (
+          <div className="db-dirty-bar">
+            <span className="db-dirty-label">Unsaved schema changes</span>
+            <button className="db-dirty-btn discard" onClick={discardAll}>
+              Discard
+            </button>
+            <button className="db-dirty-btn save" onClick={saveAll}>
+              Save
+            </button>
+          </div>
         )}
 
         {LARGE_SCHEMA && (

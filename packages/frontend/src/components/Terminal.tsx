@@ -27,6 +27,7 @@ import {
   uploadFolder,
   type StagedFile,
 } from '../lib/terminalUpload.js';
+import { getSessionToken } from '../lib/session.js';
 
 export interface TerminalApi {
   /** Subscribe to a session's raw PTY output. Returns an unsubscribe function. */
@@ -82,6 +83,16 @@ function typeLabel(file: StagedFile): string {
   return ext || 'FILE';
 }
 
+/**
+ * Ids whose saved buffer has already been restored in THIS page session. The
+ * sessionStorage restore exists to survive a page reload — but a split or layout
+ * change remounts the same Terminal within the same page, and restoring again
+ * would write the saved banner on top of the still-live session (the doubling on
+ * split). Restoring at most once per id per page load fixes that; a true reload
+ * starts a fresh module so the set is empty again.
+ */
+const restoredThisPage = new Set<string>();
+
 export function Terminal({ id, api }: TerminalProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const writeRef = useRef<((data: string) => void) | null>(null);
@@ -130,24 +141,55 @@ export function Terminal({ id, api }: TerminalProps) {
     });
 
     const safeFit = () => {
+      // The host must be laid out and visible. Fitting against a 0-width host
+      // (collapsed panel, not-yet-measured pane) yields a 1-column terminal,
+      // which is what wraps output to a single character per line. fit.fit()
+      // triggers term.onResize only when the geometry actually changes, and
+      // that handler is the single place we push the new size to the PTY —
+      // so identical sizes never re-fire and thrash full-screen TUI repaints.
+      if (host.offsetWidth === 0 || host.offsetHeight === 0) return;
       try {
         fit.fit();
-        api.resize(id, term.cols, term.rows);
+        // After re-fitting (e.g. a split squeeze), snap to the live prompt so
+        // any old box-art that xterm reflowed imperfectly stays in history,
+        // above the view, instead of sitting on top of the current session.
+        term.scrollToBottom();
       } catch {
         /* host not measurable yet */
       }
     };
-    safeFit();
 
-    // Restore prior output after a refresh, then keep the rolling buffer in
-    // sessionStorage so the last session's output survives an accidental reload.
+    // Defer the first fit until the pane has its real size. Two animation
+    // frames clears initial layout/flex settling so the PTY spawns at the
+    // correct width instead of a transient narrow one.
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(safeFit);
+    });
+
+    // Restore prior output after a refresh, but only if it belongs to the SAME
+    // backend run. The session token changes whenever the backend restarts, so a
+    // buffer tagged with a different token is stale — its PTY is gone and the new
+    // shell streams a fresh banner. Replaying the old raw bytes on top of that
+    // (and they don't reflow on resize) is exactly what doubled and garbled the
+    // terminal. When the token mismatches, discard the stale buffer instead.
     const bufKey = `archlab:term-buf:${id}`;
+    const tokenKey = `archlab:term-buf-token:${id}`;
     const BUF_CAP = 200_000;
-    let buf = sessionStorage.getItem(bufKey) ?? '';
+    const backendToken = getSessionToken();
+    const sameBackend = sessionStorage.getItem(tokenKey) === backendToken;
+    // Restore only on the FIRST mount of this id this page load. A split/layout
+    // remount must not replay the buffer over the live session (the doubling).
+    const firstMount = !restoredThisPage.has(id);
+    restoredThisPage.add(id);
+    let buf = sameBackend && firstMount ? (sessionStorage.getItem(bufKey) ?? '') : '';
+    if (!sameBackend) sessionStorage.removeItem(bufKey);
     if (buf) term.write(buf);
     const persist = () => {
       try {
         sessionStorage.setItem(bufKey, buf.length > BUF_CAP ? buf.slice(-BUF_CAP) : buf);
+        sessionStorage.setItem(tokenKey, backendToken);
       } catch {
         /* sessionStorage full or unavailable */
       }
@@ -162,12 +204,21 @@ export function Terminal({ id, api }: TerminalProps) {
     const inputDisposable = term.onData((data) => api.sendInput(id, data));
     const resizeDisposable = term.onResize(({ cols, rows }) => api.resize(id, cols, rows));
 
-    const ro = new ResizeObserver(() => safeFit());
+    // Debounce resize so a drag or layout reflow collapses into a single fit
+    // once movement stops, instead of firing dozens of PTY resizes mid-drag.
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(safeFit, 80);
+    });
     ro.observe(host);
 
     term.focus();
 
     return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      clearTimeout(resizeTimer);
       clearInterval(flushTimer);
       persist();
       unsubscribe();

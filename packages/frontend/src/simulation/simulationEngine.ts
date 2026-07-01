@@ -197,6 +197,30 @@ function nodeRecovers(nodeId: string, diagnostics: Diagnostic[]): boolean {
 
 const MAX_HOP = 4;
 
+function correlateCriticalFindings(
+  nodeStates: NodeSimulationState[],
+  nodes: CanvasNode[],
+  diagnostics: Diagnostic[],
+): string[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const labelFor = (id: string) => byId.get(id)?.label ?? id;
+  const failedIds = new Set(
+    nodeStates.filter((ns) => ns.state === 'failed' || ns.state === 'cascade-failed').map((ns) => ns.nodeId),
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of diagnostics) {
+    if (d.severity !== 'critical' && d.severity !== 'high') continue;
+    const hit = d.relatedNodeIds.find((id) => failedIds.has(id));
+    if (!hit) continue;
+    const line = `${labelFor(hit)} failure confirms a ${d.severity} gap: ${d.title}`;
+    if (seen.has(line)) continue;
+    seen.add(line);
+    out.push(line);
+  }
+  return out;
+}
+
 /**
  * Run a failure simulation from the origin node outward through its dependents.
  */
@@ -283,20 +307,7 @@ export function runSimulation(
 
   // Correlate hard failures with known critical/high findings (Enterprise Audit
   // critical gaps are derived from exactly these diagnostics).
-  const failedIds = new Set(
-    nodeStates.filter((ns) => ns.state === 'failed' || ns.state === 'cascade-failed').map((ns) => ns.nodeId),
-  );
-  const seenCorr = new Set<string>();
-  const enterpriseAuditCorrelations: string[] = [];
-  for (const d of diagnostics) {
-    if (d.severity !== 'critical' && d.severity !== 'high') continue;
-    const hit = d.relatedNodeIds.find((id) => failedIds.has(id));
-    if (!hit) continue;
-    const line = `${labelFor(hit)} failure confirms a ${d.severity} gap: ${d.title}`;
-    if (seenCorr.has(line)) continue;
-    seenCorr.add(line);
-    enterpriseAuditCorrelations.push(line);
-  }
+  const enterpriseAuditCorrelations = correlateCriticalFindings(nodeStates, nodes, diagnostics);
 
   const generatedPrompt = buildPrompt(scenario, {
     originLabel,
@@ -318,6 +329,107 @@ export function runSimulation(
     manualInterventionNodes,
     enterpriseAuditCorrelations,
     generatedPrompt,
+  };
+}
+
+const SIM_STATE_RISK: Record<NodeSimState, number> = {
+  healthy: 0,
+  recovering: 1,
+  warning: 2,
+  degraded: 3,
+  failed: 4,
+  'cascade-failed': 5,
+};
+
+function scenarioForNode(
+  node: CanvasNode,
+  severity: SimulationSeverity,
+  trafficLevel: TrafficLevel,
+  duration: SimulationDuration,
+): SimulationScenario {
+  const presets = PRESET_SCENARIOS[normalizeSimType(node)];
+  return {
+    nodeId: node.id,
+    nodeLabel: node.label,
+    nodeType: normalizeSimType(node),
+    scenario: presets[0] ?? 'Service unavailable',
+    severity,
+    trafficLevel,
+    duration,
+  };
+}
+
+/** Run a whole-graph blast-radius simulation and merge the worst state per node. */
+export function runAllNodesSimulation(
+  nodes: CanvasNode[],
+  edges: CanvasEdge[],
+  diagnostics: Diagnostic[],
+): SimulationResult {
+  const severity: SimulationSeverity = 'high';
+  const trafficLevel: TrafficLevel = 'normal';
+  const duration: SimulationDuration = '5m';
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const merged = new Map<string, NodeSimulationState>();
+  let usersAffected = 0;
+
+  for (const node of nodes) {
+    const result = runSimulation(scenarioForNode(node, severity, trafficLevel, duration), nodes, edges, diagnostics);
+    usersAffected = Math.max(usersAffected, result.estimatedUsersAffected);
+    for (const state of result.nodeStates) {
+      const current = merged.get(state.nodeId);
+      if (!current || SIM_STATE_RISK[state.state] > SIM_STATE_RISK[current.state]) {
+        merged.set(state.nodeId, {
+          ...state,
+          reason: current
+            ? `${state.reason}; also affected by broader graph simulation`
+            : state.reason,
+          affectedAtMs: Math.min(state.affectedAtMs, current?.affectedAtMs ?? state.affectedAtMs),
+        });
+      }
+    }
+  }
+
+  const nodeStates = [...merged.values()].sort((a, b) => a.hopCount - b.hopCount);
+  const maxHop = nodeStates.reduce((m, ns) => Math.max(m, ns.hopCount), 0);
+  const cascadeChain: string[][] = [];
+  for (let h = 0; h <= maxHop; h++) {
+    cascadeChain.push(nodeStates.filter((ns) => ns.hopCount === h).map((ns) => ns.nodeId));
+  }
+
+  const manualInterventionNodes = nodeStates
+    .filter((ns) => !ns.recovers && ns.state !== 'healthy')
+    .map((ns) => byId.get(ns.nodeId)?.label ?? ns.nodeId);
+  const autoRecoveryNodes = nodeStates
+    .filter((ns) => ns.recovers)
+    .map((ns) => byId.get(ns.nodeId)?.label ?? ns.nodeId);
+  const failedCount = nodeStates.filter((ns) => ns.state === 'failed' || ns.state === 'cascade-failed').length;
+  const degradedCount = nodeStates.filter((ns) => ns.state === 'degraded').length;
+
+  return {
+    scenario: {
+      nodeId: '__all__',
+      nodeLabel: 'All Nodes',
+      nodeType: 'system',
+      scenario: 'Whole-graph blast radius',
+      severity,
+      trafficLevel,
+      duration,
+    },
+    nodeStates,
+    cascadeChain,
+    estimatedUsersAffected: Math.min(TRAFFIC_BASE[trafficLevel], usersAffected),
+    estimatedImpact: `Whole-graph simulation found ${failedCount} failed nodes and ${degradedCount} degraded nodes under ${TRAFFIC_LABEL[trafficLevel]} traffic.`,
+    autoRecoveryNodes,
+    manualInterventionNodes,
+    enterpriseAuditCorrelations: correlateCriticalFindings(nodeStates, nodes, diagnostics),
+    generatedPrompt: [
+      'Review this project as a whole-system failure simulation.',
+      `Scenario: every detected node is tested for a high-severity ${DURATION_LABEL[duration]} failure under ${TRAFFIC_LABEL[trafficLevel]} traffic.`,
+      `Failed nodes: ${failedCount}. Degraded nodes: ${degradedCount}. Manual intervention required for ${manualInterventionNodes.length} nodes.`,
+      '',
+      'Prioritize fixes that reduce blast radius across many nodes: retries, circuit breakers, queue backpressure, dependency timeouts, health checks, graceful fallbacks, and clearer ownership boundaries.',
+      'Return a ranked remediation plan with the highest-risk nodes first.',
+    ].join('\n'),
   };
 }
 

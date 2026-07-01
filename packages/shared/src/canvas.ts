@@ -46,6 +46,24 @@ export interface CanvasNode {
   animation: NodeAnimationState;
   /** Layout position. Auto-computed by the backend layout pass. */
   position: { x: number; y: number };
+  /** Third-party tools/services detected in this node's source file. */
+  detectedTools?: DetectedToolSummary[];
+}
+
+/** A compact view of a detected third-party tool, attached to a canvas node. */
+export interface DetectedToolSummary {
+  id: string;
+  name: string;
+  color: string;
+  /** Lucide icon name. */
+  icon: string;
+  isInternetConnected: boolean;
+  connectionType: string;
+  category: string;
+  mcpServerUrl?: string;
+  mcpDocsUrl?: string;
+  securityNotes?: string;
+  latestVersionCheck?: string;
 }
 
 /** A real data-flow connection found in the code, labeled with what travels it. */

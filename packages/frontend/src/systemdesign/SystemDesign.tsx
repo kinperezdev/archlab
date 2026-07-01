@@ -7,7 +7,7 @@
  *    Infrastructure Components, CI/CD Pipelines, and Data Flow Map.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -931,15 +931,7 @@ function DetectedMode({
         </div>
       </div>
 
-      {infra.projectContext?.fromReadme && (
-        <div className="sd-context-banner" title={infra.projectContext.purpose}>
-          <span className="sd-context-name">{infra.projectContext.name}</span>
-          {infra.projectContext.purpose && (
-            <span className="sd-context-purpose">{infra.projectContext.purpose}</span>
-          )}
-          <span className="sd-context-source">📖 Read from README</span>
-        </div>
-      )}
+
 
       {tabMode === 'enterprise' ? (
         <EnterpriseAudit
@@ -1021,29 +1013,46 @@ function DetectedMode({
               <MiniMap pannable zoomable className="arch-minimap" />
               <Controls showInteractive={false} />
             </ReactFlow>
-
-            {/* Horizontal Request Journey Timeline */}
-            <div className="sd-horizontal-timeline">
-              <h5 className="timeline-title">Horizontal Request Journey:</h5>
-              <div className="timeline-flow-track">
-                {timelineNodes.map((n, idx) => (
-                  <div
-                    key={n.id}
-                    className={`timeline-step-node ${selectedId === n.id ? 'active' : ''}`}
-                    onClick={() => setSelectedId(n.id)}
-                  >
-                    <span className="step-badge">{idx + 1}</span>
-                    <span className="step-glyph">{infraMeta(n.type).glyph}</span>
-                    <span className="step-label">{n.label}</span>
-                    {idx < timelineNodes.length - 1 && <span className="step-connector">→</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Detail / suggestions side panel */}
           <aside className="sd-panel">
+            {infra.projectContext?.fromReadme && (
+              <div style={{ background: '#09090b', border: '1px solid #1a1a2e', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '11px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontWeight: 'bold', color: '#f8fafc' }}>{infra.projectContext.name}</span>
+                  <span style={{ fontSize: '9px', color: '#64748b' }}>📖 Read from README</span>
+                </div>
+                {infra.projectContext.purpose && (
+                  <p style={{ margin: 0, color: '#94a3b8', lineHeight: '1.4' }}>{infra.projectContext.purpose}</p>
+                )}
+              </div>
+            )}
+
+            {timelineNodes.length > 0 && (
+              <div style={{ background: '#09090b', border: '1px solid #1a1a2e', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' }}>
+                <h5 style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', margin: '0 0 10px 0', fontWeight: 'bold' }}>Request Journey</h5>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {timelineNodes.map((n, idx) => (
+                    <Fragment key={n.id}>
+                      <div
+                        className={`timeline-step-node ${selectedId === n.id ? 'active' : ''}`}
+                        onClick={() => setSelectedId(n.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        <span className="step-badge" style={{ flexShrink: 0 }}>{idx + 1}</span>
+                        <span className="step-glyph">{infraMeta(n.type).glyph}</span>
+                        <span className="step-label" style={{ fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.label}</span>
+                      </div>
+                      {idx < timelineNodes.length - 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', margin: '2px 0', color: '#475569', fontSize: '10px' }}>↓</div>
+                      )}
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {selectedNode ? (
               <NodeDetail node={selectedNode} infra={infra} />
             ) : selectedSuggestion ? (

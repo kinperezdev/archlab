@@ -13,6 +13,7 @@ import {
   type PipelineStepId,
   type ProjectIntelligence,
   type Severity,
+  type SystemDesignMap,
 } from '@archlab/shared';
 import { CopyPromptButton } from './CopyPromptButton.js';
 import {
@@ -23,10 +24,12 @@ import {
 import { inferOperation, OPERATION_COLORS, type Operation } from '../lib/operations.js';
 import { useApiKeyContext } from '../state/apiKeyContext.js';
 import { ConfidenceBadge, NudgeCard, NudgeText } from './ConfidenceNudge.js';
+import type { CapabilityDetail } from '../canvas/nodeRecommendations.js';
 
 interface NodeLink {
   node: CanvasNode;
   operation: Operation;
+  impactCount: number;
 }
 
 interface RightSidebarProps {
@@ -36,6 +39,10 @@ interface RightSidebarProps {
   graph: CanvasGraph;
   diagnostics: Diagnostic[];
   selectedNode: CanvasNode | null;
+  /** Capability chip detail to show in its own panel (null = hidden). */
+  capability?: CapabilityDetail | null;
+  /** Close the capability panel. */
+  onClearCapability?: () => void;
   intelligence: ProjectIntelligence | null;
   /** Collapse the sidebar (slides it out to the right). */
   onCollapse: () => void;
@@ -47,14 +54,16 @@ interface RightSidebarProps {
   stepFilter?: PipelineStepId | null;
   /** Clear the active step filter. */
   onClearStepFilter?: () => void;
+  /** Screen-specific controls rendered at the top of the sidebar. */
+  headerContent?: ReactNode;
   /**
-   * Simulation panel/report. When provided, it replaces the normal sidebar body
-   * (diagnostic prompt, node inspector, findings) so the failure simulation owns
-   * the sidebar while it is active.
+   * Simulation panel/report shown inline with the usual sidebar details.
    */
   simulationContent?: ReactNode;
   /** Open the Code Intelligence Panel for a node id (same as double-click). */
   onOpenCode?: (nodeId: string) => void;
+  infra?: SystemDesignMap | null;
+  enrichment?: unknown;
 }
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'bottleneck', 'medium', 'low', 'info'];
@@ -98,14 +107,18 @@ export function RightSidebar({
   graph,
   diagnostics,
   selectedNode,
+  capability,
+  onClearCapability,
   intelligence,
   onCollapse,
   width,
   onResizeStart,
   stepFilter,
   onClearStepFilter,
+  headerContent,
   simulationContent,
   onOpenCode,
+  infra,
 }: RightSidebarProps) {
   const { agentTeamHasRun, openAgentTeam } = useApiKeyContext();
   const latest = diagnostics[diagnostics.length - 1] ?? null;
@@ -134,17 +147,69 @@ export function RightSidebar({
         aria-orientation="vertical"
       />
       <button
-        className="sidebar-edge-toggle"
+        className="sidebar-collapse-btn"
         onClick={onCollapse}
         title="Hide right sidebar (R)"
       >
         ▶
       </button>
       <div className="sidebar-scroll">
-      {simulationContent ? (
-        simulationContent
-      ) : (
       <>
+      {headerContent}
+
+      {capability && (
+        <section className="panel-block cap-panel">
+          <div className="cap-panel-head">
+            <span
+              className="cap-panel-chip"
+              style={{ ['--palette-color' as string]: capability.color }}
+            >
+              {capability.category.toUpperCase()}
+            </span>
+            <h3 className="panel-title cap-panel-title">{capability.toolName}</h3>
+            <button
+              type="button"
+              className="cap-panel-close"
+              title="Close"
+              onClick={() => onClearCapability?.()}
+            >
+              ✕
+            </button>
+          </div>
+          <p className="cap-panel-node">
+            Used by <strong>{capability.nodeLabel}</strong>
+          </p>
+          {capability.recommend ? (
+            <>
+              <div className="cap-panel-row">
+                <span className="cap-panel-key cap-add">Recommended</span>
+                <p className="cap-panel-val">{capability.recommend}</p>
+              </div>
+              <div className="cap-panel-row">
+                <span className="cap-panel-key cap-why">Why it's better</span>
+                <p className="cap-panel-val cap-muted">{capability.why}</p>
+              </div>
+            </>
+          ) : (
+            <p className="cap-panel-val cap-muted">
+              No specific recommendation for this capability yet. It looks healthy as detected.
+            </p>
+          )}
+        </section>
+      )}
+
+      {infra?.projectContext?.fromReadme && (
+        <section className="panel-block ea-sidebar-readme-section" style={{ background: '#09090b', borderBottom: '1px solid #1a1a2e', padding: '10px 14px', fontSize: '11px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <span style={{ fontWeight: 'bold', color: '#e2e8f0' }}>{infra.projectContext.name}</span>
+            <span style={{ fontSize: '9px', color: '#64748b' }}>📖 Read from README</span>
+          </div>
+          {infra.projectContext.purpose && (
+            <p style={{ margin: 0, color: '#94a3b8', lineHeight: '1.4' }}>{infra.projectContext.purpose}</p>
+          )}
+        </section>
+      )}
+
       {latest && (
         <DiagnosticPrompt
           diagnostic={latest}
@@ -163,6 +228,12 @@ export function RightSidebar({
           diagnostics={diagnostics}
           onOpenCode={onOpenCode}
         />
+      )}
+
+      {simulationContent && (
+        <section className="panel-block simulation-sidebar-block">
+          {simulationContent}
+        </section>
       )}
 
       {intelligence && (
@@ -193,7 +264,7 @@ export function RightSidebar({
         </section>
       )}
 
-      <section className="panel-block panel-grow">
+      <section className="panel-block panel-grow" id="findings-panel-section">
         <h3 className="panel-title">
           Findings ({sorted.length})
           {sorted.length > 0 &&
@@ -265,7 +336,6 @@ export function RightSidebar({
         </ul>
       </section>
       </>
-      )}
       </div>
     </aside>
   );
@@ -428,12 +498,17 @@ function ConnRow({
           : undefined
       }
     >
-      <span className="conn-op" style={{ color: OPERATION_COLORS[link.operation] }}>
-        {link.operation}
+      <span className="conn-row-main">
+        <span className="conn-op" style={{ color: OPERATION_COLORS[link.operation] }}>
+          {link.operation}
+        </span>
+        <span className={`conn-arrow ${dir}`}>{dir === 'out' ? '→' : '←'}</span>
+        <span className="conn-impact">{link.impactCount} affected</span>
       </span>
-      <span className={`conn-arrow ${dir}`}>{dir === 'out' ? '→' : '←'}</span>
-      <span className="conn-label">{link.node.label}</span>
-      <span className="conn-kind">{KIND_LABEL[link.node.kind] ?? link.node.kind}</span>
+      <span className="conn-row-meta">
+        <span className="conn-label">{link.node.label}</span>
+        <span className="conn-kind">{KIND_LABEL[link.node.kind] ?? link.node.kind}</span>
+      </span>
       {canOpen && <span className="conn-open-icon" aria-hidden="true">&lt;/&gt;</span>}
     </li>
   );
@@ -456,15 +531,48 @@ function NodeInspector({
   onOpenCode?: (nodeId: string) => void;
 }) {
   // Derive connections and related findings from the in-memory analysis only.
-  const { outgoing, incoming, relatedFindings, description } = useMemo(() => {
+  const { outgoing, incoming, relatedFindings, description, downstreamCount, dependentCount, affectedKinds } = useMemo(() => {
     const byId = new Map(graph.nodes.map((n) => [n.id, n]));
     const outLinks: NodeLink[] = [];
     const inLinks: NodeLink[] = [];
+    const outgoingById = new Map<string, string[]>();
+    const incomingById = new Map<string, string[]>();
+
+    for (const e of graph.edges) {
+      const out = outgoingById.get(e.source);
+      if (out) out.push(e.target);
+      else outgoingById.set(e.source, [e.target]);
+
+      const inc = incomingById.get(e.target);
+      if (inc) inc.push(e.source);
+      else incomingById.set(e.target, [e.source]);
+    }
+
+    const reachableFrom = (startId: string, adjacency: Map<string, string[]>): Set<string> => {
+      const seen = new Set<string>();
+      const queue = [...(adjacency.get(startId) ?? [])];
+      for (let i = 0; i < queue.length; i++) {
+        const id = queue[i];
+        if (id === startId || seen.has(id)) continue;
+        seen.add(id);
+        queue.push(...(adjacency.get(id) ?? []));
+      }
+      return seen;
+    };
+
+    const downstream = reachableFrom(node.id, outgoingById);
+    const dependents = reachableFrom(node.id, incomingById);
+    const kinds = new Map<string, number>();
+    for (const id of downstream) {
+      const kind = byId.get(id)?.kind;
+      if (kind) kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+    }
 
     for (const e of graph.edges) {
       if (e.source === node.id) {
         const target = byId.get(e.target);
         if (target) {
+          const targetImpact = reachableFrom(target.id, outgoingById).size;
           outLinks.push({
             node: target,
             operation: inferOperation({
@@ -473,12 +581,14 @@ function NodeInspector({
               sourceHint: `${node.label} ${node.filePath ?? ''} ${target.label}`,
               direction: 'out',
             }),
+            impactCount: targetImpact,
           });
         }
       }
       if (e.target === node.id) {
         const source = byId.get(e.source);
         if (source) {
+          const sourceImpact = reachableFrom(source.id, outgoingById).size;
           inLinks.push({
             node: source,
             operation: inferOperation({
@@ -487,6 +597,7 @@ function NodeInspector({
               sourceHint: `${source.label} ${source.filePath ?? ''} ${node.label}`,
               direction: 'in',
             }),
+            impactCount: sourceImpact,
           });
         }
       }
@@ -498,6 +609,9 @@ function NodeInspector({
       outgoing: outLinks,
       incoming: inLinks,
       relatedFindings: findings,
+      downstreamCount: downstream.size,
+      dependentCount: dependents.size,
+      affectedKinds: [...kinds.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4),
       description: describeNode(
         node,
         outLinks.map((l) => l.node),
@@ -531,6 +645,31 @@ function NodeInspector({
       </div>
 
       <p className="node-description">{description}</p>
+
+      <div className="node-impact-summary">
+        <div className="node-impact-card">
+          <span>Directly affects</span>
+          <strong>{outgoing.length}</strong>
+        </div>
+        <div className="node-impact-card">
+          <span>Downstream reach</span>
+          <strong>{downstreamCount}</strong>
+        </div>
+        <div className="node-impact-card">
+          <span>Relied on by</span>
+          <strong>{dependentCount}</strong>
+        </div>
+      </div>
+
+      {affectedKinds.length > 0 && (
+        <div className="node-impact-kinds" aria-label="Affected node types">
+          {affectedKinds.map(([kind, count]) => (
+            <span key={kind}>
+              {count} {KIND_LABEL[kind] ?? kind}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="node-connections">
         <div className="node-conn-group">

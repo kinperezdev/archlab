@@ -1,6 +1,8 @@
 import { memo, type CSSProperties } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { NodeKind, NodeAnimationState } from '@archlab/shared';
+import { getNodeRecommendation } from './nodeRecommendations.js';
+import { capabilityBus } from './capabilityBus.js';
 
 /** A labeled connector port on a backend node. */
 export interface PortInfo {
@@ -25,6 +27,7 @@ export interface ArchNodeData {
   filePath?: string;
   isHighlighted?: boolean;
   isDimmed?: boolean;
+  isFocused?: boolean;
   meta?: Record<string, string | number | boolean>;
   /** Backend nodes carry explicit, labeled connector ports. */
   ports?: { incoming: PortInfo[]; outgoing: PortInfo[] };
@@ -58,6 +61,20 @@ export interface ArchNodeData {
   isLite?: boolean;
 }
 
+interface NodePaletteBadge {
+  id: string;
+  label: string;
+  color: string;
+  title: string;
+  /** Full tool name shown in the hover card ("Uses: …"). */
+  toolName: string;
+  /** Tool category (database, auth, ...) used by the detail panel. */
+  category: string;
+  /** Suggested improvement + why, when one applies for this tool. */
+  recommend?: string;
+  why?: string;
+}
+
 /** Short badge label per simulation state (none for healthy). */
 const SIM_STATE_LABEL: Record<string, string> = {
   warning: 'WARNING',
@@ -83,23 +100,32 @@ interface DbTable {
   columns: DbColumn[];
 }
 
-function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
+function ArchNodeImpl({ data, selected }: NodeProps<ArchNodeData>) {
   const highlightClass = data.isHighlighted ? 'node-highlight' : '';
   const dimClass = data.isDimmed ? 'node-dimmed' : '';
+  const focusClass = selected || data.isFocused ? 'node-focus-rgb' : '';
+  const paletteBadges = buildNodePaletteBadges(data);
 
   // Check if we have parsed database schema tables in this node
-  const dbSchema: DbTable[] | null = !data.isLite && data.meta?.dbSchema
-    ? JSON.parse(String(data.meta.dbSchema))
+  const dbSchema: DbTable[] | null = data.kind === 'database' && data.meta?.dbSchema
+    ? parseDbSchema(String(data.meta.dbSchema))
     : null;
 
   if (data.kind === 'database' && dbSchema && dbSchema.length > 0) {
     return (
       <div
-        className={`arch-node db-schema-node anim-${data.animation} ${highlightClass} ${dimClass}`}
+        className={`arch-node db-schema-node anim-${data.animation} ${highlightClass} ${dimClass} ${focusClass}`}
         title={data.filePath ?? data.label}
         style={{ minWidth: '220px', padding: 0 }}
       >
         <Handle type="target" position={Position.Left} />
+        {paletteBadges.length > 0 && (
+          <div className="node-palette-rail db-schema-palette" aria-label="Detected node capabilities">
+            {paletteBadges.map((badge) => (
+              <PaletteBadge key={badge.id} badge={badge} nodeLabel={data.label} />
+            ))}
+          </div>
+        )}
         
         {/* Node header */}
         <div className="db-node-header" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--node-color)' }}>
@@ -160,7 +186,7 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
 
   return (
     <div
-      className={`arch-node kind-${data.kind} anim-${data.animation} ${highlightClass} ${dimClass} ${
+      className={`arch-node kind-${data.kind} anim-${data.animation} ${highlightClass} ${dimClass} ${focusClass} ${
         hasPorts ? 'has-ports' : ''
       } ${data.isBottleneck ? 'is-bottleneck' : ''} ${data.isIsolated ? 'is-isolated' : ''} ${
         data.isEntry ? 'is-entry' : ''
@@ -189,6 +215,14 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
             zIndex: 10,
           }}
         />
+      )}
+
+      {paletteBadges.length > 0 && (
+        <div className={`node-palette-rail${data.isLite ? ' is-lite' : ''}`} aria-label="Detected node capabilities">
+          {paletteBadges.map((badge) => (
+            <PaletteBadge key={badge.id} badge={badge} nodeLabel={data.label} />
+          ))}
+        </div>
       )}
 
       {!data.isLite && data.isEntry && (
@@ -228,6 +262,7 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
 
       <div className="node-header">
         <span className="node-dot" />
+        {data.kind === 'database' && <span className="node-kind-glyph" aria-hidden="true">DB</span>}
         <span className="node-header-text">
           <span className="node-name" title={data.label}>{data.label}</span>
           <span className="node-type">{data.kind}</span>
@@ -251,6 +286,123 @@ function ArchNodeImpl({ data }: NodeProps<ArchNodeData>) {
       <Handle type="source" position={Position.Right} />
     </div>
   );
+}
+
+function parseDbSchema(raw: string): DbTable[] | null {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildNodePaletteBadges(data: ArchNodeData): NodePaletteBadge[] {
+  const badges = new Map<string, NodePaletteBadge>();
+  // Everything already on this node, so a tip the node already satisfies is hidden.
+  const present = new Set<string>();
+  for (const tool of data.detectedTools ?? []) {
+    present.add(tool.name.toLowerCase());
+    present.add(tool.category.toLowerCase());
+  }
+
+  if (data.kind === 'database') {
+    const rec = getNodeRecommendation('Database', 'database', present);
+    badges.set('database-kind', {
+      id: 'database-kind',
+      label: 'DB',
+      color: '#60a5fa',
+      title: 'Detected database model, schema, client, or query surface',
+      toolName: 'Database',
+      category: 'database',
+      recommend: rec?.recommend,
+      why: rec?.why,
+    });
+  }
+
+  for (const tool of data.detectedTools ?? []) {
+    if (!['database', 'auth', 'storage', 'realtime', 'api-client', 'ai', 'payment'].includes(tool.category)) continue;
+    const label = compactToolLabel(tool.name, tool.category);
+    const rec = getNodeRecommendation(tool.name, tool.category, present);
+    badges.set(tool.id, {
+      id: tool.id,
+      label,
+      color: tool.color,
+      title: `${tool.name} ${tool.category}`,
+      toolName: tool.name,
+      category: tool.category,
+      recommend: rec?.recommend,
+      why: rec?.why,
+    });
+  }
+
+  return [...badges.values()];
+}
+
+/** A capability chip with a hover card: what the node uses + a recommended
+ *  improvement and why it's better. Click opens the full detail panel. */
+function PaletteBadge({ badge, nodeLabel }: { badge: NodePaletteBadge; nodeLabel: string }) {
+  return (
+    <span
+      className="node-palette-badge has-card nodrag nopan"
+      style={{ ['--palette-color' as string]: badge.color }}
+      role="button"
+      tabIndex={0}
+      title="Click for details"
+      onClick={(e) => {
+        e.stopPropagation();
+        capabilityBus.open({
+          nodeLabel,
+          toolName: badge.toolName,
+          category: badge.category,
+          color: badge.color,
+          recommend: badge.recommend,
+          why: badge.why,
+        });
+      }}
+    >
+      <span className="node-badge-label">{badge.label}</span>
+      <span className="node-badge-card">
+        <span className="node-badge-row">
+          <span className="node-badge-key">Uses</span>
+          <span className="node-badge-val">{badge.toolName}</span>
+        </span>
+        {badge.recommend ? (
+          <>
+            <span className="node-badge-row">
+              <span className="node-badge-key node-badge-add">Add</span>
+              <span className="node-badge-val">{badge.recommend}</span>
+            </span>
+            <span className="node-badge-row">
+              <span className="node-badge-key node-badge-why">Why</span>
+              <span className="node-badge-val node-badge-why-text">{badge.why}</span>
+            </span>
+          </>
+        ) : (
+          <span className="node-badge-row node-badge-muted">{badge.title}</span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function compactToolLabel(name: string, category: string): string {
+  const special: Record<string, string> = {
+    'Supabase Auth': 'AUTH',
+    NextAuth: 'AUTH',
+    Auth0: 'AUTH',
+    Clerk: 'AUTH',
+    Firebase: 'FIRE',
+    MongoDB: 'MONGO',
+    PlanetScale: 'PSCALE',
+    'Google Gemini': 'GEM',
+    'Vercel AI SDK': 'AI',
+    GraphQL: 'GQL',
+  };
+  if (special[name]) return special[name];
+  if (category === 'auth') return 'AUTH';
+  if (category === 'database') return name.replace(/\s+/g, '').slice(0, 6).toUpperCase();
+  return name.replace(/\s+/g, '').slice(0, 5).toUpperCase();
 }
 
 /** Memoized so unaffected nodes don't re-render on hover/selection in large graphs. */

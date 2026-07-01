@@ -195,60 +195,37 @@ export function ArchCo({
           ))}
         </div>
 
-        {/* AI Update — evolves every employee via the active AI provider. */}
-        <button
-          className="archco-ai-update-btn"
-          onClick={handleAIUpdate}
-          disabled={!providerConfig.available || aiUpdateStatus === 'updating'}
-          title={
-            providerConfig.available
-              ? `${aiUpdateLabel} (using ${PROVIDER_LABEL[providerConfig.provider]})`
-              : 'Add an API key in Settings to enable'
-          }
-        >
-          {aiUpdateLabel}
-        </button>
-        <span
-          className={`archco-provider-badge provider-${providerConfig.available ? providerConfig.provider : 'none'}`}
-          title={providerConfig.available ? `Active AI provider: ${PROVIDER_LABEL[providerConfig.provider]}` : 'No AI provider'}
-        >
-          {providerConfig.available ? PROVIDER_LABEL[providerConfig.provider] : 'No AI'}
-        </span>
+        <div className="archco-header-actions">
+          {/* AI Update evolves every employee via the active AI provider. */}
+          <button
+            className="archco-action-btn is-primary"
+            onClick={handleAIUpdate}
+            disabled={!providerConfig.available || aiUpdateStatus === 'updating'}
+            title={
+              providerConfig.available
+                ? `${aiUpdateLabel} (using ${PROVIDER_LABEL[providerConfig.provider]})`
+                : 'Add an API key in Settings to enable'
+            }
+          >
+            {aiUpdateLabel}
+          </button>
+          <span
+            className={`archco-provider-badge provider-${providerConfig.available ? providerConfig.provider : 'none'}`}
+            title={providerConfig.available ? `Active AI provider: ${PROVIDER_LABEL[providerConfig.provider]}` : 'No AI provider'}
+          >
+            {providerConfig.available ? PROVIDER_LABEL[providerConfig.provider] : 'No AI'}
+          </span>
 
-        <button
-          className="archco-ai-update-btn"
-          style={{
-            marginLeft: '8px',
-            background: isOffDuty 
-              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(245, 158, 11, 0.25) 100%)' 
-              : 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%)',
-            borderColor: isOffDuty ? 'rgba(239, 68, 68, 0.6)' : 'rgba(16, 185, 129, 0.6)',
-            color: isOffDuty ? '#EF4444' : '#34D399',
-            boxShadow: isOffDuty 
-              ? '0 0 12px rgba(239, 68, 68, 0.2)' 
-              : '0 0 12px rgba(16, 185, 129, 0.2)',
-            textShadow: isOffDuty
-              ? '0 0 8px rgba(239, 68, 68, 0.3)'
-              : '0 0 8px rgba(16, 185, 129, 0.3)',
-          }}
-          onClick={() => {
-            setIsOffDuty(!isOffDuty);
-          }}
-        >
-          {isOffDuty ? '🏖️ On Time-Off' : '💼 Go Off-Duty'}
-        </button>
+          <button
+            className={`archco-action-btn ${isOffDuty ? 'is-off-duty' : 'is-secondary'}`}
+            onClick={() => setIsOffDuty((value) => !value)}
+          >
+            {isOffDuty ? 'On Time-Off' : 'Go Off-Duty'}
+          </button>
 
-        <button
-          className="archco-ai-update-btn"
-          style={{
-            marginLeft: '8px',
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(16, 185, 129, 0.25) 100%)',
-            borderColor: 'rgba(245, 158, 11, 0.6)',
-            color: '#F59E0B',
-            boxShadow: '0 0 12px rgba(245, 158, 11, 0.2)',
-            textShadow: '0 0 8px rgba(245, 158, 11, 0.3)',
-          }}
-          onClick={() => {
+          <button
+            className="archco-action-btn is-payroll"
+            onClick={() => {
             // Route XP/level growth through the living-data store (the persisted
             // source of truth) instead of mutating the shared EMPLOYEES module.
             const all = getAllLivingData();
@@ -261,10 +238,11 @@ export function ArchCo({
             setLivingTick((t) => t + 1); // re-read living data for display
             alert('💸 Payroll Sent!\nDistributed salaries and weekend double-pay bonuses to all employees. Team satisfaction +100%! (+50 XP rewarded) 💰');
             setPayrollTrigger((prev) => prev + 1);
-          }}
-        >
-          💵 Pay Payroll
-        </button>
+            }}
+          >
+            Pay Payroll
+          </button>
+        </div>
 
         <div className="archco-clock">
           <span className="archco-daynight" aria-hidden="true">

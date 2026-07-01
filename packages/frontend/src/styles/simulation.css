@@ -218,6 +218,12 @@
 }
 .sim-toggle-btn:hover { background: rgba(245, 158, 11, 0.16); }
 .sim-toggle-btn.active { background: rgba(245, 158, 11, 0.2); box-shadow: 0 0 14px rgba(245, 158, 11, 0.3); }
+.sim-all-btn {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: #38bdf8;
+  color: #7dd3fc;
+}
+.sim-all-btn:hover { background: rgba(56, 189, 248, 0.16); }
 .sim-reset-btn {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid #ef4444;

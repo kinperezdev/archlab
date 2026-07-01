@@ -9,10 +9,12 @@ import path from 'node:path';
 import type {
   CanvasGraph,
   CanvasNode,
+  InternetConnectionsSummary,
   MissingInfraPattern,
   ProjectIntelligence,
   SystemDesignMap,
 } from '@archlab/shared';
+import { detectToolsInFile } from './toolCatalog.js';
 import { scanProject, type ScanResult } from './scan.js';
 import { classify } from './classify.js';
 import { detectEdges } from './edges.js';
@@ -33,6 +35,8 @@ export interface AnalysisResult {
   projectReadme: string | null;
   /** Major infrastructure the project is missing, with ready-to-use prompts. */
   missingInfraPatterns: MissingInfraPattern[];
+  /** Outbound internet connections detected via third-party tools. */
+  internetConnections: InternetConnectionsSummary;
 }
 
 /** Common README filenames, in priority order. */
@@ -70,6 +74,7 @@ export function analyzeProject(rootPath: string): AnalysisResult {
   const projectReadme = readProjectReadme(scan.root);
   const infra = detectInfrastructure(scan, techStack, projectReadme);
   const missingInfraPatterns = detectMissingInfra(scan, positioned, techStack);
+  const internetConnections = summarizeInternet(positioned, scan);
 
   return {
     projectId,
@@ -82,6 +87,49 @@ export function analyzeProject(rootPath: string): AnalysisResult {
     infra,
     projectReadme,
     missingInfraPatterns,
+    internetConnections,
+  };
+}
+
+/** Aggregate the project's outbound internet connections from detected tools. */
+function summarizeInternet(nodes: CanvasNode[], scan: ScanResult): InternetConnectionsSummary {
+  const byTool = new Map<string, { toolName: string; nodeCount: number; notes: Set<string> }>();
+  let connectedNodes = 0;
+  for (const n of nodes) {
+    const tools = (n.detectedTools ?? []).filter((t) => t.isInternetConnected);
+    if (tools.length > 0) connectedNodes += 1;
+    for (const t of tools) {
+      const e = byTool.get(t.id) ?? { toolName: t.name, nodeCount: 0, notes: new Set<string>() };
+      e.nodeCount += 1;
+      if (t.securityNotes) e.notes.add(t.securityNotes);
+      byTool.set(t.id, e);
+    }
+  }
+
+  let unverifiedFetchCalls = 0;
+  const potentialDataLeaks: string[] = [];
+  for (const f of scan.files) {
+    const c = f.content;
+    if (!c) continue;
+    if (!/\bfetch\s*\(|axios\.(get|post|put|delete)|axios\(/.test(c)) continue;
+    const recognized = detectToolsInFile(c, f.relPath).some((t) => t.isInternetConnected);
+    if (recognized) continue;
+    unverifiedFetchCalls += 1;
+    const sendsData = /method:\s*['"]?(post|put)|axios\.(post|put)|body:/i.test(c);
+    const hasAuth = /authorization|bearer|api[_-]?key|x-api-key|credentials/i.test(c);
+    if (sendsData && !hasAuth && potentialDataLeaks.length < 20) potentialDataLeaks.push(f.relPath);
+  }
+
+  return {
+    totalConnectedNodes: connectedNodes,
+    externalServices: [...byTool.entries()].map(([toolId, e]) => ({
+      toolId,
+      toolName: e.toolName,
+      nodeCount: e.nodeCount,
+      securityNotes: [...e.notes],
+    })),
+    unverifiedFetchCalls,
+    potentialDataLeaks,
   };
 }
 

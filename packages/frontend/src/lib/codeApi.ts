@@ -22,12 +22,26 @@ export interface FileIntelResult {
 /** Load the full code-intelligence view (classified lines + symbols) of a file. */
 export async function fetchFileIntel(projectId: string, relPath: string): Promise<FileIntelResult> {
   const url = `${BASE}/code/file?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(relPath)}`;
+  const request = async () => {
+    const response = await fetch(url);
+    return response.json();
+  };
   try {
-    const res = await fetch(url).then((r) => r.json());
+    const res = await request();
     if (res?.ok) return { intel: res.intel as FileIntel, error: null };
     return { intel: null, error: typeof res?.error === 'string' ? res.error : 'Unknown error loading file.' };
-  } catch (err) {
-    return { intel: null, error: `Request failed: ${String(err)}` };
+  } catch (firstErr) {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    try {
+      const res = await request();
+      if (res?.ok) return { intel: res.intel as FileIntel, error: null };
+      return { intel: null, error: typeof res?.error === 'string' ? res.error : 'Unknown error loading file.' };
+    } catch {
+      return {
+        intel: null,
+        error: `Backend file loader is unavailable. Make sure the ArchLab backend is running, then reopen this node. Original error: ${String(firstErr)}`,
+      };
+    }
   }
 }
 

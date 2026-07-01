@@ -4,8 +4,8 @@
  * Every capability is a card node, grouped into 8 horizontal section bands and
  * wired together by dependency edges. Each card reads the real detected infra
  * (`infra`), package.json dependencies, README-stated tech, and pipeline
- * findings and resolves to one of four states (detected / partial / missing /
- * critical-gap). A compact score header sits above the canvas, and a slide-in
+ * findings and resolves to evidence-backed assessment states. A compact evidence
+ * coverage header sits above the canvas, and a slide-in
  * detail panel opens on card click.
  *
  * Detection logic only reads the props passed in — it never touches the backend.
@@ -57,24 +57,21 @@ interface EnterpriseAuditProps {
   onAddApiKey?: () => void;
 }
 
-const STATE_POINTS: Record<EnterpriseCardState, number> = {
-  detected: 1,
-  partial: 0.5,
-  missing: 0,
-  'critical-gap': -0.5,
-};
-
 const STATE_LABEL: Record<EnterpriseCardState, string> = {
-  detected: 'Detected',
-  partial: 'Partial',
-  missing: 'Missing',
+  verified: 'Verified',
+  inferred: 'Inferred',
+  unknown: 'Unknown',
+  'not-applicable': 'Not Applicable',
+  gap: 'Gap',
   'critical-gap': 'Critical Gap',
 };
 
 const BADGE: Record<EnterpriseCardState, string> = {
-  detected: '✓',
-  partial: '–',
-  missing: '',
+  verified: '✓',
+  inferred: '≈',
+  unknown: '?',
+  'not-applicable': '–',
+  gap: '!',
   'critical-gap': '✕',
 };
 
@@ -87,6 +84,8 @@ const MED_SEVERITIES: Severity[] = ['bottleneck', 'medium'];
 
 interface DetectCtx {
   nodeTypes: Set<InfraNodeType>;
+  /** Source evidence grouped by the infrastructure node type it established. */
+  nodeEvidence: Map<InfraNodeType, string[]>;
   /** Lowercased searchable text built from the detected infra (project evidence). */
   corpus: string;
   /** Lowercased package.json dependency names + CI/scan config markers. */
@@ -94,13 +93,23 @@ interface DetectCtx {
   /** Lowercased technologies named explicitly in the README. */
   readme: Set<string>;
   findings: Diagnostic[];
+  serviceCount: number;
+  hasBackend: boolean;
+  hasStatefulData: boolean;
+  hasPublicEdge: boolean;
+  hasDeploymentEvidence: boolean;
 }
 
 /** Build the detection context once from infra + findings + dependencies. */
 function buildContext(infra: SystemDesignMap, findings: Diagnostic[], dependencies: string[]): DetectCtx {
   const nodeTypes = new Set<InfraNodeType>(infra.nodes.map((n) => n.type));
+  const nodeEvidence = new Map<InfraNodeType, string[]>();
   const parts: string[] = [];
   for (const n of infra.nodes) {
+    nodeEvidence.set(
+      n.type,
+      n.evidence.map((ev) => `${ev.file}: ${ev.pattern}`),
+    );
     parts.push(n.type, n.label);
     for (const ev of n.evidence) {
       parts.push(ev.pattern);
@@ -108,9 +117,15 @@ function buildContext(infra: SystemDesignMap, findings: Diagnostic[], dependenci
       parts.push(ev.file);
     }
   }
+  const corpus = parts.join(' \n ').toLowerCase();
   const deps = new Set(dependencies.map((d) => d.toLowerCase()));
   const readme = new Set((infra.projectContext?.technologies ?? []).map((t) => t.toLowerCase()));
-  return { nodeTypes, corpus: parts.join(' \n ').toLowerCase(), deps, readme, findings };
+  const serviceCount = infra.nodes.filter((n) => n.type === 'microservice').length;
+  const hasBackend = serviceCount > 0 || ['express', 'fastify', 'nestjs', 'django', 'flask', 'spring-boot', 'laravel'].some((d) => deps.has(d));
+  const hasStatefulData = infra.nodes.some((n) => ['postgres', 'mysql', 'mongodb', 'redis', 'private-bucket', 'public-bucket'].includes(n.type));
+  const hasPublicEdge = infra.nodes.some((n) => ['cdn', 'load-balancer', 'api-gateway', 'waf', 'ddos-protection'].includes(n.type));
+  const hasDeploymentEvidence = /dockerfile|docker-compose|kubernetes|helm|terraform|pulumi|vercel|netlify|fly\.io|railway|ecs|cloud run/.test(corpus) || hasPublicEdge;
+  return { nodeTypes, nodeEvidence, corpus, deps, readme, findings, serviceCount, hasBackend, hasStatefulData, hasPublicEdge, hasDeploymentEvidence };
 }
 
 /** Escape a keyword so it can be embedded literally in a RegExp. */
@@ -149,107 +164,119 @@ function readmeProof(def: CardDef, ctx: DetectCtx): string | null {
 
 /** Does a finding mention any of the keywords in its title or body text? */
 function findingMatches(f: Diagnostic, keywords: string[]): boolean {
+  // Version intelligence describes one dependency's maintenance state. It is
+  // not evidence that an architectural capability such as CI or test coverage
+  // is absent, even when the dependency name happens to match a keyword.
+  if (f.step === 'final-report' && /^outdated dependency:/i.test(f.title)) return false;
   const hay = `${f.title} ${f.what} ${f.why} ${f.howToFix}`.toLowerCase();
-  return keywords.some((k) => hay.includes(k));
+  return keywords.some((k) => wordHit(k, hay));
 }
 
-/** Resolve one card's live state and the human-readable detail line. */
-function evaluateCard(def: CardDef, ctx: DetectCtx): { state: EnterpriseCardState; detail: string } {
-  // 1. Negative signal: its very presence is the risk (anti-pattern in code).
+type Applicability = { applies: boolean; reason: string };
+
+const PUBLIC_EDGE_CAPABILITIES = new Set([
+  'cdn', 'load-balancer', 'waf', 'ddos-protection', 'auto-scaling', 'blue-green', 'canary-releases', 'multi-region', 'sla-slo-sli', 'cost-monitoring',
+]);
+const MULTI_SERVICE_CAPABILITIES = new Set([
+  'service-mesh', 'mtls', 'circuit-breaker', 'bulkhead-pattern', 'failover-strategy', 'chaos-engineering',
+]);
+const STATEFUL_CAPABILITIES = new Set([
+  'database-sharding', 'read-replicas', 'caching-strategy', 'consistency-model', 'data-partitioning', 'backup-strategy', 'encryption-at-rest', 'migration-strategy',
+]);
+const BACKEND_CAPABILITIES = new Set([
+  'auth-service', 'access-control', 'business-logic-abuse', 'external-apis', 'ssrf', 'sensitive-data-exposure', 'input-validation', 'rate-limiting', 'api-inventory', 'configuration-security', 'structured-logging', 'metrics-collection', 'distributed-tracing', 'alerting-rules', 'health-checks', 'uptime-monitoring', 'error-tracking', 'audit-logging', 'retry-logic', 'timeout-handling', 'graceful-degradation', 'secrets-management', 'rbac',
+]);
+
+function applicabilityFor(def: CardDef, ctx: DetectCtx): Applicability {
+  if ((def.id === 'microservices' || def.id === 'microservices-architecture') && ctx.serviceCount < 2) {
+    return { applies: false, reason: 'A single deployable service was detected, not a microservice architecture.' };
+  }
+  if (PUBLIC_EDGE_CAPABILITIES.has(def.id) && !ctx.hasDeploymentEvidence) {
+    return { applies: false, reason: 'No production edge or deployment configuration was detected.' };
+  }
+  if (MULTI_SERVICE_CAPABILITIES.has(def.id) && ctx.serviceCount < 2) {
+    return { applies: false, reason: 'This control applies once multiple independently deployed services exist.' };
+  }
+  if (STATEFUL_CAPABILITIES.has(def.id) && !ctx.hasStatefulData) {
+    return { applies: false, reason: 'No stateful data store was detected.' };
+  }
+  if (BACKEND_CAPABILITIES.has(def.id) && !ctx.hasBackend) {
+    return { applies: false, reason: 'No backend service was detected.' };
+  }
+  return { applies: true, reason: '' };
+}
+
+function evidenceForNodeTypes(def: CardDef, ctx: DetectCtx): string[] {
+  return [...ctx.nodeTypes]
+    .filter((type) => def.nodeTypes?.includes(type))
+    .flatMap((type) => ctx.nodeEvidence.get(type) ?? [`Detected infrastructure node: ${type}`])
+    .slice(0, 4);
+}
+
+/** Resolve one card from evidence. Absence is unknown, never a finding by itself. */
+function evaluateCard(def: CardDef, ctx: DetectCtx): Pick<EnterpriseCard, 'state' | 'detail' | 'evidence' | 'confidence'> {
+  const applicability = applicabilityFor(def, ctx);
+  if (!applicability.applies) {
+    return { state: 'not-applicable', detail: applicability.reason, evidence: [], confidence: 1 };
+  }
+
   if (def.negativeKeywords?.some((k) => wordHit(k, ctx.corpus))) {
-    return {
-      state: 'critical-gap',
-      detail: 'A risky anti-pattern was found in the code — this must be remediated, not relied on.',
-    };
+    const riskyPatterns = def.negativeKeywords.filter((k) => wordHit(k, ctx.corpus));
+    return { state: 'critical-gap', detail: 'A risky anti-pattern was found in scanned project evidence.', evidence: riskyPatterns.map((k) => `Risk pattern: ${k}`), confidence: 0.95 };
   }
 
-  // 2. Direct infrastructure detection — strongest signal.
   if (def.nodeTypes?.some((t) => ctx.nodeTypes.has(t))) {
-    return { state: 'detected', detail: 'ArchLab detected this directly in the project infrastructure.' };
+    return { state: 'verified', detail: 'Direct infrastructure evidence was detected in the project.', evidence: evidenceForNodeTypes(def, ctx), confidence: 0.95 };
   }
 
-  // 3. Confirmed dependency / config-file proof — high confidence.
   const dep = dependencyProof(def, ctx);
   if (dep) {
-    return { state: 'detected', detail: `Confirmed by a project dependency/config: ${dep}.` };
+    return { state: 'inferred', detail: `A project dependency/config indicates this capability: ${dep}.`, evidence: [`Dependency/config: ${dep}`], confidence: 0.75 };
   }
 
-  // 3b. Explicit README mention — equal confidence to a dependency.
   const readme = readmeProof(def, ctx);
   if (readme) {
-    return { state: 'detected', detail: `Named in the project README: ${readme}.` };
+    return { state: 'inferred', detail: `The README claims this capability: ${readme}.`, evidence: [`README statement: ${readme}`], confidence: 0.65 };
   }
 
-  // Findings scan (scoped to security-checks step when requested).
-  const pool = def.securityStep
-    ? ctx.findings.filter((f) => f.step === 'security-checks')
-    : ctx.findings;
+  const pool = def.securityStep ? ctx.findings.filter((f) => f.step === 'security-checks') : ctx.findings;
   const matched = def.keywords ? pool.filter((f) => findingMatches(f, def.keywords!)) : [];
-  const hasHigh = matched.some((f) => HIGH_SEVERITIES.includes(f.severity));
-  const hasMed = matched.some((f) => MED_SEVERITIES.includes(f.severity));
-
-  // 4a. Safety-critical capabilities: corpus keywords can never promote these.
-  if (def.criticalIfMissing) {
-    if (hasHigh) {
-      const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
-      return { state: 'critical-gap', detail: `A ${f.severity} finding flags this as a gap: ${f.title}.` };
-    }
-    return {
-      state: 'critical-gap',
-      detail: 'Not proven by infrastructure or a dependency. Its absence is a security/reliability risk.',
-    };
+  const highFinding = matched.find((f) => HIGH_SEVERITIES.includes(f.severity));
+  const mediumFinding = matched.find((f) => MED_SEVERITIES.includes(f.severity));
+  if (highFinding) {
+    return { state: 'critical-gap', detail: `A ${highFinding.severity} finding identifies this as a risk: ${highFinding.title}.`, evidence: [`${highFinding.step}: ${highFinding.title}`], confidence: 0.85 };
+  }
+  if (mediumFinding) {
+    return { state: 'gap', detail: `A finding identifies this as incomplete: ${mediumFinding.title}.`, evidence: [`${mediumFinding.step}: ${mediumFinding.title}`], confidence: 0.75 };
   }
 
-  // 4b. Operational/process capabilities: not verifiable from static code.
-  if (def.requiresProof) {
-    if (hasHigh) {
-      const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
-      return { state: 'critical-gap', detail: `A ${f.severity} finding flags this as a gap: ${f.title}.` };
-    }
-    if (def.partialTypes?.some((t) => ctx.nodeTypes.has(t))) {
-      return { state: 'partial', detail: 'Related infrastructure exists, but this capability is unproven.' };
-    }
-    return { state: 'missing', detail: 'Not proven by infrastructure or a dependency; requires verification.' };
-  }
-
-  // 5. Normal cards: require 2+ whole-word corpus hits for Detected.
   const hits = corpusKeywordHits(def.keywords, ctx.corpus);
-  if (hits >= 2 && !hasHigh) {
-    return { state: 'detected', detail: 'Multiple corroborating signals were found in the scanned code.' };
+  if (hits >= 2) {
+    return { state: 'inferred', detail: 'Multiple code signals suggest this capability, but runtime behavior is unverified.', evidence: [`${hits} matching project signals`], confidence: 0.6 };
   }
   if (def.partialTypes?.some((t) => ctx.nodeTypes.has(t))) {
-    return { state: 'partial', detail: 'Related infrastructure exists, but this capability looks incomplete.' };
+    return { state: 'inferred', detail: 'Related infrastructure exists, but this capability is not directly proven.', evidence: ['Related infrastructure node detected'], confidence: 0.5 };
   }
-  if (hits === 1 && !hasHigh) {
-    return { state: 'partial', detail: 'A single weak signal was found — partial at best, not confirmed.' };
+  if (hits === 1) {
+    return { state: 'inferred', detail: 'One weak project signal was found. Verify before relying on it.', evidence: ['One matching project signal'], confidence: 0.35 };
   }
-
-  // 6. Findings indicate the gap explicitly.
-  if (hasHigh) {
-    const f = matched.find((m) => HIGH_SEVERITIES.includes(m.severity))!;
-    return { state: 'critical-gap', detail: `A ${f.severity} finding flags this as a gap: ${f.title}.` };
-  }
-  if (hasMed) {
-    const f = matched.find((m) => MED_SEVERITIES.includes(m.severity))!;
-    return { state: 'missing', detail: `A finding notes room to improve here: ${f.title}.` };
-  }
-  return { state: 'missing', detail: 'Not detected in this project.' };
+  return { state: 'unknown', detail: 'Static analysis has no evidence either way. This requires runtime, deployment, or process evidence.', evidence: [], confidence: 0 };
 }
 
-/** Average score (0-100) for a list of card states. */
+/** Direct verification coverage, excluding controls that do not apply to this project. */
 function scoreOf(cards: EnterpriseCard[]): number {
-  if (cards.length === 0) return 0;
-  const sum = cards.reduce((acc, c) => acc + STATE_POINTS[c.state], 0);
-  return Math.max(0, Math.round((sum / cards.length) * 100));
+  const applicable = cards.filter((c) => c.state !== 'not-applicable');
+  if (applicable.length === 0) return 0;
+  const verified = applicable.filter((c) => c.state === 'verified');
+  return Math.round((verified.length / applicable.length) * 100);
 }
 
-/** Compute the full audit result from infra + findings + dependencies. */
-function computeAudit(infra: SystemDesignMap, findings: Diagnostic[], dependencies: string[]): EnterpriseAuditResult {
+export function computeAudit(infra: SystemDesignMap, findings: Diagnostic[], dependencies: string[]): EnterpriseAuditResult {
   const ctx = buildContext(infra, findings, dependencies);
   const sections: EnterpriseSection[] = ENTERPRISE_SECTIONS.map((section: SectionDef) => {
     const cards: EnterpriseCard[] = section.cards.map((def) => {
-      const { state, detail } = evaluateCard(def, ctx);
-      return { id: def.id, label: def.label, state, what: def.what, why: def.why, detail, fixPrompt: def.fix };
+      const assessment = evaluateCard(def, ctx);
+      return { id: def.id, label: def.label, what: def.what, why: def.why, fixPrompt: def.fix, ...assessment };
     });
     return { id: section.id, title: section.title, color: section.color, cards, score: scoreOf(cards) };
   });
@@ -257,24 +284,43 @@ function computeAudit(infra: SystemDesignMap, findings: Diagnostic[], dependenci
   const allCards = sections.flatMap((s) => s.cards);
   const count = (state: EnterpriseCardState) => allCards.filter((c) => c.state === state).length;
   const score = scoreOf(allCards);
-  const verdict =
-    score >= 80 ? 'Production Ready' : score >= 50 ? 'Needs Hardening' : 'Not Production Ready';
+  const verdict = 'Static Verification Only';
 
   return {
     sections,
     score,
     verdict,
     totalCards: allCards.length,
-    detectedCount: count('detected'),
-    partialCount: count('partial'),
-    missingCount: count('missing'),
+    applicableCount: allCards.length - count('not-applicable'),
+    verifiedCount: count('verified'),
+    inferredCount: count('inferred'),
+    unknownCount: count('unknown'),
+    notApplicableCount: count('not-applicable'),
+    gapCount: count('gap'),
     criticalGapCount: count('critical-gap'),
   };
 }
 
-/** Color band the overall/section score falls into. */
-function scoreColor(score: number): string {
-  return score >= 80 ? '#22C55E' : score >= 50 ? '#F59E0B' : '#EF4444';
+export function getOverallVerdict(result: EnterpriseAuditResult): { text: string; label: string; score: number } {
+  const allCards = result.sections.flatMap((s) =>
+    s.cards.map((card) => ({ card, sectionId: s.id }))
+  );
+  const criticalGaps = allCards
+    .filter((c) => c.card.state === 'critical-gap')
+    .sort((a, b) => sectionRank(a.sectionId) - sectionRank(b.sectionId));
+  const top3 = criticalGaps.slice(0, 3).map((c) => c.card.label);
+  const risks = top3.length > 0 ? top3.join(', ') : 'no critical risks were evidenced';
+  const text = `${result.verifiedCount} of ${result.applicableCount} applicable capabilities are directly verified in the current project. ${result.inferredCount} are inferred from indirect evidence, ${result.unknownCount} need runtime or deployment evidence, and ${result.criticalGapCount} critical risks are evidenced. Highest-priority risks: ${risks}.`;
+  return {
+    text,
+    label: result.verdict,
+    score: result.score
+  };
+}
+
+/** Direct verification is informational, never a pass/fail risk score. */
+function verificationColor(): string {
+  return '#60A5FA';
 }
 
 // ---------------------------------------------------------------------------
@@ -333,8 +379,7 @@ for (const s of ENTERPRISE_SECTIONS) {
 function reEvaluateCard(card: EnterpriseCard, ctx: DetectCtx): EnterpriseCard {
   const def = CARD_DEF_BY_ID.get(card.id);
   if (!def) return card;
-  const { state, detail } = evaluateCard(def, ctx);
-  return { ...card, state, detail };
+  return { ...card, ...evaluateCard(def, ctx) };
 }
 
 /** Section priority for the Master Action Plan (lower = surfaced first). */
@@ -417,67 +462,6 @@ const NODE_TYPES = { auditCard: AuditCardNode, sectionLabel: SectionLabelNode };
 const SMALL_RING_R = 24;
 const SMALL_RING_C = 2 * Math.PI * SMALL_RING_R;
 
-function ScoreHeader({
-  result,
-  hasApiKey,
-  aiEnhanced,
-  lastRunAt,
-  onExport,
-}: {
-  result: EnterpriseAuditResult;
-  hasApiKey: boolean;
-  aiEnhanced: boolean;
-  lastRunAt: string | null;
-  onExport: () => void;
-}) {
-  const color = scoreColor(result.score);
-  const offset = SMALL_RING_C * (1 - result.score / 100);
-  return (
-    <div className="ea-score-header">
-      {/* Static-only mode desaturates the ring (70% opacity) to signal lower
-          confidence; AI-enhanced mode shows it at full strength. */}
-      <div
-        className="ea-mini-ring"
-        style={{ ['--ring-color' as string]: color, opacity: aiEnhanced ? 1 : 0.7 }}
-      >
-        <svg viewBox="0 0 56 56" width="56" height="56">
-          <circle cx="28" cy="28" r={SMALL_RING_R} className="ea-ring-track" />
-          <circle
-            cx="28"
-            cy="28"
-            r={SMALL_RING_R}
-            className="ea-ring-progress"
-            stroke={color}
-            strokeDasharray={SMALL_RING_C}
-            strokeDashoffset={offset}
-          />
-        </svg>
-        <span className="ea-mini-ring-score" style={{ color }}>{result.score}%</span>
-      </div>
-      <div className="ea-score-header-text">
-        <div className="ea-score-header-verdict" style={{ color }}>
-          {result.verdict}
-          {aiEnhanced ? (
-            <span className="ea-score-header-note" style={{ color: '#22C55E' }}>
-              Static + AI analysis · Agent Team last run {formatRunTimestamp(lastRunAt)}
-            </span>
-          ) : (
-            !hasApiKey && (
-              <span className="ea-score-header-note">Static analysis only · Add API key for AI insights</span>
-            )
-          )}
-        </div>
-        <div className="ea-score-header-dots">
-          {result.sections.map((s) => (
-            <span key={s.id} className="ea-dot" style={{ background: s.color }} title={`${s.title}: ${s.score}%`} />
-          ))}
-        </div>
-      </div>
-      <button className="ea-export-btn ea-export-compact" onClick={onExport}>📥 Export</button>
-    </div>
-  );
-}
-
 function DetailPanel({
   card,
   color,
@@ -507,6 +491,16 @@ function DetailPanel({
         <p className="ea-detail-text">{card.why}</p>
         <h5 className="ea-detail-label">What ArchLab found</h5>
         <p className="ea-detail-text">{card.detail}</p>
+        {card.evidence.length > 0 && (
+          <>
+            <h5 className="ea-detail-label">Evidence</h5>
+            <ul className="ea-detail-neighbors">
+              {card.evidence.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </>
+        )}
+        <h5 className="ea-detail-label">Assessment confidence</h5>
+        <p className="ea-detail-text">{Math.round(card.confidence * 100)}%</p>
         {neighbors.length > 0 && (
           <>
             <h5 className="ea-detail-label">Connected capabilities</h5>
@@ -547,6 +541,7 @@ function exportReport(result: EnterpriseAuditResult) {
                 <div class="row-body"><b>What:</b> ${c.what}</div>
                 <div class="row-body"><b>Why:</b> ${c.why}</div>
                 <div class="row-body"><b>Found:</b> ${c.detail}</div>
+                ${c.evidence.length ? `<div class="row-body"><b>Evidence:</b> ${c.evidence.join(' · ')}</div>` : ''}
                 <div class="row-fix"><b>Fix:</b> ${c.fixPrompt}</div>
               </div>
             </li>`,
@@ -554,7 +549,7 @@ function exportReport(result: EnterpriseAuditResult) {
         .join('');
       return `
         <section class="sec">
-          <h2 style="color:${s.color}">${s.title} <span class="sec-score">${s.score}%</span></h2>
+          <h2 style="color:${s.color}">${s.title} <span class="sec-score">Direct verification</span></h2>
           <ul class="rows">${cards}</ul>
         </section>`;
     })
@@ -567,7 +562,7 @@ function exportReport(result: EnterpriseAuditResult) {
         <style>
           body { background:#080810; color:#f4f4ff; font-family:'Inter',system-ui,sans-serif; padding:40px; }
           h1 { font-size:28px; margin:0 0 4px; }
-          .score { font-size:48px; font-weight:800; color:${scoreColor(result.score)}; }
+          .score { font-size:48px; font-weight:800; color:${verificationColor()}; }
           .verdict { font-size:18px; color:#c4c4d4; margin-bottom:28px; }
           .sec { break-inside:avoid; margin-bottom:28px; border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:20px; background:#10101c; }
           .sec h2 { font-size:18px; margin:0 0 14px; display:flex; justify-content:space-between; }
@@ -577,16 +572,17 @@ function exportReport(result: EnterpriseAuditResult) {
           .dot { width:10px; height:10px; border-radius:50%; margin-top:5px; flex-shrink:0; }
           .row-head em { color:#8a8; font-style:normal; font-size:12px; }
           .state-critical-gap .row-head em { color:#f66; }
-          .state-missing .row-head em { color:#caa; }
-          .state-partial .row-head em { color:#fb3; }
+          .state-gap .row-head em { color:#fb3; }
+          .state-unknown .row-head em { color:#9aa; }
+          .state-not-applicable .row-head em { color:#778; }
           .row-body, .row-fix { font-size:13px; color:#bcbccc; margin-top:3px; }
           .row-fix { color:#9cf; }
         </style>
       </head>
       <body>
         <h1>ArchLab Enterprise Audit</h1>
-        <div class="score">${result.score}% — ${result.verdict}</div>
-        <div class="verdict">${result.detectedCount} detected · ${result.partialCount} partial · ${result.missingCount} missing · ${result.criticalGapCount} critical gaps across ${result.totalCards} capabilities.</div>
+        <div class="score">${result.verifiedCount} / ${result.applicableCount} verified controls</div>
+        <div class="verdict">${result.verifiedCount} verified · ${result.inferredCount} inferred · ${result.unknownCount} unknown · ${result.notApplicableCount} not applicable · ${result.gapCount} gaps · ${result.criticalGapCount} critical gaps across ${result.applicableCount} applicable capabilities.</div>
         ${sectionHtml}
         <script>window.onload=function(){window.print();window.close();}</script>
       </body>
@@ -622,6 +618,14 @@ export function EnterpriseAudit({
     [infra, findings, dependencies],
   );
 
+  // Production-ready score from ONLY what is actually evaluable right now:
+  // verified out of (verified + inferred). The "unknown" controls need runtime/
+  // deployment evidence we don't have, so excluding them avoids understating
+  // readiness with things that simply can't be checked statically yet.
+  const evaluableCount = result.verifiedCount + result.inferredCount;
+  const productionReady =
+    evaluableCount > 0 ? Math.round((result.verifiedCount / evaluableCount) * 100) : 0;
+
   // Agent-sourced findings carry an agentId; absence means no AI analysis yet.
   const hasAgentFindings = useMemo(() => findings.some((f) => Boolean(f.agentId)), [findings]);
 
@@ -637,7 +641,7 @@ export function EnterpriseAudit({
 
   /** Whether a card should show the "Run Agent Team" nudge. */
   const showNudgeFor = useCallback(
-    (state: EnterpriseCardState) => state === 'critical-gap' && (!hasApiKey || !hasAgentFindings),
+    (state: EnterpriseCardState) => (state === 'critical-gap' || state === 'gap') && (!hasApiKey || !hasAgentFindings),
     [hasApiKey, hasAgentFindings],
   );
 
@@ -659,9 +663,9 @@ export function EnterpriseAudit({
         connectable: false,
       });
       section.cards.forEach((def, cIdx) => {
-        const { state, detail } = evaluateCard(def, base);
+        const assessment = evaluateCard(def, base);
         const card: EnterpriseCard = {
-          id: def.id, label: def.label, state, what: def.what, why: def.why, detail, fixPrompt: def.fix,
+          id: def.id, label: def.label, what: def.what, why: def.why, fixPrompt: def.fix, ...assessment,
         };
         out.push({
           id: def.id,
@@ -671,7 +675,7 @@ export function EnterpriseAudit({
             card,
             color: section.color,
             icon: iconFor(def.id),
-            showAgentNudge: showNudgeFor(state),
+            showAgentNudge: showNudgeFor(assessment.state),
             onRunAgentTeam: runAgentTeam,
           } satisfies CardNodeData,
           draggable: false,
@@ -767,14 +771,6 @@ export function EnterpriseAudit({
 
   return (
     <div className="ea-flow-root">
-      <ScoreHeader
-        result={result}
-        hasApiKey={hasApiKey}
-        aiEnhanced={aiEnhanced}
-        lastRunAt={lastAgentRunAt}
-        onExport={() => exportReport(result)}
-      />
-
       {!hasApiKey && (
         <div className="ea-apikey-banner">
           <span>⚡ Connect an API key to run Agent Team and get AI-backed analysis for critical gaps.</span>
@@ -806,7 +802,7 @@ export function EnterpriseAudit({
           </ReactFlow>
         </ReactFlowProvider>
 
-        {selected && (
+        {selected ? (
           <DetailPanel
             card={selected.card}
             color={selected.color}
@@ -815,10 +811,66 @@ export function EnterpriseAudit({
             onClose={closePanel}
             onRunAgentTeam={runAgentTeam}
           />
+        ) : (
+          <aside className="ea-detail-panel" style={{ ['--glow' as string]: '#6366f1' }}>
+            <div className="ea-detail-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="ea-mini-ring" style={{ ['--ring-color' as string]: verificationColor(), opacity: aiEnhanced ? 1 : 0.7, margin: 0, width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg viewBox="0 0 56 56" width="38" height="38" style={{ display: 'block', transform: 'rotate(-90deg)' }}>
+                    <circle cx="28" cy="28" r={SMALL_RING_R} className="ea-ring-track" />
+                    <circle
+                      cx="28"
+                      cy="28"
+                      r={SMALL_RING_R}
+                      className="ea-ring-progress"
+                      stroke={verificationColor()}
+                      strokeDasharray={SMALL_RING_C}
+                      strokeDashoffset={SMALL_RING_C * (1 - result.score / 100)}
+                    />
+                  </svg>
+                  <span className="ea-mini-ring-score" style={{ color: verificationColor(), fontSize: '8px', fontWeight: 'bold' }}>{result.verifiedCount}/{result.applicableCount}</span>
+                </div>
+                <div>
+                  <span className="ea-detail-title" style={{ display: 'block', fontSize: '13px', lineHeight: '1.2', marginBottom: '2px' }}>Verified Controls</span>
+                  <span className="ea-detail-state" style={{ background: verificationColor(), color: '#09090b', fontWeight: 'bold', fontSize: '8px', padding: '1px 5px', borderRadius: '4px' }}>
+                    {result.verdict}
+                  </span>
+                  <span
+                    title={`Of the ${evaluableCount} controls evaluable right now (${result.verifiedCount} verified + ${result.inferredCount} inferred), ${productionReady}% are verified. Excludes ${result.unknownCount} that need runtime/deployment evidence.`}
+                    style={{ display: 'block', fontSize: '9px', color: '#94a3b8', marginTop: '3px', whiteSpace: 'nowrap' }}
+                  >
+                    Production ready:{' '}
+                    <strong style={{ color: productionReady >= 70 ? '#34d399' : productionReady >= 40 ? '#fbbf24' : '#f87171' }}>
+                      {productionReady}%
+                    </strong>{' '}
+                    of evaluable
+                  </span>
+                  {aiEnhanced && lastAgentRunAt && (
+                    <div style={{ fontSize: '8px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                      AI Run: {formatRunTimestamp(lastAgentRunAt)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button className="ea-export-btn ea-export-compact" style={{ margin: 0, padding: '4px 8px', fontSize: '10px', height: '24px' }} onClick={() => exportReport(result)}>📥 Export</button>
+            </div>
+            <div className="ea-detail-body" style={{ flex: 1, overflowY: 'auto', padding: '14px' }}>
+              {infra.projectContext?.fromReadme && (
+                <div style={{ background: '#09090b', border: '1px solid #1a1a2e', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '11px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: 'bold', color: '#f8fafc' }}>{infra.projectContext.name}</span>
+                    <span style={{ fontSize: '9px', color: '#64748b' }}>📖 Read from README</span>
+                  </div>
+                  {infra.projectContext.purpose && (
+                    <p style={{ margin: 0, color: '#94a3b8', lineHeight: '1.4' }}>{infra.projectContext.purpose}</p>
+                  )}
+                </div>
+              )}
+              <MasterActionPlan result={result} purpose={infra.projectContext?.purpose ?? ''} />
+            </div>
+          </aside>
         )}
       </div>
-
-      <MasterActionPlan result={result} purpose={infra.projectContext?.purpose ?? ''} />
     </div>
   );
 }
@@ -849,14 +901,17 @@ function MasterActionPlan({ result, purpose }: { result: EnterpriseAuditResult; 
     [allCards],
   );
 
-  const top5 = criticalGaps.slice(0, 5);
+  const top5 = useMemo(
+    () => [...criticalGaps, ...allCards.filter((c) => c.card.state === 'gap')].slice(0, 5),
+    [allCards, criticalGaps],
+  );
 
   const quickWins = useMemo(
     () =>
       allCards
         .filter(
           (c) =>
-            c.card.state === 'missing' &&
+            c.card.state === 'gap' &&
             (c.section.id === 'deployment-scale' || c.section.id === 'observability') &&
             npmPackageFor(c.card.id),
         )
@@ -867,26 +922,33 @@ function MasterActionPlan({ result, purpose }: { result: EnterpriseAuditResult; 
   const names = (state: EnterpriseCardState) =>
     allCards.filter((c) => c.card.state === state).map((c) => c.card.label);
 
+  const evidenceList = (state: EnterpriseCardState) => {
+    const cards = allCards.filter((c) => c.card.state === state);
+    if (cards.length === 0) return 'none';
+    return cards
+      .map(({ card }) => `${card.label} [${card.evidence.join('; ') || 'no source reference'}]`)
+      .join(', ');
+  };
+
   const verdict = useMemo(() => {
-    const confirmed = result.detectedCount;
+    const confirmed = result.verifiedCount;
     const crit = result.criticalGapCount;
     const top3 = criticalGaps.slice(0, 3).map((c) => c.card.label);
-    const risks = top3.length > 0 ? top3.join(', ') : 'none flagged';
-    return `This project scores ${result.score}% across ${result.totalCards} capabilities. ${confirmed} ${
-      confirmed === 1 ? 'capability is' : 'capabilities are'
-    } confirmed, ${crit} ${crit === 1 ? 'has a critical gap' : 'have critical gaps'}. The biggest risks are ${risks}.`;
+    const risks = top3.length > 0 ? top3.join(', ') : 'no critical risks were evidenced';
+    return `${confirmed} of ${result.applicableCount} applicable capabilities are directly verified. ${result.inferredCount} are inferred, ${result.unknownCount} require runtime or deployment evidence, and ${crit} ${crit === 1 ? 'critical risk is' : 'critical risks are'} evidenced. Highest-priority risks: ${risks}.`;
   }, [result, criticalGaps]);
 
   const aiPrompt = useMemo(() => {
     const list = (arr: string[]) => (arr.length ? arr.join(', ') : 'none');
     return [
       'You are a senior software architect. I have run an enterprise audit on my project and got these results:',
-      `Score: ${result.score}%.`,
-      `Critical gaps: ${list(names('critical-gap'))}.`,
-      `Missing capabilities: ${list(names('missing'))}.`,
-      `Confirmed capabilities: ${list(names('detected'))}.`,
+      `Directly verified controls: ${result.verifiedCount} of ${result.applicableCount} applicable controls. ${result.inferredCount} controls are inferred and ${result.unknownCount} are unknown.`,
+      `Evidence-backed critical risks: ${evidenceList('critical-gap')}.`,
+      `Evidence-backed gaps: ${evidenceList('gap')}.`,
+      `Unknown capabilities requiring runtime, deployment, or process evidence: ${list(names('unknown'))}.`,
+      `Verified capabilities with source evidence: ${evidenceList('verified')}.`,
       `Project context: ${purpose || 'not provided'}.`,
-      'Give me a prioritized action plan with specific implementation steps for the top 5 critical gaps.',
+      'Give me a prioritized action plan only for evidence-backed critical risks and gaps. Do not recommend controls marked not applicable or unknown without stating what evidence is needed first.',
     ].join(' ');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, purpose]);
@@ -894,14 +956,14 @@ function MasterActionPlan({ result, purpose }: { result: EnterpriseAuditResult; 
   return (
     <div className="ea-plan">
       <section className="ea-plan-section">
-        <h4 className="ea-plan-label">Overall Verdict</h4>
+        <h4 className="ea-plan-label">Evidence Summary</h4>
         <p className="ea-plan-verdict">{verdict}</p>
       </section>
 
       <section className="ea-plan-section">
-        <h4 className="ea-plan-label">Top 5 Critical Actions</h4>
+        <h4 className="ea-plan-label">Top Evidence-Backed Actions</h4>
         {top5.length === 0 ? (
-          <p className="ea-plan-empty">No critical gaps — nice work.</p>
+          <p className="ea-plan-empty">No evidence-backed gaps yet. Run the relevant runtime, deployment, or security checks to increase confidence.</p>
         ) : (
           <ul className="ea-plan-actions">
             {top5.map(({ card, section }) => (

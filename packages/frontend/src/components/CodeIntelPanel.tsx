@@ -229,12 +229,13 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
-        openFind();
+        if (findOpen) closeFind();
+        else openFind();
       }
     };
     el.addEventListener('keydown', onKey);
     return () => el.removeEventListener('keydown', onKey);
-  }, [openFind]);
+  }, [closeFind, findOpen, openFind]);
 
   const openReferences = useCallback(
     async (line: number, symbol: string) => {
@@ -329,72 +330,72 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
               </button>
             </>
           )}
+          <button className="code-icon-btn" onClick={onClose} title="Close panel">✕</button>
+        </div>
+      </header>
+
+      <div className="code-toolbar">
+        <SymbolNavigator intel={intel} onJump={jumpToLine} />
+        <div className={`code-find-bar ${findOpen ? 'is-open' : ''}`}>
           <button
-            className={`code-icon-btn ${findOpen ? 'active' : ''}`}
+            className={`code-icon-btn code-find-toggle ${findOpen ? 'active' : ''}`}
             onClick={() => (findOpen ? closeFind() : openFind())}
             title="Find in file (⌘F)"
             aria-label="Find in file"
           >
             <Search size={14} />
           </button>
-          <button className="code-icon-btn" onClick={onClose} title="Close panel">✕</button>
+          {findOpen && (
+            <>
+              <input
+                ref={findInputRef}
+                className="code-find-input"
+                placeholder="Find in file..."
+                value={query}
+                spellCheck={false}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeFind();
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (e.shiftKey) prevMatch();
+                    else nextMatch();
+                  }
+                }}
+              />
+              <span className={`code-find-count ${query && matches.length === 0 ? 'no-results' : ''}`}>
+                {query
+                  ? matches.length === 0
+                    ? 'No results'
+                    : `${activeMatch + 1} of ${matches.length}`
+                  : ''}
+              </span>
+              <button
+                className="code-find-nav"
+                onClick={prevMatch}
+                disabled={matches.length === 0}
+                title="Previous match (Shift+Enter)"
+                aria-label="Previous match"
+              >
+                <ChevronUp size={14} />
+              </button>
+              <button
+                className="code-find-nav"
+                onClick={nextMatch}
+                disabled={matches.length === 0}
+                title="Next match (Enter)"
+                aria-label="Next match"
+              >
+                <ChevronDown size={14} />
+              </button>
+              <button className="code-find-nav" onClick={closeFind} title="Close (Esc)" aria-label="Close find">
+                <X size={14} />
+              </button>
+            </>
+          )}
         </div>
-      </header>
-
-      {findOpen && (
-        <div className="code-find-bar">
-          <Search size={13} className="code-find-icon" aria-hidden="true" />
-          <input
-            ref={findInputRef}
-            className="code-find-input"
-            placeholder="Find in file..."
-            value={query}
-            spellCheck={false}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                closeFind();
-              } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (e.shiftKey) prevMatch();
-                else nextMatch();
-              }
-            }}
-          />
-          <span className={`code-find-count ${query && matches.length === 0 ? 'no-results' : ''}`}>
-            {query
-              ? matches.length === 0
-                ? 'No results'
-                : `${activeMatch + 1} of ${matches.length}`
-              : ''}
-          </span>
-          <button
-            className="code-find-nav"
-            onClick={prevMatch}
-            disabled={matches.length === 0}
-            title="Previous match (Shift+Enter)"
-            aria-label="Previous match"
-          >
-            <ChevronUp size={14} />
-          </button>
-          <button
-            className="code-find-nav"
-            onClick={nextMatch}
-            disabled={matches.length === 0}
-            title="Next match (Enter)"
-            aria-label="Next match"
-          >
-            <ChevronDown size={14} />
-          </button>
-          <button className="code-find-nav" onClick={closeFind} title="Close (Esc)" aria-label="Close find">
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      <div className="code-toolbar">
-        <SymbolNavigator intel={intel} onJump={jumpToLine} />
       </div>
 
       {loading ? (

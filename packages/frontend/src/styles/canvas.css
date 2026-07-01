@@ -21,6 +21,10 @@
 .react-flow__renderer {
   background: var(--color-bg);
 }
+.arch-flow .react-flow__selection,
+.arch-flow .react-flow__selectionpane {
+  display: none !important;
+}
 .arch-minimap {
   background: var(--bg-base) !important;
   border: 1px solid var(--border-subtle);
@@ -139,7 +143,7 @@
 .arch-flow.is-compact-graph .arch-node {
   background: #10131d !important;
   box-shadow: none;
-  contain: layout paint style;
+  contain: layout style;
   transition: none;
   will-change: transform;
 }
@@ -163,9 +167,9 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.arch-flow.is-compact-graph .tied-bundle-edge .react-flow__edge-path {
-  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.22));
-}
+/* No drop-shadow on compact edges: an SVG filter forces a full re-rasterization
+   of the edge layer on every zoom step, which is the main source of zoom flicker
+   on large graphs. The plain stroke reads fine at this density. */
 .bundle-wire-tie {
   pointer-events: none;
 }
@@ -181,9 +185,12 @@
 .arch-flow.is-compact-graph .react-flow__edges {
   pointer-events: none;
 }
-.arch-flow.is-compact-graph.is-viewport-moving .react-flow__edge-path {
-  opacity: 0.34;
-  vector-effect: non-scaling-stroke;
+/* While the viewport is actively zooming/panning on a large graph, hide the
+   whole edge layer. Scaling a few hundred SVG paths every frame is what tears /
+   flickers; the nodes (composited divs) keep moving smoothly, and the edges
+   snap back the instant movement stops. */
+.arch-flow.is-compact-graph.is-viewport-moving .react-flow__edges {
+  visibility: hidden;
 }
 .arch-flow.is-compact-graph .react-flow__viewport {
   will-change: transform;
@@ -197,6 +204,12 @@
   pointer-events: none;
 }
 .arch-flow.is-compact-graph.is-viewport-moving .node-type {
+  display: none;
+}
+.arch-flow.is-compact-graph.is-viewport-moving .node-palette-rail,
+.arch-flow.is-compact-graph.is-viewport-moving .database-badge,
+.arch-flow.is-compact-graph.is-viewport-moving .node-port,
+.arch-flow.is-compact-graph.is-viewport-moving .node-badge-card {
   display: none;
 }
 .arch-flow.is-compact-graph.is-viewport-moving .react-flow__background,
@@ -232,7 +245,14 @@
 }
 .arch-node.kind-database {
   --node-color: var(--kind-database);
-  background: color-mix(in srgb, var(--kind-database) 12%, var(--bg-elevated));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--kind-database) 18%, transparent), transparent 46%),
+    color-mix(in srgb, var(--kind-database) 12%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--kind-database) 84%, white 10%);
+  box-shadow:
+    inset 0 0 0 1px rgba(96, 165, 250, 0.22),
+    0 0 0 1px rgba(96, 165, 250, 0.08),
+    0 10px 24px rgba(37, 99, 235, 0.14);
   color: var(--color-text);
 }
 .arch-node.db-schema-node {
@@ -305,6 +325,233 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--color-text-dim);
+}
+.node-kind-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 16px;
+  border: 1px solid color-mix(in srgb, var(--kind-database) 78%, white 8%);
+  border-radius: 999px 999px 5px 5px;
+  background:
+    linear-gradient(180deg, rgba(96, 165, 250, 0.28), rgba(96, 165, 250, 0.08)),
+    var(--bg-elevated);
+  color: #bfdbfe;
+  font-family: var(--font-mono);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.28);
+}
+.database-badge {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  z-index: 3;
+  padding: 1px 6px;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-elevated) 82%, var(--kind-database));
+  color: #bfdbfe;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  box-shadow: 0 0 12px rgba(96, 165, 250, 0.28);
+}
+.node-palette-rail {
+  position: absolute;
+  top: 50%;
+  right: -46px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.node-palette-rail.db-schema-palette {
+  right: -48px;
+}
+.node-palette-rail.is-lite {
+  right: -32px;
+  gap: 2px;
+}
+.node-palette-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  max-width: 52px;
+  height: 15px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--palette-color) 74%, white 12%);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--palette-color) 24%, transparent), rgba(8, 12, 22, 0.94)),
+    var(--bg-elevated);
+  color: color-mix(in srgb, var(--palette-color) 56%, white 44%);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--palette-color) 30%, transparent),
+    0 0 12px color-mix(in srgb, var(--palette-color) 42%, transparent),
+    0 0 22px color-mix(in srgb, var(--palette-color) 18%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-palette-badge::before {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  width: 13px;
+  height: 1px;
+  background: color-mix(in srgb, var(--palette-color) 62%, transparent);
+  transform: translateY(-50%);
+}
+
+/* Chips that carry a hover card let it escape the pill (no clipping).
+   The rail itself is pointer-events:none; re-enable it on the clickable chip. */
+.node-palette-badge.has-card {
+  overflow: visible;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.node-palette-badge.has-card:hover {
+  filter: brightness(1.18);
+}
+.arch-node.node-focus-rgb .node-palette-badge,
+.arch-node.node-highlight .node-palette-badge {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--palette-color) 54%, white 12%),
+    0 0 14px color-mix(in srgb, var(--palette-color) 62%, transparent),
+    0 0 28px color-mix(in srgb, var(--palette-color) 34%, transparent);
+}
+.node-badge-label {
+  display: inline-block;
+  max-width: 42px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-badge-card {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 50;
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--bg-elevated, #10131d);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+.node-badge-card::after {
+  /* little pointer */
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--color-border);
+}
+.node-palette-badge.has-card:hover .node-badge-card {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.node-badge-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.node-badge-key {
+  flex: 0 0 auto;
+  width: 26px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-dim);
+  padding-top: 1px;
+}
+.node-badge-add { color: #34d399; }
+.node-badge-why { color: #fbbf24; }
+.node-badge-val {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text);
+}
+.node-badge-why-text { color: var(--color-text-dim); }
+.node-badge-muted {
+  color: var(--color-text-dim);
+  font-size: 9px;
+}
+.arch-node.node-focus-rgb {
+  border-color: transparent !important;
+  background:
+    linear-gradient(#10131d, #10131d) padding-box,
+    conic-gradient(from var(--rgb-angle, 0deg), #ff2d55, #ffcc00, #34c759, #00c7ff, #7c3aed, #ff2d55) border-box !important;
+  border-width: 2px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 16px rgba(0, 199, 255, 0.35),
+    0 0 24px rgba(255, 45, 85, 0.22) !important;
+  animation: node-rgb-border 2.4s linear infinite;
+}
+.arch-flow.is-compact-graph .arch-node.node-focus-rgb,
+.arch-flow.is-compact-graph .react-flow__node.selected .arch-node {
+  border-color: transparent !important;
+  background:
+    linear-gradient(#10131d, #10131d) padding-box,
+    conic-gradient(from var(--rgb-angle, 0deg), #ff2d55, #ffcc00, #34c759, #00c7ff, #7c3aed, #ff2d55) border-box !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 18px rgba(0, 199, 255, 0.42),
+    0 0 30px rgba(255, 45, 85, 0.26) !important;
+  animation: node-rgb-border 2.4s linear infinite;
+}
+@property --rgb-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes node-rgb-border {
+  to {
+    --rgb-angle: 360deg;
+  }
+}
+.node-palette-rail.is-lite .node-palette-badge {
+  min-width: 18px;
+  max-width: 28px;
+  height: 10px;
+  padding: 0 3px;
+  font-size: 5px;
 }
 
 /* ---------- Animation states ---------- */
@@ -471,7 +718,43 @@
   right: 16px;
   z-index: 100;
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+.canvas-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.canvas-search-input {
+  width: 180px;
+  padding: 6px 24px 6px 10px;
+  font-size: 12px;
+  background: var(--color-surface, #14141c);
+  color: var(--color-text, #e2e8f0);
+  border: 1px solid var(--color-border, #2a2a3e);
+  border-radius: 6px;
+  outline: none;
+}
+.canvas-search-input:focus {
+  border-color: var(--color-accent, #7c6cf6);
+}
+.canvas-search-clear {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-dim, #94a3b8);
+  font-size: 10px;
+  cursor: pointer;
+}
+.canvas-search-clear:hover {
+  color: var(--color-text, #fff);
 }
 /* Shown only when a selected node culls non-incident edges on a huge graph. */
 .canvas-cull-indicator {
@@ -517,3 +800,62 @@
     animation: none !important;
   }
 }
+
+/* ---------- Capability detail panel (right sidebar) ---------- */
+.cap-panel { border-bottom: 1px solid var(--color-border); }
+.cap-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cap-panel-chip {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--palette-color) 70%, white 10%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--palette-color) 22%, transparent);
+  color: color-mix(in srgb, var(--palette-color) 60%, white 40%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+.cap-panel-title { margin: 0; flex: 1; min-width: 0; }
+.cap-panel-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--color-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+}
+.cap-panel-close:hover {
+  color: #fff;
+  background: #ef4444;
+  border-color: #ef4444;
+}
+.cap-panel-node {
+  margin: 6px 0 10px;
+  font-size: 11px;
+  color: var(--color-text-dim);
+}
+.cap-panel-node strong { color: var(--color-text); }
+.cap-panel-row { margin-bottom: 10px; }
+.cap-panel-key {
+  display: inline-block;
+  margin-bottom: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.cap-add { color: #34d399; }
+.cap-why { color: #fbbf24; }
+.cap-panel-val { margin: 0; font-size: 12px; line-height: 1.5; color: var(--color-text); }
+.cap-muted { color: var(--color-text-dim); }

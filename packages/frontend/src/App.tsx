@@ -384,6 +384,22 @@ export function App() {
     tab === 'all' || tab === 'frontend' || tab === 'backend' || tab === 'api' || tab === 'security';
   const isArchitecture = isCanvasTab;
 
+  useEffect(() => {
+    if (!isCanvasTab) {
+      setSelectedNodeId(null);
+      setSelectedCapability(null);
+      setCodeNodeId(null);
+      return;
+    }
+    if (!selectedNodeId) return;
+    const node = state.canvas.nodes.find((n) => n.id === selectedNodeId);
+    if (!node || !isNodeVisibleInCanvasTab(node, tab, state.canvas, state.diagnostics)) {
+      setSelectedNodeId(null);
+      setSelectedCapability(null);
+      setCodeNodeId(null);
+    }
+  }, [isCanvasTab, selectedNodeId, tab, state.canvas, state.diagnostics]);
+
   // Count nodes with no edges at all — the project's disconnected parts.
   const isolatedCount = useMemo(() => {
     const degree = new Set<string>();

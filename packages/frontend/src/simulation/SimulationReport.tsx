@@ -114,8 +114,8 @@ export function SimulationReport({ result, nodes, onReset }: SimulationReportPro
             <span className="sim-recovery-empty">None detected. No node has a circuit breaker, retry, or fallback.</span>
           ) : (
             <ul>
-              {result.autoRecoveryNodes.map((n) => (
-                <li key={n}>{n}</li>
+              {result.autoRecoveryNodes.map((n, i) => (
+                <li key={`${n}-${i}`}>{n}</li>
               ))}
             </ul>
           )}
@@ -126,8 +126,8 @@ export function SimulationReport({ result, nodes, onReset }: SimulationReportPro
             <span className="sim-recovery-empty">None.</span>
           ) : (
             <ul>
-              {result.manualInterventionNodes.map((n) => (
-                <li key={n}>{n}</li>
+              {result.manualInterventionNodes.map((n, i) => (
+                <li key={`${n}-${i}`}>{n}</li>
               ))}
             </ul>
           )}

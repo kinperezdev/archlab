@@ -177,18 +177,26 @@ export interface SystemDesignDoc {
 
 /**
  * Live detection state for a single Enterprise Audit card.
- *  - detected:    clear evidence found in the project.
- *  - partial:     related-but-incomplete evidence found.
- *  - missing:     nothing detected (dim card).
- *  - critical-gap: absent and that absence is a security/reliability risk.
+ *  - verified: clear structural evidence was found in code or deployment config.
+ *  - inferred: indirect evidence suggests the capability, but does not prove it.
+ *  - unknown: static analysis cannot prove or disprove the capability.
+ *  - not-applicable: the capability does not apply to the detected operating model.
+ *  - gap: a concrete finding shows an applicable capability is incomplete.
+ *  - critical-gap: a concrete high-severity finding or dangerous pattern was found.
  */
-export type EnterpriseCardState = 'detected' | 'partial' | 'missing' | 'critical-gap';
+export type EnterpriseCardState =
+  | 'verified'
+  | 'inferred'
+  | 'unknown'
+  | 'not-applicable'
+  | 'gap'
+  | 'critical-gap';
 
 /** One evaluated capability card in the Enterprise Audit grid. */
 export interface EnterpriseCard {
   id: string;
   label: string;
-  /** Resolved detection state, computed from infra + findings. */
+  /** Resolved assessment state, computed from evidence + project applicability. */
   state: EnterpriseCardState;
   /** Plain-English: what this capability is. */
   what: string;
@@ -196,6 +204,10 @@ export interface EnterpriseCard {
   why: string;
   /** What ArchLab detected (or did not detect) for this card. */
   detail: string;
+  /** Exact evidence references that support the state. */
+  evidence: string[];
+  /** How strongly ArchLab can stand behind this state, from 0 to 1. */
+  confidence: number;
   /** A one-line, paste-ready prompt to close the gap. */
   fixPrompt: string;
 }
@@ -207,20 +219,23 @@ export interface EnterpriseSection {
   /** Glow / accent color, hex. */
   color: string;
   cards: EnterpriseCard[];
-  /** Section score 0-100 (detected=1, partial=0.5, missing=0, critical-gap=-0.5). */
+  /** Direct verification coverage 0-100 across applicable cards, not a readiness score. */
   score: number;
 }
 
 /** The full Enterprise Audit result for a project. */
 export interface EnterpriseAuditResult {
   sections: EnterpriseSection[];
-  /** Overall score 0-100. */
+  /** Direct verification coverage 0-100 across applicable cards, not a readiness score. */
   score: number;
-  /** One-line verdict derived from the score. */
+  /** One-line evidence-quality verdict, never a deployment-readiness claim. */
   verdict: string;
   totalCards: number;
-  detectedCount: number;
-  partialCount: number;
-  missingCount: number;
+  applicableCount: number;
+  verifiedCount: number;
+  inferredCount: number;
+  unknownCount: number;
+  notApplicableCount: number;
+  gapCount: number;
   criticalGapCount: number;
 }

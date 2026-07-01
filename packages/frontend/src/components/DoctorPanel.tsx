@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Stethoscope, ShieldCheck, RefreshCw } from 'lucide-react';
 import { PORTS, type DoctorReport, type DoctorCheck, type CheckStatus } from '@archlab/shared';
 
@@ -81,22 +81,27 @@ export function DoctorPanel({ onClose }: DoctorPanelProps) {
   const [security, setSecurity] = useState<DoctorReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
 
-  const run = () => {
+  const run = useCallback(() => {
     setLoading(true);
     setError('');
     const base = `http://127.0.0.1:${PORTS.backend}`;
-    Promise.all([
-      fetch(`${base}/doctor`).then((r) => r.json()),
-      fetch(`${base}/security/selfcheck`).then((r) => r.json()),
+    const bust = Date.now();
+    const requestInit: RequestInit = { cache: 'no-store' };
+    void Promise.all([
+      fetch(`${base}/doctor?refresh=${bust}`, requestInit).then((r) => r.json()),
+      fetch(`${base}/security/selfcheck?refresh=${bust}`, requestInit).then((r) => r.json()),
     ])
       .then(([h, s]) => {
-        if (h?.ok) setHealth(h.report);
-        if (s?.ok) setSecurity(s.report);
+        if (!h?.ok || !s?.ok) throw new Error(h?.error ?? s?.error ?? 'Doctor check failed');
+        setHealth(h.report);
+        setSecurity(s.report);
+        setLastCheckedAt(Date.now());
       })
       .catch((err) => setError(`Could not reach the backend: ${String(err)}`))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(run, []);
 
@@ -116,7 +121,7 @@ export function DoctorPanel({ onClose }: DoctorPanelProps) {
         >
           <Stethoscope size={18} strokeWidth={1.75} aria-hidden="true" />
           <h2 style={{ flex: 1 }}>Doctor</h2>
-          <button className="btn" onClick={run} disabled={loading} title="Re-run checks">
+          <button className="btn" onClick={run} disabled={loading} title="Check again">
             <RefreshCw size={13} strokeWidth={1.75} className={loading ? 'tb-folder-spin' : ''} />
           </button>
           <button className="btn" onClick={onClose}>
@@ -127,6 +132,14 @@ export function DoctorPanel({ onClose }: DoctorPanelProps) {
         {error && (
           <div style={{ color: '#f87171', fontSize: 'var(--text-sm)', padding: 'var(--space-3) 0' }}>{error}</div>
         )}
+
+        <div style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
+          {loading
+            ? 'Checking now...'
+            : lastCheckedAt
+              ? `Last checked ${new Date(lastCheckedAt).toLocaleTimeString()}`
+              : 'Ready to check'}
+        </div>
 
         {loading && !health && !security ? (
           <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-dim)' }}>

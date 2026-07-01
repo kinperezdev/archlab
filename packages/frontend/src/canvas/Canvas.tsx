@@ -12,7 +12,7 @@ import ReactFlow, {
   useReactFlow,
 } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
-import type { CanvasEdge, CanvasGraph, CanvasNode, Diagnostic, MissingInfraPattern } from '@archlab/shared';
+import type { CanvasEdge, CanvasGraph, CanvasNode, Diagnostic, MissingInfraPattern, NodeAnimationState } from '@archlab/shared';
 import { isEntryFile } from '@archlab/shared';
 import { ArchNode, type ArchNodeData, type PortInfo } from './ArchNode.js';
 import { LaneGroup, type LaneVariant, type LaneGroupData } from './LaneGroup.js';
@@ -157,9 +157,11 @@ function isolationReasonFor(kind: string): string {
 // Estimated node footprint, used only to size the swim-lane background boxes.
 const NODE_W = 240;
 const NODE_H = 110;
-const READABLE_COL_W = 250;
-const READABLE_ROW_H = 108;
+const READABLE_COL_W = 360;
+const READABLE_ROW_H = 128;
 const READABLE_MAX_ROWS = 20;
+const DECORATED_COL_W = 340;
+const DECORATED_ROW_H = 86;
 const LARGE_GRAPH_NODE_THRESHOLD = 140;
 const LARGE_GRAPH_EDGE_THRESHOLD = 220;
 // Above this edge count, a selected node culls non-incident edges while it is
@@ -229,8 +231,62 @@ function normalizeForViewport(nodes: CanvasNode[]): CanvasNode[] {
   return nodes.map((node) => ({ ...node, position: positionById.get(node.id) ?? node.position }));
 }
 
+/** Give node badges and side chips enough visual room without changing order. */
+function spaceForNodeDecorations(nodes: CanvasNode[]): CanvasNode[] {
+  if (nodes.length < 12) return nodes;
+
+  const uniqueX: number[] = [];
+  for (const x of [...new Set(nodes.map((node) => Math.round(node.position.x)))].sort((a, b) => a - b)) {
+    uniqueX.push(x);
+  }
+
+  const spacedX = new Map<number, number>();
+  let lastX: number | null = null;
+  for (const x of uniqueX) {
+    const nextX = lastX === null ? x : Math.max(x, lastX + DECORATED_COL_W);
+    spacedX.set(x, nextX);
+    lastX = nextX;
+  }
+
+  const byColumn = new Map<number, CanvasNode[]>();
+  for (const node of nodes) {
+    const originalX = Math.round(node.position.x);
+    const column = spacedX.get(originalX) ?? node.position.x;
+    const list = byColumn.get(column);
+    if (list) list.push(node);
+    else byColumn.set(column, [node]);
+  }
+
+  const spacedY = new Map<string, number>();
+  for (const columnNodes of byColumn.values()) {
+    const sorted = [...columnNodes].sort((a, b) => a.position.y - b.position.y);
+    let lastY: number | null = null;
+    for (const node of sorted) {
+      const nextY = lastY === null ? node.position.y : Math.max(node.position.y, lastY + DECORATED_ROW_H);
+      spacedY.set(node.id, nextY);
+      lastY = nextY;
+    }
+  }
+
+  return nodes.map((node) => {
+    const originalX = Math.round(node.position.x);
+    return {
+      ...node,
+      position: {
+        x: spacedX.get(originalX) ?? node.position.x,
+        y: spacedY.get(node.id) ?? node.position.y,
+      },
+    };
+  });
+}
+
 interface CanvasProps {
   graph: CanvasGraph;
+  /** Live per-node animation state (kept out of `graph` so structural memos stay
+   *  stable while the pipeline streams animation ticks). */
+  nodeAnimations: Record<string, NodeAnimationState>;
+  /** Live per-edge "flowing" flags. */
+  edgeAnimations: Record<string, boolean>;
   diagnostics: Diagnostic[];
   onSelectNode: (nodeId: string | null) => void;
   /** Double-click a node: open the Code Intelligence Panel for it. */
@@ -339,6 +395,8 @@ function portsForIndexed(nodeId: string, indexes: GraphIndexes): { incoming: Por
 
 export function Canvas({
   graph,
+  nodeAnimations,
+  edgeAnimations,
   diagnostics,
   onSelectNode,
   onOpenCode,
@@ -358,13 +416,15 @@ export function Canvas({
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<{ source: string; target: string } | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // Canvas search: typing highlights matching nodes and dims the rest.
+  const [canvasSearch, setCanvasSearch] = useState('');
   // A clicked node locks its highlight on until the user clicks the canvas
   // background or presses Escape. Only one node can be locked at a time.
   const [lockedNodeId, setLockedNodeId] = useState<string | null>(null);
 
   // Hovering any node overrides the displayed highlight; otherwise the locked
   // node (if any) keeps its connections lit.
-  const activeNodeId = hoveredNodeId ?? lockedNodeId;
+  const activeNodeId = hoveredNodeId ?? selectedNodeId ?? lockedNodeId;
   const [selectedEdges, setSelectedEdges] = useState<Record<string, EdgeRef>>({});
   const [isViewportMoving, setIsViewportMoving] = useState(false);
   const viewportMovingRef = useRef(false);
@@ -453,7 +513,7 @@ export function Canvas({
       }
     }
 
-    return normalizeForViewport(graph.nodes.filter((n) => base.has(n.id)));
+    return spaceForNodeDecorations(normalizeForViewport(graph.nodes.filter((n) => base.has(n.id))));
   }, [graph.nodes, graph.edges, filter, securityNodeIds]);
 
   // Split the visible nodes into Connected (≥1 edge) and Isolated (no edges).
@@ -498,6 +558,33 @@ export function Canvas({
     layoutNodes.length > LARGE_GRAPH_NODE_THRESHOLD || graph.edges.length > LARGE_GRAPH_EDGE_THRESHOLD;
   const detailNodeId = selectedNodeId ?? lockedNodeId;
 
+  const findFirstCanvasSearchMatch = useCallback(() => {
+    const q = canvasSearch.trim().toLowerCase();
+    if (!q) return null;
+    return (
+      layoutNodes.find((n) => {
+        const hay = `${n.label ?? ''} ${n.filePath ?? ''} ${n.kind ?? ''}`.toLowerCase();
+        return hay.includes(q);
+      }) ?? null
+    );
+  }, [canvasSearch, layoutNodes]);
+
+  const focusCanvasNode = useCallback(
+    (node: CanvasNode) => {
+      onSelectNode(node.id);
+      setSelectedEdges({});
+      setLockedNodeId(node.id);
+      setHoveredNodeId(null);
+      setHoveredEdgeId(null);
+      setHoveredEdge(null);
+      setCenter(node.position.x + NODE_W / 2, node.position.y + NODE_H / 2, {
+        zoom: isLargeGraph ? 1.25 : 1.1,
+        duration: 420,
+      });
+    },
+    [isLargeGraph, onSelectNode, setCenter],
+  );
+
   // Mind-map branch coloring: every node in the same top-level folder shares one
   // color, so each folder branch reads as a single colored limb, matching the
   // folder-based left-to-right layout (like the reference mental-model diagram).
@@ -506,18 +593,37 @@ export function Canvas({
       '#34d399', '#60a5fa', '#fbbf24', '#c084fc', '#fb923c',
       '#2dd4bf', '#f472b6', '#f87171', '#a3e635', '#818cf8',
     ];
-    const topFolder = (n: { filePath?: string; label?: string; id: string }): string => {
-      const rel = (n.filePath ?? n.label ?? n.id).replace(/^\.?\//, '');
-      const segs = rel.split('/').filter(Boolean);
-      return segs.length > 1 ? segs[0] : '·root'; // top-level files share one group
+    // The folder segments of a node, with the filename dropped.
+    const foldersOf = (n: { filePath?: string; label?: string; id: string }): string[] => {
+      const rel = ((n.filePath ?? n.label ?? n.id) || '').replace(/^\.?\//, '');
+      return rel.split('/').filter(Boolean).slice(0, -1);
     };
-    const colorOfFolder = new Map<string, string>();
+    // Strip the path prefix shared by ALL nodes (e.g. "packages" in a monorepo,
+    // where every file would otherwise share one color). Color keys off the first
+    // segment that actually differs — frontend/backend/shared, src/pages, etc. —
+    // so the rainbow shows consistently regardless of project layout.
+    const allFolders = graph.nodes.map(foldersOf);
+    let prefix = 0;
+    if (allFolders.length > 0) {
+      const first = allFolders[0];
+      for (; prefix < first.length; prefix++) {
+        const seg = first[prefix];
+        if (!allFolders.every((f) => f[prefix] === seg)) break;
+      }
+    }
+    const groupKey = (n: { filePath?: string; label?: string; id: string }): string => {
+      const folders = foldersOf(n);
+      // First distinguishing folder; root-level files fall back to their own key
+      // so they still spread across the palette instead of collapsing to one.
+      return folders[prefix] ?? `·${n.filePath ?? n.label ?? n.id}`;
+    };
+    const colorOfGroup = new Map<string, string>();
     const color = new Map<string, string>();
     let idx = 0;
     for (const n of graph.nodes) {
-      const folder = topFolder(n);
-      if (!colorOfFolder.has(folder)) colorOfFolder.set(folder, PALETTE[idx++ % PALETTE.length]);
-      color.set(n.id, colorOfFolder.get(folder)!);
+      const g = groupKey(n);
+      if (!colorOfGroup.has(g)) colorOfGroup.set(g, PALETTE[idx++ % PALETTE.length]);
+      color.set(n.id, colorOfGroup.get(g)!);
     }
     return color;
   }, [graph.nodes]);
@@ -596,7 +702,10 @@ export function Canvas({
   const structureKey = useMemo(
     () =>
       layoutNodes
-        .map((n) => `${n.id}@${n.position.x},${n.position.y}${isolatedIds.has(n.id) ? '!' : ''}`)
+        .map((n) => {
+          const toolSig = (n.detectedTools ?? []).map((t) => t.id).sort().join(',');
+          return `${n.id}@${n.position.x},${n.position.y}${isolatedIds.has(n.id) ? '!' : ''}[${n.kind}:${toolSig}]`;
+        })
         .join('|') +
       // Edge signature so backend connector ports refresh when edges change.
       `#${graph.edges.length}` +
@@ -604,6 +713,7 @@ export function Canvas({
       `~${[...entryIds].sort().join(',')}~${depthByNode.size}`,
     [layoutNodes, isolatedIds, graph.edges.length, entryIds, depthByNode],
   );
+  const lastStructureKeyRef = useRef<string | null>(null);
 
   // Auto-center viewport ONLY when the node selection actually changes. Uses the
   // laid-out positions so selecting an isolated node pans to its relocated spot.
@@ -623,6 +733,7 @@ export function Canvas({
   // behind the real nodes (zIndex -1) so the Frontend/Backend split is obvious.
   // Memoized on structureKey so it does not recalculate on animation updates.
   const laneGroups = useMemo(() => {
+    if (isLargeGraph) return [];
     const groups: ReturnType<typeof buildLaneGroup>[] = [];
     const connected = layoutNodes.filter((n) => !isolatedIds.has(n.id));
     const isolated = layoutNodes.filter((n) => isolatedIds.has(n.id));
@@ -634,40 +745,50 @@ export function Canvas({
     }
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structureKey]);
+  }, [structureKey, isLargeGraph]);
 
   // 1. Build the node set ONLY when the structure changes (new project, new
   //    nodes, filter switch). Never on a pipeline animation tick, so nodes are
   //    never cleared or rebuilt mid-run.
   useEffect(() => {
-    const realNodes = layoutNodes.map((n) => {
-      const isIsolated = isolatedIds.has(n.id);
-      const shouldShowDetails = !isLargeGraph || n.id === detailNodeId;
-      return {
-        id: n.id,
-        type: 'arch',
-        position: n.position,
-        data: {
-          label: n.label,
-          kind: n.kind,
-          animation: n.animation,
-          filePath: n.filePath,
-          meta: n.meta,
-          isHighlighted: false,
-          isDimmed: false,
-          isIsolated,
-          isolationReason: isIsolated ? isolationReasonFor(n.kind) : undefined,
-          isEntry: entryIds.has(n.id),
-          depth: depthByNode.get(n.id),
-          branchColor: branchColorById.get(n.id),
-          isLite: !shouldShowDetails,
-          // Backend nodes get explicit operation-labeled connector ports.
-          ports: shouldShowDetails && n.lane === 'backend' && !isIsolated ? portsForIndexed(n.id, graphIndexes) : undefined,
-        },
-      };
+    const preservePositions = lastStructureKeyRef.current === structureKey;
+    setNodes((prevNodes) => {
+      const previousPositions = preservePositions
+        ? new Map(prevNodes.filter((node) => node.type === 'arch').map((node) => [node.id, node.position]))
+        : new Map<string, { x: number; y: number }>();
+
+      const realNodes = layoutNodes.map((n) => {
+        const isIsolated = isolatedIds.has(n.id);
+        const shouldShowDetails = !isLargeGraph || n.id === detailNodeId;
+        return {
+          id: n.id,
+          type: 'arch',
+          position: previousPositions.get(n.id) ?? n.position,
+          data: {
+            label: n.label,
+            kind: n.kind,
+            animation: nodeAnimations[n.id] ?? n.animation,
+            filePath: n.filePath,
+            meta: n.meta,
+            detectedTools: n.detectedTools,
+            isHighlighted: false,
+            isDimmed: false,
+            isFocused: false,
+            isIsolated,
+            isolationReason: isIsolated ? isolationReasonFor(n.kind) : undefined,
+            isEntry: entryIds.has(n.id),
+            depth: depthByNode.get(n.id),
+            branchColor: branchColorById.get(n.id),
+            isLite: !shouldShowDetails,
+            // Backend nodes get explicit operation-labeled connector ports.
+            ports: shouldShowDetails && n.lane === 'backend' && !isIsolated ? portsForIndexed(n.id, graphIndexes) : undefined,
+          },
+        };
+      });
+      // Lane backgrounds first so they paint behind the real nodes.
+      return [...laneGroups, ...realNodes];
     });
-    // Lane backgrounds first so they paint behind the real nodes.
-    setNodes([...laneGroups, ...realNodes]);
+    lastStructureKeyRef.current = structureKey;
     // filteredNodes is captured via structureKey and stable laneGroups to avoid
     // rebuilds on every animation frame; positions/ids are what actually matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -676,17 +797,16 @@ export function Canvas({
   // 1b. Patch live animation state onto the EXISTING nodes in place. This is
   //     what the pipeline drives: color/glow updates only, nodes stay mounted.
   useEffect(() => {
-    const animById = new Map(graph.nodes.map((n) => [n.id, n.animation]));
     setNodes((prevNodes) =>
       prevNodes.map((node) => {
         // Lane-group backgrounds carry no animation; skip them.
         if (!('animation' in node.data)) return node;
-        const animation = animById.get(node.id);
-        if (animation === undefined || animation === node.data.animation) return node;
+        const animation = nodeAnimations[node.id] ?? 'idle';
+        if (animation === node.data.animation) return node;
         return { ...node, data: { ...node.data, animation } };
       }),
     );
-  }, [graph.nodes, setNodes]);
+  }, [nodeAnimations, setNodes]);
 
   // 1c. Patch bottleneck flags (amber) onto nodes from bottleneck diagnostics.
   const bottleneckById = useMemo(() => {
@@ -775,6 +895,16 @@ export function Canvas({
   // beats click-selected edges.
   const { highlightNodeIds, hasActiveHighlight } = useMemo(() => {
     const set = new Set<string>();
+    // Search takes precedence: highlight every node whose label/file/type matches
+    // the query, and dim the rest so matches stand out on a busy canvas.
+    const q = canvasSearch.trim().toLowerCase();
+    if (q) {
+      for (const n of layoutNodes) {
+        const hay = `${n.label ?? ''} ${n.filePath ?? ''} ${n.kind ?? ''}`.toLowerCase();
+        if (hay.includes(q)) set.add(n.id);
+      }
+      return { highlightNodeIds: set, hasActiveHighlight: true };
+    }
     const hasSelection = Object.keys(selectedEdges).length > 0;
     if (activeNodeId) {
       set.add(activeNodeId);
@@ -795,7 +925,7 @@ export function Canvas({
       highlightNodeIds: set,
       hasActiveHighlight: activeNodeId !== null || hoveredEdge !== null || hasSelection,
     };
-  }, [activeNodeId, hoveredEdge, selectedEdges, graph.edges]);
+  }, [canvasSearch, layoutNodes, activeNodeId, hoveredEdge, selectedEdges, graph.edges]);
 
   // Fix 2: set of "active" edge ids (touching the active node, hovered, or
   // selected). Membership lookups replace the per-click full edge rebuild.
@@ -841,7 +971,6 @@ export function Canvas({
           source: e.source,
           target: e.target,
           label: isLargeGraph ? undefined : e.label,
-          baseAnimated: e.animated,
           branchColor,
           offset,
           tie: !isLargeGraph && n % 3 === 0,
@@ -897,11 +1026,16 @@ export function Canvas({
           if (!('kind' in node.data)) return node; // leave lane backgrounds alone
           const isHighlighted = hasActiveHighlight ? highlightNodeIds.has(node.id) : false;
           const isDimmed = hasActiveHighlight ? !highlightNodeIds.has(node.id) : false;
-          if (node.data.isHighlighted === isHighlighted && node.data.isDimmed === isDimmed) {
+          const isFocused = activeNodeId === node.id;
+          if (
+            node.data.isHighlighted === isHighlighted &&
+            node.data.isDimmed === isDimmed &&
+            node.data.isFocused === isFocused
+          ) {
             return node;
           }
           changed = true;
-          return { ...node, data: { ...node.data, isHighlighted, isDimmed } };
+          return { ...node, data: { ...node.data, isHighlighted, isDimmed, isFocused } };
         });
         return changed ? next : prevNodes;
       });
@@ -930,8 +1064,9 @@ export function Canvas({
         return visibleBase.map((b) => {
           const isActive = activeEdgeIds.has(b.id);
           // Fix 4: during a highlight only the active edges animate; everything
-          // else stops flowing. At rest, restore each edge's base flow state.
-          const animated = hasActiveHighlight ? isActive : b.baseAnimated;
+          // else stops flowing. At rest, restore each edge's live flow state
+          // (driven by the pipeline via the edgeAnimations side map).
+          const animated = hasActiveHighlight ? isActive : (edgeAnimations[b.id] ?? false);
           const finalAnimated = isLargeGraph ? false : animated;
           const opacity = hasActiveHighlight ? (isActive ? 1 : 0.18) : (isLargeGraph ? 0.48 : 0.5);
           const bundledWidth = 1 + Math.min(1.7, Math.log2(Math.max(1, b.bundleCount)) * 0.22);
@@ -992,7 +1127,7 @@ export function Canvas({
     return () => {
       if (edgeRafRef.current !== null) cancelAnimationFrame(edgeRafRef.current);
     };
-  }, [displayedBaseEdges, activeEdgeIds, highlightNodeIds, hasActiveHighlight, activeNodeId, isLargeGraph, setEdges]);
+  }, [displayedBaseEdges, activeEdgeIds, highlightNodeIds, hasActiveHighlight, activeNodeId, isLargeGraph, edgeAnimations, setEdges]);
 
   // Clean up the debounce timer and any pending rAF when the canvas unmounts.
   useEffect(
@@ -1102,13 +1237,25 @@ export function Canvas({
             elevateNodesOnSelect={false}
             nodesFocusable={false}
             edgesFocusable={false}
-            onlyRenderVisibleElements={false}
+            elementsSelectable={false}
+            selectNodesOnDrag={false}
+            selectionOnDrag={false}
+            /* On large graphs, only mount the nodes/edges inside the viewport so
+               zooming in unmounts the off-screen majority instead of repainting
+               every node each frame. Small graphs keep everything mounted so
+               edges that leave the viewport still measure correctly. */
+            onlyRenderVisibleElements={isLargeGraph}
             onMoveStart={beginViewportMove}
             onMove={beginViewportMove}
             onMoveEnd={endViewportMove}
             onWheelCapture={markWheelViewportMove}
             onNodeClick={(_e, node) => {
-              if (node.type === 'laneGroup') return;
+              if (node.type === 'laneGroup') {
+                onSelectNode(null);
+                setSelectedEdges({});
+                setLockedNodeId(null);
+                return;
+              }
               onSelectNode(node.id);
               setSelectedEdges({});
               // Lock this node's highlight (switching the lock off any prior one).
@@ -1195,6 +1342,34 @@ export function Canvas({
             </div>
           )}
           <div className="canvas-floating-controls">
+            <div className="canvas-search">
+              <input
+                className="canvas-search-input"
+                placeholder="Search nodes…"
+                value={canvasSearch}
+                onChange={(e) => setCanvasSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setCanvasSearch('');
+                    return;
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const match = findFirstCanvasSearchMatch();
+                    if (match) focusCanvasNode(match);
+                  }
+                }}
+              />
+              {canvasSearch && (
+                <button
+                  className="canvas-search-clear"
+                  title="Clear search"
+                  onClick={() => setCanvasSearch('')}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <button className="btn btn-auto-arrange" onClick={handleAutoArrange}>
               Arrange Nodes
             </button>

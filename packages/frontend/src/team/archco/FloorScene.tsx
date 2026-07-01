@@ -45,6 +45,8 @@ interface FloorSceneProps {
 const SCENE_W = 720;
 const SCENE_H = 320;
 const ELEVATOR_X = SCENE_W - 56;
+const WALKABLE_TOP = 98;
+const WALKABLE_BOTTOM = SCENE_H - 92;
 
 const SEVERITY_COLOR: Record<'critical' | 'high' | 'medium' | 'low', string> = {
   critical: '#F87171',
@@ -227,12 +229,111 @@ interface EmpState {
   isWalking: boolean;
   flip: boolean;
   emotion: string | null;
+  hidden?: boolean;
   /** Raise the speech bubble so two people talking don't cover each other. */
   emotionRaised?: boolean;
   /** Set while a late employee is panic-arriving (drives the fast-walk class). */
   panic?: 'mild' | 'moderate' | 'severe';
   /** Per-move walk duration (ms) to override the default transition, distance-based. */
   walkMs?: number;
+}
+
+interface OfficePoint {
+  x: number;
+  y: number;
+}
+
+interface OfficeObstacle {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface OfficeMap {
+  elevator: OfficePoint;
+  coffee: OfficePoint;
+  lounge: OfficePoint;
+  aisle: OfficePoint[];
+  obstacles: OfficeObstacle[];
+}
+
+function officeMapForFloor(floor: Floor): OfficeMap {
+  const base: OfficeMap = {
+    elevator: { x: ELEVATOR_X - 65, y: 190 },
+    coffee: { x: 104, y: 204 },
+    lounge: { x: 150, y: 210 },
+    aisle: [
+      { x: 120, y: 190 },
+      { x: 260, y: 188 },
+      { x: 405, y: 188 },
+      { x: 560, y: 190 },
+    ],
+    obstacles: [
+      { x: 18, y: 94, w: 54, h: 122 },
+      { x: 88, y: 232, w: 92, h: 44 },
+      { x: ELEVATOR_X - 4, y: 140, w: 48, h: 90 },
+    ],
+  };
+
+  if (floor === 1) {
+    return {
+      ...base,
+      obstacles: [
+        ...base.obstacles,
+        { x: 18, y: 214, w: 74, h: 36 },
+        { x: 205, y: 86, w: 170, h: 100 },
+      ],
+    };
+  }
+  if (floor === 6) {
+    return {
+      ...base,
+      coffee: { x: 106, y: 230 },
+      lounge: { x: 510, y: 194 },
+      obstacles: [
+        ...base.obstacles,
+        { x: 286, y: 206, w: 90, h: 38 },
+        { x: 448, y: 78, w: 148, h: 82 },
+      ],
+    };
+  }
+  return base;
+}
+
+function deskPoint(emp: Employee): OfficePoint {
+  return {
+    x: Math.min(emp.deskPosition.x, ELEVATOR_X - 60),
+    y: Math.min(WALKABLE_BOTTOM, Math.max(WALKABLE_TOP, emp.deskPosition.y + 40)),
+  };
+}
+
+function avoidObstacles(point: OfficePoint, map: OfficeMap): OfficePoint {
+  let x = Math.min(ELEVATOR_X - 66, Math.max(36, point.x));
+  let y = Math.min(WALKABLE_BOTTOM, Math.max(WALKABLE_TOP, point.y));
+
+  for (const obstacle of map.obstacles) {
+    const insideX = x >= obstacle.x - 10 && x <= obstacle.x + obstacle.w + 10;
+    const insideY = y >= obstacle.y - 10 && y <= obstacle.y + obstacle.h + 10;
+    if (!insideX || !insideY) continue;
+
+    const left = Math.abs(x - (obstacle.x - 14));
+    const right = Math.abs(x - (obstacle.x + obstacle.w + 14));
+    if (left < right) x = obstacle.x - 14;
+    else x = obstacle.x + obstacle.w + 14;
+    y = Math.min(WALKABLE_BOTTOM, Math.max(WALKABLE_TOP, y));
+  }
+
+  return { x, y };
+}
+
+function routeTarget(point: OfficePoint, map: OfficeMap): OfficePoint {
+  return avoidObstacles(point, map);
+}
+
+function walkDuration(from: OfficePoint, to: OfficePoint, pxPerSec = 88): number {
+  const dist = Math.hypot(to.x - from.x, to.y - from.y);
+  return Math.max(650, Math.round((dist / pxPerSec) * 1000));
 }
 
 export function FloorScene({
@@ -250,6 +351,7 @@ export function FloorScene({
   active = true,
 }: FloorSceneProps) {
   const config = FLOOR_CONFIGS[floor];
+  const officeMap = useMemo(() => officeMapForFloor(floor), [floor]);
   // Stable per floor: employeesOnFloor() filters a fresh array each call, so we
   // memoize it. Without this, every render produced a new array identity, which
   // re-ran the position-init effect below and reset sprites to their desks (and
@@ -346,11 +448,11 @@ export function FloorScene({
       for (const emp of employees) {
         next[emp.id] =
           prev[emp.id] ?? {
-            x: Math.min(emp.deskPosition.x, ELEVATOR_X - 60),
-            y: emp.deskPosition.y + 40,
+            ...deskPoint(emp),
             isWalking: false,
             flip: false,
             emotion: null,
+            hidden: false,
           };
       }
       return next;
@@ -378,12 +480,14 @@ export function FloorScene({
     setEmpStates((prev) => {
       const next = { ...prev };
       for (const emp of toArrive) {
+        const desk = deskPoint(emp);
         next[emp.id] = {
-          x: ELEVATOR_X - 65,
-          y: emp.deskPosition.y + 40,
+          x: officeMap.elevator.x,
+          y: desk.y,
           isWalking: true,
           flip: true,
           emotion: emp.arrivalMood ?? 'Morning! 👋',
+          hidden: false,
         };
       }
       return next;
@@ -392,18 +496,28 @@ export function FloorScene({
     for (const emp of toArrive) {
       timers.push(
         setTimeout(() => {
-          const deskX = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
+          const desk = deskPoint(emp);
           setEmpStates((prev) => {
             const cur = prev[emp.id];
             if (!cur) return prev;
-            return { ...prev, [emp.id]: { ...cur, x: deskX, isWalking: true, flip: false } };
+            return {
+              ...prev,
+              [emp.id]: {
+                ...cur,
+                ...routeTarget(desk, officeMap),
+                isWalking: true,
+                flip: false,
+                walkMs: walkDuration(cur, desk),
+                hidden: false,
+              },
+            };
           });
           timers.push(
             setTimeout(() => {
               setEmpStates((prev) => {
                 const cur = prev[emp.id];
                 if (!cur) return prev;
-                return { ...prev, [emp.id]: { ...cur, isWalking: false, emotion: null } };
+                return { ...prev, [emp.id]: { ...cur, isWalking: false, emotion: null, walkMs: undefined } };
               });
               markArrived(emp.id);
             }, 1800),
@@ -442,12 +556,13 @@ export function FloorScene({
       setEmpStates((prev) => ({
         ...prev,
         [id]: {
-          x: ELEVATOR_X - 65,
-          y: emp.deskPosition.y + 40,
+          x: officeMap.elevator.x,
+          y: deskPoint(emp).y,
           isWalking: true,
           flip: true,
           emotion: firstBubble,
           panic: severity,
+          hidden: false,
         },
       }));
 
@@ -484,20 +599,30 @@ export function FloorScene({
       }
 
       // Rush to desk, settle, clear reactions, mark arrived.
-      const deskX = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
+      const desk = deskPoint(emp);
       timers.push(
         setTimeout(() => {
           setEmpStates((prev) => {
             const cur = prev[id];
             if (!cur) return prev;
-            return { ...prev, [id]: { ...cur, x: deskX, isWalking: true, flip: false } };
+            return {
+              ...prev,
+              [id]: {
+                ...cur,
+                ...routeTarget(desk, officeMap),
+                isWalking: true,
+                flip: false,
+                walkMs: walkDuration(cur, desk, 120),
+                hidden: false,
+              },
+            };
           });
           timers.push(
             setTimeout(() => {
               setEmpStates((prev) => {
                 const next = { ...prev };
                 const cur = next[id];
-                if (cur) next[id] = { ...cur, isWalking: false, emotion: 'Made it… 😮‍💨', panic: undefined };
+                if (cur) next[id] = { ...cur, isWalking: false, emotion: 'Made it… 😮‍💨', panic: undefined, walkMs: undefined };
                 // Clear colleague reaction bubbles.
                 for (const other of employees) {
                   if (other.id === id) continue;
@@ -624,10 +749,13 @@ export function FloorScene({
           if (presentIds.has(emp.id) && next[emp.id]) {
             next[emp.id] = {
               ...next[emp.id],
-              x: ELEVATOR_X - 65,
+              x: officeMap.elevator.x,
+              y: officeMap.elevator.y,
               isWalking: true,
               flip: false,
               emotion: goodbyes[Math.floor(Math.random() * goodbyes.length)],
+              hidden: false,
+              walkMs: walkDuration(next[emp.id], officeMap.elevator, 92),
             };
           }
         }
@@ -636,6 +764,15 @@ export function FloorScene({
       // After the walk completes, mark them as gone for the day (office empties).
       const timer = setTimeout(() => {
         setLeftForDay(new Set(employees.filter((e) => presentIds.has(e.id)).map((e) => e.id)));
+        setEmpStates((prev) => {
+          const next = { ...prev };
+          for (const emp of employees) {
+            if (presentIds.has(emp.id) && next[emp.id]) {
+              next[emp.id] = { ...next[emp.id], hidden: true, isWalking: false, emotion: null, walkMs: undefined };
+            }
+          }
+          return next;
+        });
       }, 4800);
       return () => clearTimeout(timer);
     }
@@ -648,17 +785,18 @@ export function FloorScene({
         if (next[emp.id]) {
           next[emp.id] = {
             ...next[emp.id],
-            x: Math.min(emp.deskPosition.x, ELEVATOR_X - 60),
-            y: emp.deskPosition.y + 40,
+            ...deskPoint(emp),
             isWalking: false,
             flip: false,
             emotion: null,
+            hidden: false,
+            walkMs: undefined,
           };
         }
       }
       return next;
     });
-  }, [isOffDuty, employees, presentIds]);
+  }, [isOffDuty, employees, presentIds, officeMap]);
 
   // XP Reward & Local Persistence Saver
   const rewardXP = (empId: string, amount: number) => {
@@ -712,7 +850,7 @@ export function FloorScene({
 
       setTimeout(() => {
         // Start walking back to elevator
-        setFounderVisitor((v) => v ? { ...v, x: ELEVATOR_X - 65, isWalking: true, flip: false, emotion: 'Upgraded! 🎓 +150XP' } : null);
+        setFounderVisitor((v) => v ? { ...v, x: officeMap.elevator.x, y: officeMap.elevator.y, isWalking: true, flip: false, emotion: 'Upgraded! 🎓 +150XP' } : null);
         // (walk-back budget aligned with the normal 1.8s pace below)
         rewardXP(founderVisitor.id, 150);
 
@@ -742,7 +880,7 @@ export function FloorScene({
         if (activeIds.length > 0) {
           const randId = activeIds[Math.floor(Math.random() * activeIds.length)];
           const emp = employees.find((e) => e.id === randId)!;
-          const defaultX = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
+          const defaultDesk = deskPoint(emp);
 
           // Phase 1: Speak and walk to elevator
           setEmpStates((prev) => {
@@ -753,9 +891,11 @@ export function FloorScene({
               [randId]: {
                 ...current,
                 emotion: 'Heading up for advice! ✈️',
-                x: ELEVATOR_X - 65,
+                ...officeMap.elevator,
                 isWalking: true,
                 flip: false,
+                walkMs: walkDuration(current, officeMap.elevator),
+                hidden: false,
               },
             };
           });
@@ -766,7 +906,7 @@ export function FloorScene({
             setEmpStates((prev) => {
               const current = prev[randId];
               if (!current) return prev;
-              return { ...prev, [randId]: { ...current, emotion: null, isWalking: false } };
+              return { ...prev, [randId]: { ...current, emotion: null, isWalking: false, hidden: true, walkMs: undefined } };
             });
           }, 4800);
 
@@ -786,12 +926,28 @@ export function FloorScene({
                 ...prev,
                 [randId]: {
                   ...current,
-                  x: defaultX,
-                  isWalking: true,
-                  flip: true,
+                  ...officeMap.elevator,
+                  hidden: false,
+                  emotion: 'Back from coaching! 🛗',
+                  walkMs: undefined,
                 },
               };
             });
+            window.setTimeout(() => {
+              setEmpStates((prev) => {
+                const current = prev[randId];
+                if (!current) return prev;
+                return {
+                  ...prev,
+                  [randId]: {
+                    ...current,
+                    ...routeTarget(defaultDesk, officeMap),
+                    isWalking: true,
+                    flip: true,
+                    walkMs: walkDuration(current, defaultDesk),
+                  },
+                };
+              });
 
             // Arrive back at desk, settle, level up/gain XP!
             setTimeout(() => {
@@ -803,6 +959,7 @@ export function FloorScene({
                   [randId]: {
                     ...current,
                     isWalking: false,
+                    walkMs: undefined,
                     flip: false,
                     emotion: 'Leveled up! 🎓 +100XP',
                   },
@@ -819,6 +976,7 @@ export function FloorScene({
                 });
               }, 3000);
             }, 4800);
+            }, 100);
 
           }, 12500);
           return; // skip other actions on this tick to prevent overlaps
@@ -842,7 +1000,7 @@ export function FloorScene({
             hairStyle: cand.hairStyle,
             hairColor: cand.hairColor,
             accessory: cand.accessory,
-            x: ELEVATOR_X - 65,
+            x: officeMap.elevator.x,
             y: 120 + 40,
             isWalking: true,
             flip: true,
@@ -882,7 +1040,7 @@ export function FloorScene({
 
             // Phase 5: Settle and walk back to elevator
             setTimeout(() => {
-              setVisitor((v) => (v ? { ...v, x: ELEVATOR_X - 65, isWalking: true, flip: false, emotion: 'Heading back down!' } : null));
+              setVisitor((v) => (v ? { ...v, x: officeMap.elevator.x, y: officeMap.elevator.y, isWalking: true, flip: false, emotion: 'Heading back down!' } : null));
             }, 7500);
 
             // Phase 6: Reach elevator and despawn
@@ -911,7 +1069,7 @@ export function FloorScene({
             hairStyle: cand.hairStyle,
             hairColor: cand.hairColor,
             accessory: cand.accessory,
-            x: ELEVATOR_X - 65,
+            x: officeMap.elevator.x,
             y: 120 + 40,
             isWalking: true,
             flip: true,
@@ -974,7 +1132,7 @@ export function FloorScene({
             hairStyle: guest.hairStyle,
             hairColor: guest.hairColor,
             accessory: guest.accessory,
-            x: ELEVATOR_X - 65,
+            x: officeMap.elevator.x,
             y: hostY,
             isWalking: true,
             flip: true,
@@ -1014,7 +1172,7 @@ export function FloorScene({
                 return { ...prev, [host.id]: { ...h, emotion: null, emotionRaised: false } };
               });
               setVisitor((v) =>
-                v ? { ...v, x: ELEVATOR_X - 65, isWalking: true, flip: false, emotion: 'Back to my floor!' } : null,
+                v ? { ...v, x: officeMap.elevator.x, y: officeMap.elevator.y, isWalking: true, flip: false, emotion: 'Back to my floor!' } : null,
               );
             }, 5600);
 
@@ -1227,55 +1385,59 @@ export function FloorScene({
         if (activeIds.length > 0) {
           const randId = activeIds[Math.floor(Math.random() * activeIds.length)];
           const emp = employees.find((e) => e.id === randId)!;
-          const defaultX = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
-          const defaultY = emp.deskPosition.y + 40;
+          const defaultDesk = deskPoint(emp);
 
           let chosenEmotion: string | null = null;
-          let targetX = defaultX;
-          let targetY = defaultY;
+          let target = defaultDesk;
+          let destination = 'desk' as 'desk' | 'elevator' | 'coffee' | 'wander';
 
           setEmpStates((prev) => {
             const current = prev[randId];
             if (!current) return prev;
 
-            const atDesk = Math.abs(current.x - defaultX) < 5 && Math.abs(current.y - defaultY) < 5;
+            const atDesk = Math.abs(current.x - defaultDesk.x) < 5 && Math.abs(current.y - defaultDesk.y) < 5;
 
             if (atDesk) {
               const roll = Math.random();
               if (roll < 0.35) {
-                targetX = ELEVATOR_X - 65; // walk to elevator
+                target = officeMap.elevator;
+                destination = 'elevator';
                 chosenEmotion = "Taking a quick break! 🚶‍♂️";
               } else if (roll < 0.70) {
-                targetX = 45; // walk to left plants / lounge
+                target = Math.random() < 0.65 ? officeMap.coffee : officeMap.lounge;
+                destination = 'coffee';
                 chosenEmotion = "Heading to grab coffee! ☕";
               } else {
-                targetX = 140 + Math.random() * 280; // random walk
+                target = officeMap.aisle[Math.floor(Math.random() * officeMap.aisle.length)];
+                destination = 'wander';
                 chosenEmotion = "Brainstorming stretch... 💡";
               }
-              // Gentle vertical wander, clamped to the floor band so they never
-              // drift up into the wall or down off the bottom edge.
-              targetY = Math.min(SCENE_H - 60, Math.max(96, defaultY + (Math.random() * 44 - 22)));
+              target = routeTarget(
+                { x: target.x, y: target.y + (Math.random() * 24 - 12) },
+                officeMap,
+              );
             }
 
             return {
               ...prev,
               [randId]: {
                 ...current,
-                x: targetX,
-                y: targetY,
-                isWalking: targetX !== current.x || targetY !== current.y,
-                flip: targetX < current.x,
+                ...target,
+                isWalking: target.x !== current.x || target.y !== current.y,
+                flip: target.x < current.x,
                 emotion: chosenEmotion || current.emotion,
+                walkMs: walkDuration(current, target),
+                hidden: false,
               },
             };
           });
 
           // If they went to get coffee, show arrival bubble
-          if (targetX === 45) {
+          if (destination === 'coffee') {
             setTimeout(() => {
               setEmpStates((prev) => {
                 const curr = prev[randId];
-                if (!curr || Math.abs(curr.x - 45) > 5) return prev;
+                if (!curr || Math.hypot(curr.x - target.x, curr.y - target.y) > 12) return prev;
                 return { ...prev, [randId]: { ...curr, emotion: "Ah, coffee! ☕ Chilling... 🛋️" } };
               });
             }, 3800);
@@ -1286,16 +1448,17 @@ export function FloorScene({
             setEmpStates((prev) => {
               const current = prev[randId];
               if (!current) return prev;
-              const headingBackEmotion = targetX === 45 ? "Refreshed! Back to code. 💻" : "Back to my desk! 🏃‍♂️";
+              const headingBackEmotion = destination === 'coffee' ? "Refreshed! Back to code. 💻" : "Back to my desk! 🏃‍♂️";
+              const desk = routeTarget(defaultDesk, officeMap);
               return {
                 ...prev,
                 [randId]: {
                   ...current,
-                  x: defaultX,
-                  y: defaultY,
-                  isWalking: defaultX !== current.x || defaultY !== current.y,
-                  flip: defaultX < current.x,
+                  ...desk,
+                  isWalking: desk.x !== current.x || desk.y !== current.y,
+                  flip: desk.x < current.x,
                   emotion: headingBackEmotion,
+                  walkMs: walkDuration(current, desk),
                 },
               };
             });
@@ -1307,7 +1470,7 @@ export function FloorScene({
                 if (!current) return prev;
                 return {
                   ...prev,
-                  [randId]: { ...current, emotion: null },
+                  [randId]: { ...current, emotion: null, isWalking: false, walkMs: undefined },
                 };
               });
             }, 3000);
@@ -1425,7 +1588,7 @@ export function FloorScene({
     }, 2200);
 
     return () => clearInterval(tick);
-  }, [employees, presentIds, taskBadges, floor, threatLevel, mentoringIds, visitor, isOffDuty, active]);
+  }, [employees, presentIds, taskBadges, floor, threatLevel, mentoringIds, visitor, isOffDuty, active, officeMap]);
 
 
   return (
@@ -1449,6 +1612,14 @@ export function FloorScene({
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
+          <pattern id={`floor-grid-${floor}`} width="36" height="28" patternUnits="userSpaceOnUse">
+            <path d="M 36 0 H 0 V 28" fill="none" stroke="#FFFFFF" strokeWidth="0.7" opacity="0.08" />
+          </pattern>
+          <linearGradient id={`floor-sheen-${floor}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.08" />
+            <stop offset="45%" stopColor="#FFFFFF" stopOpacity="0" />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0.14" />
+          </linearGradient>
           <linearGradient id="lamp-light-gradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#FDE047" stopOpacity="0.5" />
             <stop offset="40%" stopColor="#FDE047" stopOpacity="0.2" />
@@ -1483,6 +1654,20 @@ export function FloorScene({
         <rect x="0" y="0" width={SCENE_W} height={SCENE_H} fill={config.backgroundColor} />
         <rect x="0" y="0" width={SCENE_W} height="70" fill={config.wallColor} />
         <rect x="0" y={SCENE_H - 40} width={SCENE_W} height="40" fill={config.wallColor} opacity="0.6" />
+        <rect x="0" y="70" width={SCENE_W} height={SCENE_H - 110} fill={`url(#floor-grid-${floor})`} />
+        <rect x="0" y="70" width={SCENE_W} height={SCENE_H - 110} fill={`url(#floor-sheen-${floor})`} />
+        <rect x="0" y="68" width={SCENE_W} height="4" fill="#000000" opacity="0.18" />
+        <rect x="0" y={SCENE_H - 44} width={SCENE_W} height="4" fill={config.accentColor} opacity="0.18" />
+
+        {/* Department work-zone rugs and readable walking lanes. */}
+        <g opacity="0.95">
+          <rect x="88" y="188" width="92" height="44" rx="7" fill="#111827" opacity="0.22" />
+          <rect x="236" y="166" width="146" height="72" rx="9" fill={config.accentColor} opacity="0.08" stroke={config.accentColor} strokeWidth="1" strokeDasharray="8 8" />
+          <rect x="430" y="166" width="152" height="72" rx="9" fill="#0F172A" opacity="0.16" stroke="#FFFFFF" strokeWidth="0.8" strokeOpacity="0.12" />
+          <path d="M 86 246 H 604" stroke="#FDE68A" strokeWidth="2.5" strokeDasharray="8 8" opacity="0.24" />
+          <text x="304" y="178" fill={config.accentColor} fontSize="6.5" fontWeight="700" textAnchor="middle">{config.zones[0].replace(/-/g, ' ').toUpperCase()}</text>
+          <text x="506" y="178" fill="#CBD5E1" fontSize="6.5" fontWeight="700" textAnchor="middle">{config.zones[1]?.replace(/-/g, ' ').toUpperCase() ?? 'TEAM ZONE'}</text>
+        </g>
 
         {/* Windows with dynamic cityscape sky and glass reflections */}
         <g>
@@ -1712,6 +1897,30 @@ export function FloorScene({
           <path d="M 530 270 Q 538 248 532 254" fill="none" stroke="#166534" strokeWidth="3" strokeLinecap="round" />
         </g>
 
+        {/* Navigation landmarks used by employee movement. */}
+        <g opacity="0.98">
+          <path
+            d={`M ${officeMap.coffee.x - 20} ${officeMap.coffee.y + 24} H ${officeMap.elevator.x + 24}`}
+            stroke="#FDE68A"
+            strokeWidth="2"
+            strokeDasharray="6 6"
+            opacity="0.22"
+          />
+          <rect x={officeMap.coffee.x - 16} y={officeMap.coffee.y - 28} width="32" height="26" rx="3" fill="#2A1710" stroke="#C08457" strokeWidth="1.2" />
+          <rect x={officeMap.coffee.x - 10} y={officeMap.coffee.y - 23} width="8" height="10" rx="1.5" fill="#F8FAFC" />
+          <path d={`M ${officeMap.coffee.x - 2} ${officeMap.coffee.y - 20} q5 0 5 4 q0 4 -5 4`} fill="none" stroke="#F8FAFC" strokeWidth="1" />
+          <rect x={officeMap.coffee.x + 5} y={officeMap.coffee.y - 22} width="6" height="13" fill="#7C3E12" />
+          <text x={officeMap.coffee.x} y={officeMap.coffee.y - 33} fill="#FDE68A" fontSize="6.5" fontWeight="700" textAnchor="middle">COFFEE</text>
+
+          <rect x={officeMap.lounge.x - 24} y={officeMap.lounge.y + 10} width="48" height="11" rx="3" fill="#172033" stroke="#334155" strokeWidth="1" />
+          <rect x={officeMap.lounge.x - 18} y={officeMap.lounge.y + 3} width="36" height="10" rx="2" fill="#243044" />
+          <text x={officeMap.lounge.x} y={officeMap.lounge.y + 32} fill="#93C5FD" fontSize="6.5" fontWeight="700" textAnchor="middle">LOUNGE</text>
+
+          {officeMap.aisle.map((p, index) => (
+            <circle key={`aisle-${index}`} cx={p.x} cy={p.y} r="3" fill={config.accentColor} opacity="0.28" />
+          ))}
+        </g>
+
         {/* Corporate office decor (standard floors) — gives the space a real
             office feel: ceiling lights, a wall clock, framed art, a water
             cooler, and a lounge coffee table. */}
@@ -1755,8 +1964,7 @@ export function FloorScene({
         {/* Desks and monitors for employees */}
         {employees.map((emp) => {
           const present = presentIds.has(emp.id);
-          const x = Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
-          const y = emp.deskPosition.y + 40;
+          const { x, y } = deskPoint(emp);
           
           const deskX = x - 9;
           const deskY = y + 26;
@@ -1850,11 +2058,20 @@ export function FloorScene({
       {/* Employees layered over the SVG (HTML for crisp text + click). */}
       <div className="archco-employee-layer">
         {employees.map((emp) => {
-          const present = presentIds.has(emp.id) && !leftForDay.has(emp.id);
-          const badge = taskBadges[emp.id];
+          // A colleague in an elevator or mentoring session has left this
+          // floor. Render the empty desk instead of leaving a duplicate sprite
+          // behind while their cross-floor activity is in progress.
           const state = empStates[emp.id];
-          const x = state ? state.x : Math.min(emp.deskPosition.x, ELEVATOR_X - 60);
-          const y = state ? state.y : emp.deskPosition.y + 40;
+          const present =
+            presentIds.has(emp.id) &&
+            !leftForDay.has(emp.id) &&
+            !mentoringIds.has(emp.id) &&
+            !state?.hidden;
+          if (!present) return null;
+          const badge = taskBadges[emp.id];
+          const home = deskPoint(emp);
+          const x = state ? state.x : home.x;
+          const y = state ? state.y : home.y;
           // Pick the sprite's emotional animation by priority. Fran also reacts
           // to the token budget (alert/panicking = stressed).
           const isFranStressed =
@@ -1916,7 +2133,7 @@ export function FloorScene({
               <EmployeeSprite
                 employee={emp}
                 scale={2}
-                absent={!present}
+                absent={false}
                 working={present && !timeState.isWeekend && emp.status === 'working' && !state?.isWalking}
                 isWalking={present && state?.isWalking}
                 flip={present && state?.flip}
@@ -2100,7 +2317,7 @@ export function FloorScene({
         )}
 
         {/* Security guards patrol on top of the floor scene. */}
-        <GuardLayer floor={floor} timeState={timeState} criticalAlertMode={criticalAlertMode} />
+        <GuardLayer floor={floor} timeState={timeState} criticalAlertMode={criticalAlertMode} active={active} />
       </div>
     </div>
   );
@@ -2141,28 +2358,37 @@ function GuardLayer({
   floor,
   timeState,
   criticalAlertMode,
+  active,
 }: {
   floor: Floor;
   timeState: TimeState;
   criticalAlertMode: boolean;
+  active: boolean;
 }) {
   const [rotationIndex, setRotationIndex] = useState(0);
   const [tick, setTick] = useState(0);
   const tickRef = useRef(0);
 
-  // Rotate floors every 45s.
+  // Rotate floors every minute. Inactive floors have no guard animation or
+  // timer work, avoiding duplicate guards during a floor transition.
   useEffect(() => {
-    const r = setInterval(() => setRotationIndex((i) => i + 1), 45_000);
+    if (!active) return;
+    const syncRotation = () => setRotationIndex(Math.floor(Date.now() / 60_000));
+    syncRotation();
+    const r = setInterval(syncRotation, 60_000);
     return () => clearInterval(r);
-  }, []);
-  // Patrol + bubble cadence every 3s (so a left/right round trip is ~6s).
+  }, [active]);
+  // Patrol at a measured pace so guards read as walking rather than sprinting.
   useEffect(() => {
+    if (!active) return;
     const t = setInterval(() => {
       tickRef.current += 1;
       setTick(tickRef.current);
-    }, 3_000);
+    }, 6_000);
     return () => clearInterval(t);
-  }, []);
+  }, [active]);
+
+  if (!active) return null;
 
   const isNight = timeState.lightLevel < 0.5;
   const leftX = 90;
@@ -2194,7 +2420,7 @@ function GuardLayer({
             style={{
               left: `${(x / SCENE_W) * 100}%`,
               top: `${(y / SCENE_H) * 100}%`,
-              transition: 'left 2.8s linear, top 0.6s ease',
+              transition: 'left 5.6s linear, top 0.6s ease',
             }}
             title={`${g.name} · ${g.role}`}
           >
