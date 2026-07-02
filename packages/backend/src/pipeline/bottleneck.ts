@@ -58,11 +58,17 @@ export function detectBottlenecks(analysis: AnalysisResult): Diagnostic[] {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const indeg = inDegree(edges);
   const hasCaching = analysis.scan.files.some((f) =>
-    /cache|redis|memo|swr|react-query|tanstack|lru/i.test(f.content),
+    // "memo" alone matches "memory"/"memorial"; require real memoization APIs.
+    /cache|redis|useMemo|React\.memo|\bmemoiz|swr|react-query|tanstack|lru/i.test(f.content),
   );
 
-  // 1. SINGLE POINT OF FAILURE — 3+ nodes depend directly on this node.
+  // 1. SINGLE POINT OF FAILURE — 3+ nodes depend directly on a RUNTIME node.
+  // Only infrastructure that can actually go down at runtime counts. A shared
+  // types/util module imported by many files is a compile-time dependency, not
+  // an outage risk, and flagging it was the detector's main false positive.
+  const RUNTIME_KINDS = new Set(['endpoint', 'middleware', 'auth', 'database', 'external-service', 'mcp']);
   for (const node of nodes) {
+    if (!RUNTIME_KINDS.has(node.kind)) continue;
     const dependents = indeg.get(node.id) ?? 0;
     if (dependents >= 3) {
       out.push(

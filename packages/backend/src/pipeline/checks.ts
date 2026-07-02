@@ -112,11 +112,17 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
   }
   
   // Possible SQL injection via string concatenation in queries.
+  // Report every affected file (capped) so a user fixing one flagged file
+  // doesn't wrongly believe the whole project is clean.
+  const SQL_INJECTION_FINDINGS_CAP = 5;
+  let sqlInjectionFindings = 0;
   for (const f of scan.files) {
+    if (sqlInjectionFindings >= SQL_INJECTION_FINDINGS_CAP) break;
     const isBackend = !f.relPath.includes('frontend') && !f.relPath.includes('checks.ts') && (f.relPath.includes('backend') || f.relPath.includes('server') || f.relPath.includes('database'));
     const isSqlConcat = /'[^']*?\b(select|insert|update|delete|drop)\b[^']*?'\s*\+|"[^"]*?\b(select|insert|update|delete|drop)\b[^"]*?"\s*\+/i;
     const isSqlTemplate = /`[^`]*?\b(select|insert|update|delete|drop)\b[^`]*?\$\{/i;
     if (isBackend && (isSqlConcat.test(f.content) || isSqlTemplate.test(f.content))) {
+      sqlInjectionFindings += 1;
       out.push(
         diag(
           'security-checks',
@@ -129,7 +135,6 @@ export function securityChecks(analysis: AnalysisResult): Diagnostic[] {
           nodesFor(analysis, f.relPath),
         ),
       );
-      break; // One representative finding is enough for the demo.
     }
   }
 
@@ -289,8 +294,12 @@ export function performanceChecks(analysis: AnalysisResult): Diagnostic[] {
   const { scan } = analysis;
   const fw = detectFrameworks(scan);
 
-  // SELECT * usage.
-  const selectStar = scan.files.find((f) => /select\s+\*/i.test(f.content));
+  // SELECT * usage. Only flag code files: docs/readmes legitimately show
+  // "SELECT *" in teaching examples and would be false positives.
+  const DOC_EXTENSIONS = new Set(['.md', '.mdx', '.txt', '.rst']);
+  const selectStar = scan.files.find(
+    (f) => !DOC_EXTENSIONS.has(f.ext) && /select\s+\*/i.test(f.content),
+  );
   if (selectStar) {
     out.push(
       diag(
@@ -324,7 +333,9 @@ export function performanceChecks(analysis: AnalysisResult): Diagnostic[] {
   }
 
   // No caching anywhere.
-  const mentionsCache = scan.files.some((f) => /cache|redis|memo|swr|react-query|tanstack/i.test(f.content));
+  const mentionsCache = scan.files.some((f) =>
+    /cache|redis|useMemo|React\.memo|\bmemoiz|swr|react-query|tanstack/i.test(f.content),
+  );
   if (!mentionsCache) {
     out.push(
       diag(
@@ -363,9 +374,11 @@ export function scaleChecks(analysis: AnalysisResult): Diagnostic[] {
     );
   }
 
-  // Stateful session handling hurts horizontal scaling.
+  // Stateful session handling hurts horizontal scaling. Require the Map to be
+  // assigned to a session-named variable; "any Map() plus the word session
+  // anywhere later in the file" flagged unrelated code.
   const inMemorySession = analysis.scan.files.some((f) =>
-    /express-session(?![\s\S]*store)|new Map\(\)[\s\S]*session/i.test(f.content),
+    /express-session(?![\s\S]*store)|\bsessions?\w*\s*=\s*new Map\(/i.test(f.content),
   );
   if (inMemorySession) {
     out.push(
