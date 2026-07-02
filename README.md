@@ -41,6 +41,8 @@ ArchLab is organized as an `npm` workspaces monorepo:
 
 ## Getting Started
 
+> Contributing or onboarding as an engineer? Start with [CONTRIBUTING.md](CONTRIBUTING.md): the mental model, how the packages talk, and the rules the code enforces.
+
 ### 1. Install Dependencies
 ```bash
 npm install
