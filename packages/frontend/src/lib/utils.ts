@@ -1,3 +1,5 @@
+/** Shared class-name helper used by every shadcn-style component. */
+
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 

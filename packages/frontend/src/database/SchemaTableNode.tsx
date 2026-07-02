@@ -1,3 +1,9 @@
+/**
+ * One table card on the Database ERD canvas: name, column rows with PK/FK
+ * badges, and React Flow handles for relationship edges. Inline-editable;
+ * edits flow back up through onUpdateTable and regenerate the SQL.
+ */
+
 import { useState, useEffect } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { DbColumn, DbTable } from '../lib/sqlSchema.js';

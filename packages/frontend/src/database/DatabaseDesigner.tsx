@@ -1,3 +1,12 @@
+/**
+ * Database tab — the two-way schema designer.
+ *
+ * Renders every table (confirmed from real schema files + inferred from app
+ * code, visually distinct) as an ERD on a React Flow canvas with FK edges.
+ * Editing SQL regenerates the diagram; editing a table card regenerates the
+ * SQL. Search, confirmed/inferred filters, and pagination live in the toolbar.
+ */
+
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import ReactFlow, {
   Background,

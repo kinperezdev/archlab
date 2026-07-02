@@ -1,3 +1,9 @@
+/**
+ * Doctor panel — ArchLab checking its own health. Renders the backend's
+ * self-diagnostic report (service status, brain integrity, security posture)
+ * with pass/warn/fail rows and a re-run button.
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { Stethoscope, ShieldCheck, RefreshCw } from 'lucide-react';
 import { PORTS, type DoctorReport, type DoctorCheck, type CheckStatus } from '@archlab/shared';

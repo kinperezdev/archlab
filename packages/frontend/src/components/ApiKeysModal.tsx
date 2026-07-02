@@ -1,3 +1,9 @@
+/**
+ * Settings → API Keys modal. Write-only by design: the backend reports which
+ * providers are configured as booleans and never returns key values, so this
+ * form can only save new keys, never display stored ones.
+ */
+
 import { useState, useEffect } from 'react';
 import { PORTS } from '@archlab/shared';
 

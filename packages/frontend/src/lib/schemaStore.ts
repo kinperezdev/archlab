@@ -1,3 +1,8 @@
+/**
+ * Persistence for the Database tab's SQL text. Backend first (survives across
+ * browsers), localStorage as the offline fallback, seeded SQL as last resort.
+ */
+
 import { PORTS } from '@archlab/shared';
 import { loadJSON, saveJSON } from './storage.js';
 

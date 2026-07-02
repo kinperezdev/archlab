@@ -1,3 +1,10 @@
+/**
+ * One node on the architecture canvas: kind-colored card with label, badges,
+ * side ports, and the live pipeline animation states (processing / scanning /
+ * error / stress / success). Memoized — it renders hundreds of times per
+ * project, so props must stay referentially stable.
+ */
+
 import { memo, type CSSProperties } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { NodeKind, NodeAnimationState } from '@archlab/shared';

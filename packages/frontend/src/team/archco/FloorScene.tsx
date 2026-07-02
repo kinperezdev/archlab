@@ -1,3 +1,10 @@
+/**
+ * One floor of the ArchCo pixel-art office: furniture layout, day/night
+ * lighting, and the employee sprites who work, roam, chat, and ride the
+ * elevator. Presence and behavior are driven by timeSystem; the roster and
+ * layouts are pure data (companyData / floorLayouts).
+ */
+
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Employee, Floor, HairStyle, Accessory, SecurityGuard } from './companyData.js';
 import { employeesOnFloor, EMPLOYEES, SECURITY_GUARDS } from './companyData.js';

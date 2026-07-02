@@ -1,3 +1,15 @@
+/**
+ * The architecture canvas — ArchLab's main surface.
+ *
+ * Renders the analyzed project as a React Flow graph: nodes in Connected /
+ * Isolated containers, kind-colored edges with flow animation on hover or
+ * selection, the Frontend/Backend/External swim lanes, simulation cascade
+ * waves, and the layout normalizers (readability re-grid + decoration
+ * spacing) that keep dense graphs legible. Structural props are memoized;
+ * live animation state arrives separately so streaming pipeline ticks never
+ * invalidate the graph memo.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,

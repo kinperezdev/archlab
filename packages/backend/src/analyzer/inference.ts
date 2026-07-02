@@ -1,3 +1,14 @@
+/**
+ * Schema inference — the "Inferred" (amber) layer of the Database tab.
+ *
+ * When a project has no schema files, this guesses probable tables from app
+ * code: TS interfaces/types/classes, req.body field access in route handlers,
+ * form inputs, and language-specific models (Rails migrations, etc.). Every
+ * result is a HEURISTIC GUESS and must always be presented as inferred /
+ * unverified in the UI — never mixed with confirmed schema (see dbParser.ts
+ * for the confirmed layer parsed from real .prisma/.sql/ORM files).
+ */
+
 import type { ScanResult } from './scan.js';
 
 export interface InferredColumn {

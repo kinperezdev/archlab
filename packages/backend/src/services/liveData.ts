@@ -1,3 +1,12 @@
+/**
+ * Live data fetchers — the only place the backend talks to the internet.
+ *
+ * Free, keyless sources only: npm registry (latest versions), OSV (known
+ * vulnerabilities), DuckDuckGo instant answers (best-practice lookups). All
+ * results are cached in brain/live-data-cache.json with a 24h TTL, and every
+ * fetcher fails soft (returns empty) so offline use never breaks analysis.
+ */
+
 import https from 'https';
 import http from 'http';
 import path from 'path';

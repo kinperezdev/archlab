@@ -1,3 +1,11 @@
+/**
+ * Frontend entry point.
+ *
+ * Fetches the backend session token FIRST (initSession patches window.fetch so
+ * every backend call carries it automatically), then mounts <App/>. All global
+ * stylesheets are imported here, in cascade order.
+ */
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';

@@ -1,3 +1,12 @@
+/**
+ * Analysis enrichment — folds live internet data into a finished analysis.
+ *
+ * After the scanner produces its offline result, this adds outdated-dependency
+ * findings, known vulnerabilities (OSV), and stack best-practice tips using the
+ * cached fetchers in liveData.ts. Enrichment is additive and optional: if the
+ * machine is offline the base analysis is returned untouched.
+ */
+
 import {
   loadLiveDataCache,
   saveLiveDataCache,
