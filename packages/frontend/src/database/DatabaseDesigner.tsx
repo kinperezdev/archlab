@@ -418,7 +418,7 @@ function mergeSchemas(explicit: DbTable[], inferred: DbTable[]): DbTable[] {
   return merged;
 }
 
-function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) {
+function DatabaseDesignerInner({ inferredSql, projectId }: { inferredSql: string | null; projectId: string | null }) {
   const [sql, setSql] = useState<string>('');
   const [tables, setTables] = useState<DbTable[]>([]);
   // Last persisted SQL. Edits stay live on the canvas but only this snapshot is
@@ -460,19 +460,21 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
     [],
   );
 
-  // Load saved SQL schema and merge with inferredSql
+  // Load this project's saved SQL and merge with its inferred schema. With a
+  // project active, an empty save means "no manual edits yet" and the inferred
+  // tables stand alone; the sample SQL only seeds the no-project playground.
   useEffect(() => {
-    loadSchema(SAMPLE_SQL).then((savedSql) => {
+    loadSchema(projectId ? '' : SAMPLE_SQL, projectId).then((savedSql) => {
       const explicit = parseSqlSchema(savedSql);
       const inferred = parseSqlSchema(inferredSql || '');
       const merged = mergeSchemas(explicit, inferred);
       const mergedSql = serializeSqlSchema(merged);
-      
+
       setSql(mergedSql);
       setTables(merged);
       setSavedSql(mergedSql); // baseline: a freshly loaded schema is not "dirty"
     });
-  }, [inferredSql]);
+  }, [inferredSql, projectId]);
 
   // Resolve FK references (auto-correct to PK / flag unresolved) for display.
   const resolvedTables = useMemo(() => resolveReferences(tables), [tables]);
@@ -759,7 +761,7 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
   // Global dirty-state Save / Discard for the whole schema.
   const isDirty = sql !== savedSql;
   const saveAll = () => {
-    saveSchema(sql);
+    saveSchema(sql, projectId);
     setSavedSql(sql);
   };
   const discardAll = () => {
@@ -1049,9 +1051,11 @@ function DatabaseDesignerInner({ inferredSql }: { inferredSql: string | null }) 
 interface DatabaseDesignerProps {
   inferredSql: string | null;
   hasProject: boolean;
+  /** Active canvas project; scopes schema persistence and resets the designer on switch. */
+  projectId: string | null;
 }
 
-export function DatabaseDesigner({ inferredSql, hasProject }: DatabaseDesignerProps) {
+export function DatabaseDesigner({ inferredSql, hasProject, projectId }: DatabaseDesignerProps) {
   // Gate the empty state here so the inner component (with all its hooks) only
   // mounts once a project exists. Returning early from inside the inner
   // component would change its hook count when a project loads and crash it.
@@ -1071,7 +1075,9 @@ export function DatabaseDesigner({ inferredSql, hasProject }: DatabaseDesignerPr
   }
   return (
     <ReactFlowProvider>
-      <DatabaseDesignerInner inferredSql={inferredSql} />
+      {/* key: switching projects remounts the designer so selection, dirty
+          state, and viewport never leak from one project into another. */}
+      <DatabaseDesignerInner key={projectId ?? 'none'} inferredSql={inferredSql} projectId={projectId} />
     </ReactFlowProvider>
   );
 }

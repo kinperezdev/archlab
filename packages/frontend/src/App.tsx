@@ -630,7 +630,7 @@ export function App() {
           ) : tab === 'docs' ? (
             <Docs hasApiKey={hasApiKey} apiKeys={apiKeys} />
           ) : tab === 'database' ? (
-            <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} />
+            <DatabaseDesigner inferredSql={state.inferredSql} hasProject={Boolean(state.projectId)} projectId={state.projectId} />
           ) : tab === 'archco' ? (
             <TeamReview
               embedded

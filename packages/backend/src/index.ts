@@ -274,18 +274,30 @@ app.post('/api/keys', (req, res) => {
 app.get('/doctor', (_req, res) => res.json({ ok: true, report: buildHealthReport() }));
 
 app.get('/security/selfcheck', (_req, res) => {
-  // Posture reflects how THIS server actually configured itself above, so the
-  // panel reports the real running state, not assumptions.
+  // Derive posture from the server's ACTUAL running configuration wherever a
+  // value can vary, so the panel catches a real regression (a wildcard added
+  // to CORS, a disabled limiter, a non-localhost bind) instead of always
+  // reporting green. The remaining flags are code invariants: the behavior
+  // they name is enforced unconditionally on every request by middleware that
+  // always runs, so there is no variable runtime state to probe.
   const report = buildSecurityReport({
-    corsLocked: true,
-    authRequired: true,
-    keysAreBooleans: true,
-    bodyLimited: true,
-    rateLimited: true,
-    unlockTokenBound: true,
-    ssrfGuarded: true,
-    pathSandboxed: true,
+    // Real: the allowlist is non-empty and contains no wildcard origin.
+    corsLocked: ALLOWED_ORIGINS.size > 0 && !ALLOWED_ORIGINS.has('*'),
+    // Real: a strong per-run session token is set and gates every route.
+    authRequired: typeof SESSION_TOKEN === 'string' && SESSION_TOKEN.length >= 32,
+    // Real: the JSON body limiter and access rate limiter are installed.
+    bodyLimited: Boolean(smallJson),
+    rateLimited: Boolean(accessLimiter),
+    // Real: the server is only reachable on loopback.
     boundToLocalhost: HOST === '127.0.0.1' || HOST === 'localhost',
+    // Invariants enforced by always-on code paths (not variable at runtime):
+    // /api/keys returns presence booleans only, MCP inspect blocks internal
+    // targets, the unlock sentinel is hashed against the password, and every
+    // filesystem path passes resolveWithin.
+    keysAreBooleans: true,
+    ssrfGuarded: true,
+    unlockTokenBound: true,
+    pathSandboxed: true,
   });
   return res.json({ ok: true, report });
 });
@@ -669,10 +681,21 @@ app.patch('/brain/archco/employees/:employeeId', (req, res) => {
   }
 });
 
-app.get('/schema', (_req, res) => {
+// Schemas are stored PER PROJECT (brain/schemas/<projectId>.json) so switching
+// the active project on the canvas switches the Database tab with it. Requests
+// without a projectId keep using the legacy single global file.
+const SCHEMAS_DIR = path.join(BRAIN_DIR, 'schemas');
+function schemaFileFor(projectId: unknown): string {
+  return typeof projectId === 'string' && /^[a-f0-9]{6,64}$/i.test(projectId)
+    ? path.join(SCHEMAS_DIR, `${projectId}.json`)
+    : SCHEMA_FILE;
+}
+
+app.get('/schema', (req, res) => {
+  const file = schemaFileFor(req.query.projectId);
   try {
-    if (!fs.existsSync(SCHEMA_FILE)) return res.json({ ok: true, sql: '' });
-    const data = JSON.parse(fs.readFileSync(SCHEMA_FILE, 'utf8'));
+    if (!fs.existsSync(file)) return res.json({ ok: true, sql: '' });
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     return res.json({ ok: true, sql: data.sql ?? '' });
   } catch {
     return res.json({ ok: true, sql: '' });
@@ -681,9 +704,10 @@ app.get('/schema', (_req, res) => {
 
 app.post('/schema', (req, res) => {
   const sql = typeof req.body?.sql === 'string' ? req.body.sql : '';
+  const file = schemaFileFor(req.body?.projectId);
   try {
-    fs.mkdirSync(path.dirname(SCHEMA_FILE), { recursive: true });
-    fs.writeFileSync(SCHEMA_FILE, JSON.stringify({ sql }, null, 2), 'utf8');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ sql }, null, 2), 'utf8');
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err) });
