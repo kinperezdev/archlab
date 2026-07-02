@@ -63,12 +63,21 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
   // user rc files don't emit it themselves) never tells us when the user `cd`s,
   // so auto-analysis never fires and the canvas stays "No project loaded".
   const cwdReporting = buildCwdReportingEnv(home);
+  // The backend loads the user's AI provider keys into its own process.env
+  // (from brain/api_keys.json). The PTY must NOT inherit them: anything run in
+  // the in-app terminal could otherwise read them with a one-line `echo`.
+  const shellEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    if (key === 'ANTHROPIC_API_KEY' || key === 'OPENAI_API_KEY' || key === 'GEMINI_API_KEY') continue;
+    shellEnv[key] = value;
+  }
   const term = pty.spawn(SHELL, os.platform() === 'win32' ? [] : ['-l'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     cwd: startCwd,
-    env: { ...process.env, TERM: 'xterm-256color', ...cwdReporting.env },
+    env: { ...shellEnv, TERM: 'xterm-256color', ...cwdReporting.env },
   });
 
   // Current output sink. Starts as the initial handlers; swapped on re-attach.

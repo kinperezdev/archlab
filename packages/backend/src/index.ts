@@ -248,7 +248,8 @@ app.post('/api/keys', (req, res) => {
     };
 
     fs.mkdirSync(path.dirname(KEYS_FILE), { recursive: true });
-    fs.writeFileSync(KEYS_FILE, JSON.stringify(merged, null, 2), 'utf8');
+    // 0600: keys hold provider credentials; only the owner may read them.
+    fs.writeFileSync(KEYS_FILE, JSON.stringify(merged, null, 2), { encoding: 'utf8', mode: 0o600 });
 
     // Load them into environment immediately.
     process.env.ANTHROPIC_API_KEY = merged.anthropic || '';
@@ -1905,3 +1906,36 @@ server.listen(PORTS.backend, HOST, () => {
   // eslint-disable-next-line no-console
   console.log(`[archlab-backend] http+ws listening on http://${HOST}:${PORTS.backend}`);
 });
+
+// ---- Process-level reliability guards ---------------------------------------
+// Without these, one rejected promise anywhere (a failed analysis, a dropped
+// AI call) kills the whole backend and takes every live terminal session and
+// WebSocket with it. Log loudly, keep serving; all durable state is on disk.
+process.on('unhandledRejection', (reason) => {
+  console.error('[archlab-backend] unhandled rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[archlab-backend] uncaught exception:', err);
+});
+
+// Graceful shutdown: kill PTYs (so no orphaned shells linger) and close the
+// server before exiting on Ctrl+C or a supervisor's terminate signal.
+let shuttingDown = false;
+function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[archlab-backend] ${signal} received, shutting down...`);
+  for (const session of terminals.values()) {
+    try {
+      session.kill();
+    } catch {
+      /* PTY already gone */
+    }
+  }
+  wss.close();
+  server.close(() => process.exit(0));
+  // Hard exit if a hung connection keeps the server open.
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

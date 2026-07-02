@@ -16,4 +16,18 @@ export default defineConfig({
     port: 5317,
     strictPort: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'vendor-react';
+          if (id.includes('node_modules/reactflow') || id.includes('node_modules/@reactflow')) return 'vendor-flow';
+          if (id.includes('node_modules/motion') || id.includes('node_modules/framer-motion')) return 'vendor-motion';
+          if (id.includes('node_modules/highlight.js')) return 'vendor-highlight';
+          if (id.includes('node_modules/lucide-react')) return 'vendor-icons';
+          return undefined;
+        },
+      },
+    },
+  },
 });

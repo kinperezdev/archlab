@@ -243,7 +243,7 @@ function spaceForNodeDecorations(nodes: CanvasNode[]): CanvasNode[] {
   const spacedX = new Map<number, number>();
   let lastX: number | null = null;
   for (const x of uniqueX) {
-    const nextX = lastX === null ? x : Math.max(x, lastX + DECORATED_COL_W);
+    const nextX: number = lastX === null ? x : Math.max(x, lastX + DECORATED_COL_W);
     spacedX.set(x, nextX);
     lastX = nextX;
   }
@@ -262,7 +262,7 @@ function spaceForNodeDecorations(nodes: CanvasNode[]): CanvasNode[] {
     const sorted = [...columnNodes].sort((a, b) => a.position.y - b.position.y);
     let lastY: number | null = null;
     for (const node of sorted) {
-      const nextY = lastY === null ? node.position.y : Math.max(node.position.y, lastY + DECORATED_ROW_H);
+      const nextY: number = lastY === null ? node.position.y : Math.max(node.position.y, lastY + DECORATED_ROW_H);
       spacedY.set(node.id, nextY);
       lastY = nextY;
     }
