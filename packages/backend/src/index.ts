@@ -1287,6 +1287,48 @@ function broadcast(msg: ServerMessage): void {
   }
 }
 
+// ---- Live project watcher -----------------------------------------------
+// The canvas used to update only when the terminal cd'd somewhere new, so a
+// CLI scaffold generating files INSIDE the current folder never showed up
+// until the user manually re-opened it. Watch the active project root and
+// re-analyze (debounced) whenever its files change, broadcasting to all tabs.
+let projectWatcher: fs.FSWatcher | null = null;
+let watchedRoot: string | null = null;
+let watchDebounce: NodeJS.Timeout | null = null;
+let watchRescanInFlight = false;
+const WATCH_DEBOUNCE_MS = 2500;
+// Generated/derived dirs whose churn must not trigger rescans. `brain` is
+// critical: analyzing ArchLab itself writes brain files inside the watched
+// root, which would otherwise loop watcher -> analyze -> write -> watcher.
+const WATCH_IGNORE = /(^|[\\/])(node_modules|\.git|dist|build|out|coverage|\.next|\.cache|\.vite|brain)([\\/]|$)/;
+
+function watchProjectRoot(root: string): void {
+  if (watchedRoot === root && projectWatcher) return;
+  projectWatcher?.close();
+  projectWatcher = null;
+  watchedRoot = root;
+  try {
+    projectWatcher = fs.watch(root, { recursive: true }, (_event, filename) => {
+      if (filename && WATCH_IGNORE.test(String(filename))) return;
+      if (watchDebounce) clearTimeout(watchDebounce);
+      watchDebounce = setTimeout(() => {
+        if (watchRescanInFlight || !watchedRoot) return;
+        watchRescanInFlight = true;
+        void handleAnalyze(watchedRoot, broadcast)
+          .catch(() => {})
+          .finally(() => {
+            watchRescanInFlight = false;
+          });
+      }, WATCH_DEBOUNCE_MS);
+      watchDebounce.unref();
+    });
+  } catch {
+    // fs.watch can fail on network mounts or exhausted descriptors; the
+    // manual Re-analyze button still covers those setups.
+    projectWatcher = null;
+  }
+}
+
 // Native folder picker (macOS) so the UI can offer a "Choose Folder" button
 // that returns a real absolute path the backend can analyze and the terminal
 // can cd into. Browsers can't expose absolute paths, so this runs the OS dialog.
@@ -1400,6 +1442,15 @@ wss.on('connection', (socket) => {
 
   log(emit, 'info', 'Connected to ArchLab backend.');
   sendBrain(emit);
+
+  // Restore the last analyzed project for this client so a fresh page load
+  // never lands on an empty canvas. The project index lives in the brain, so
+  // this survives backend restarts and works from any browser (the old
+  // localStorage-based restore broke in both cases).
+  const lastProject = getLastAnalyzedProject();
+  if (lastProject && fs.existsSync(lastProject.rootPath)) {
+    void handleAnalyze(lastProject.rootPath, emit);
+  }
 
   socket.on('close', () => {
     clients.delete(socket);
@@ -1628,6 +1679,8 @@ async function handleAnalyze(
   // Persist id -> root path immediately so checks can always recover this
   // project later, even after a restart or page refresh.
   rememberProject(analysis.projectId, analysis.rootPath, analysis.name);
+  // Keep the canvas live: newly generated/edited files re-analyze automatically.
+  watchProjectRoot(analysis.rootPath);
   
   const inferredSql = inferSchemaFromAppFlow(analysis.scan);
   // Record detected infrastructure so the brain can surface cross-project insights.
@@ -1985,6 +2038,7 @@ function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[archlab-backend] ${signal} received, shutting down...`);
+  projectWatcher?.close();
   for (const session of terminals.values()) {
     try {
       session.kill();

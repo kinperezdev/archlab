@@ -144,22 +144,9 @@ export interface ArchLabState {
 }
 
 const EMPTY_CANVAS: CanvasGraph = { nodes: [], edges: [] };
-const LAST_PROJECT_PATH_KEY = 'archlab:lastProjectPath';
-
-function getLastProjectPath(): string | null {
-  try {
-    const path = localStorage.getItem(LAST_PROJECT_PATH_KEY)?.trim();
-    return path || null;
-  } catch {
-    return null;
-  }
-}
 
 export function useArchLab() {
   const wsRef = useRef<WebSocket | null>(null);
-  // A reconnect must not restart a potentially expensive scan. Restore the
-  // remembered project once per browser session, after the first socket opens.
-  const restoredProjectRef = useRef(false);
   const [state, setState] = useState<ArchLabState>({
     connected: false,
     projectId: null,
@@ -391,17 +378,6 @@ export function useArchLab() {
     }
   }, []);
 
-  // Keep the last successfully analyzed folder local to this browser. The path
-  // is used on the next page load to rebuild the canvas automatically.
-  useEffect(() => {
-    if (!state.projectPath) return;
-    try {
-      localStorage.setItem(LAST_PROJECT_PATH_KEY, state.projectPath);
-    } catch {
-      /* private browsing or full storage: the current session still works */
-    }
-  }, [state.projectPath]);
-
   // Connect once on mount, with simple auto-reconnect.
   useEffect(() => {
     let closed = false;
@@ -419,11 +395,8 @@ export function useArchLab() {
         const queued = sendQueue.current;
         sendQueue.current = [];
         for (const msg of queued) ws.send(JSON.stringify(msg));
-        if (!restoredProjectRef.current) {
-          restoredProjectRef.current = true;
-          const rootPath = getLastProjectPath();
-          if (rootPath) ws.send(JSON.stringify({ type: 'analyze-project', rootPath }));
-        }
+        // Last-project restore is backend-driven: the server replays the most
+        // recently analyzed project from its persisted index on every connect.
       };
       ws.onclose = () => {
         setState((p) => ({ ...p, connected: false }));

@@ -51,11 +51,23 @@ export function recallProject(projectId: string): RememberedProject | null {
   return readIndex()[projectId] ?? null;
 }
 
-/** Get the most recently analyzed project to initialize paths after restart. */
+/**
+ * Get the most recently analyzed project whose folder still exists, to
+ * initialize paths and restore the canvas after a restart. Deleted projects
+ * are skipped (not returned) so a removed scratch folder never blanks the
+ * restore; the next-newest surviving project wins.
+ */
 export function getLastAnalyzedProject(): RememberedProject | null {
   const index = readIndex();
   const items = Object.values(index);
   if (items.length === 0) return null;
   items.sort((a, b) => new Date(b.analyzedAt).getTime() - new Date(a.analyzedAt).getTime());
-  return items[0];
+  for (const item of items) {
+    try {
+      if (fs.existsSync(item.rootPath) && fs.statSync(item.rootPath).isDirectory()) return item;
+    } catch {
+      /* unreadable path: treat as gone */
+    }
+  }
+  return null;
 }
