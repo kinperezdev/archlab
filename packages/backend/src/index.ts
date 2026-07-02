@@ -23,6 +23,7 @@ import { rememberProject, recallProject, getLastAnalyzedProject } from './analyz
 import { runPipeline } from './pipeline/pipeline.js';
 import { detectBottlenecks } from './pipeline/bottleneck.js';
 import { enrichAnalysis } from './services/enrichAnalysis.js';
+import { loadDocsLive, refreshDocsLive, isDocsLiveFresh, startDocsLiveScheduler } from './services/docsLive.js';
 
 // Load .env from workspace root if it exists
 try {
@@ -168,12 +169,19 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'archlab-backend
 // the token is rejected, and gives hosted/multi-user mode a real auth seam.
 const SESSION_TOKEN = crypto.randomBytes(32).toString('hex');
 const SESSION_TOKEN_FILE = path.join(BRAIN_DIR, '.session-token');
-try {
-  fs.mkdirSync(BRAIN_DIR, { recursive: true });
-  // 0600 so only the owner can read it.
-  fs.writeFileSync(SESSION_TOKEN_FILE, SESSION_TOKEN, { mode: 0o600 });
-} catch (err) {
-  console.error('[auth] failed to write session token file:', err);
+
+// Written only once the port is actually bound (see server.listen at the
+// bottom). Writing it earlier let a second launch attempt that dies with
+// EADDRINUSE clobber the RUNNING instance's token file, silently breaking
+// every client that reads it.
+function persistSessionToken(): void {
+  try {
+    fs.mkdirSync(BRAIN_DIR, { recursive: true });
+    // 0600 so only the owner can read it.
+    fs.writeFileSync(SESSION_TOKEN_FILE, SESSION_TOKEN, { mode: 0o600 });
+  } catch (err) {
+    console.error('[auth] failed to write session token file:', err);
+  }
 }
 
 // The frontend fetches the token here at startup. Gated by Origin only (the
@@ -994,31 +1002,57 @@ app.post('/access/permissions', (req, res) => {
   return res.json({ ok: true, ...accessStatus() });
 });
 
+// ---- Docs live updates -------------------------------------------------
+// Version / end-of-life data for the technologies the Docs articles teach,
+// pulled from endoflife.date and cached in the brain. See services/docsLive.ts.
+
+app.get('/docs/live', (_req, res) => {
+  const data = loadDocsLive();
+  if (!isDocsLiveFresh(data)) {
+    // Serve what we have immediately; refresh in the background for next time.
+    void refreshDocsLive().catch(() => {});
+  }
+  return res.json({ ok: true, ...data, fresh: isDocsLiveFresh(data) });
+});
+
+app.post('/docs/live/refresh', async (_req, res) => {
+  try {
+    const data = await refreshDocsLive();
+    return res.json({ ok: true, ...data, fresh: true });
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: String(err) });
+  }
+});
+
 // Serve the source of a node's file so the UI can show "what's inside" on click.
-// Content is served from the in-memory scan captured at analysis time.
+// Any file inside the project root is viewable — membership in the analysis
+// scan is NOT required, so files the scanner skipped (unrecognized extensions,
+// scan caps) still open. Path containment is the only gate.
 app.get('/file', (req, res) => {
   const projectId = String(req.query.projectId ?? '');
   const relPath = String(req.query.path ?? '');
   const analysis = projects.get(projectId);
   if (!analysis) return res.status(404).json({ ok: false, error: 'Unknown project' });
-  const file = analysis.scan.files.find((f) => f.relPath === relPath);
-  if (!file) return res.status(404).json({ ok: false, error: 'File not found' });
 
-  // Read file directly from disk to avoid in-memory scanner limits
-  const absPath = path.join(analysis.rootPath, file.relPath);
+  const absPath = resolveWithin(analysis.rootPath, relPath);
+  if (!absPath) return res.status(403).json({ ok: false, error: 'Path is outside the project root.' });
+
+  const scanned = analysis.scan.files.find((f) => f.relPath === relPath);
   let content = '';
   try {
-    if (fs.existsSync(absPath)) {
+    if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
       content = fs.readFileSync(absPath, 'utf8');
+    } else if (!scanned) {
+      return res.status(404).json({ ok: false, error: 'File not found' });
     }
   } catch {
-    content = file.content; // fallback
+    content = scanned?.content ?? ''; // disk read failed: fall back to scan capture
   }
 
   return res.json({
     ok: true,
-    path: file.relPath,
-    ext: file.ext,
+    path: relPath,
+    ext: scanned?.ext ?? path.extname(relPath),
     content: content || '(binary or too large to preview)',
   });
 });
@@ -1902,7 +1936,33 @@ function log(
 // password again before anything is served (Layer 1).
 lock();
 
+// Keep the Docs tab's tech radar current: refresh once shortly after boot if
+// stale, then every 24 hours.
+startDocsLiveScheduler();
+
+// A second launch while ArchLab is already running must fail loudly and with a
+// non-zero exit, not fall through to the generic crash guard with exit 0.
+// NOTE: the ws library forwards the HTTP server's 'error' events onto `wss`,
+// and an unhandled 'error' on wss throws before our server handler runs — so
+// the handler must be attached to BOTH emitters.
+function onServerStartupError(err: NodeJS.ErrnoException): void {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `[archlab-backend] port ${PORTS.backend} is already in use — ArchLab is probably already running.\n` +
+      `[archlab-backend] stop it with Ctrl+C in its terminal, or force-kill: kill -9 $(lsof -t -i:${PORTS.backend})`,
+    );
+  } else {
+    console.error('[archlab-backend] server failed to start:', err);
+  }
+  process.exit(1);
+}
+server.on('error', onServerStartupError);
+wss.on('error', () => {
+  /* handled by the server listener above; this stops ws's re-emit from throwing */
+});
+
 server.listen(PORTS.backend, HOST, () => {
+  persistSessionToken();
   // eslint-disable-next-line no-console
   console.log(`[archlab-backend] http+ws listening on http://${HOST}:${PORTS.backend}`);
 });

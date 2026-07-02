@@ -4,6 +4,9 @@
   "private": true,
   "description": "ArchLab — local engineering command center: maps any project to a live canvas, runs structured checks, and grows a global brain. Everything runs on localhost.",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/shared",
     "packages/backend",

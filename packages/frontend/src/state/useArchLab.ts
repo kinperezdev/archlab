@@ -198,6 +198,15 @@ export function useArchLab() {
   // bypasses React state and is pushed straight to xterm.js to avoid
   // re-rendering the whole app per chunk.
   const termListeners = useRef<Map<string, Set<(data: string) => void>>>(new Map());
+  // PTY output that arrived before any xterm subscribed for its id. The shell
+  // prints its prompt exactly once; dropping it left the pane blank forever.
+  // Held here (capped) and flushed to the first listener that registers.
+  const termPending = useRef<Map<string, string>>(new Map());
+  const TERM_PENDING_CAP = 200_000;
+  // Client messages issued before the socket finished connecting (e.g. a
+  // terminal tab mounting on first paint sends term-create immediately).
+  // Silently dropping them meant the PTY was never spawned at all.
+  const sendQueue = useRef<ClientMessage[]>([]);
 
   // Reduce one server message into the next immutable state.
   const reduce = useCallback((prev: ArchLabState, msg: ServerMessage): ArchLabState => {
@@ -406,6 +415,10 @@ export function useArchLab() {
       ws.onopen = () => {
         setState((p) => ({ ...p, connected: true }));
         ws.send(JSON.stringify({ type: 'term-init' }));
+        // Deliver everything queued while the socket was still connecting.
+        const queued = sendQueue.current;
+        sendQueue.current = [];
+        for (const msg of queued) ws.send(JSON.stringify(msg));
         if (!restoredProjectRef.current) {
           restoredProjectRef.current = true;
           const rootPath = getLastProjectPath();
@@ -423,7 +436,13 @@ export function useArchLab() {
           // (xterm.js) instead of through React state.
           if (msg.type === 'term-data') {
             const set = termListeners.current.get(msg.id);
-            if (set) for (const fn of set) fn(msg.data);
+            if (set && set.size > 0) {
+              for (const fn of set) fn(msg.data);
+            } else {
+              // No xterm attached yet: hold the output for it (capped).
+              const held = (termPending.current.get(msg.id) ?? '') + msg.data;
+              termPending.current.set(msg.id, held.slice(-TERM_PENDING_CAP));
+            }
             return;
           }
           setState((p) => reduce(p, msg));
@@ -443,7 +462,14 @@ export function useArchLab() {
 
   const send = useCallback((msg: ClientMessage) => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    } else {
+      // Socket still connecting (or reconnecting): queue instead of dropping,
+      // flushed by ws.onopen. Without this, a terminal tab that mounts before
+      // the socket opens never spawns its PTY and stays blank.
+      sendQueue.current.push(msg);
+    }
   }, []);
 
   const analyzeProject = useCallback((rootPath: string) => {
@@ -512,6 +538,12 @@ export function useArchLab() {
       termListeners.current.set(id, set);
     }
     set.add(cb);
+    // Replay output that arrived before this xterm subscribed (the prompt).
+    const held = termPending.current.get(id);
+    if (held) {
+      termPending.current.delete(id);
+      cb(held);
+    }
     return () => {
       set?.delete(cb);
       if (set && set.size === 0) termListeners.current.delete(id);
