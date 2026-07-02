@@ -4,7 +4,8 @@
  * Layout: a 260px left sidebar (search trigger + collapsible categories) and a
  * centered reading column (max 860px). Only the selected article is rendered;
  * every other article exists as data only, satisfying the performance budget.
- * No network calls, no loading states.
+ * The article library itself is offline; live version data (tech radar) and
+ * project enrichment load from the local backend and hide when unavailable.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -14,6 +15,7 @@ import { DOC_CATEGORY_ORDER, type DocArticle as DocArticleType, type DocCategory
 import { DocArticle } from './DocArticle.js';
 import { DocsSearch, buildSearchIndex } from './DocsSearch.js';
 import { AskClaude } from './AskClaude.js';
+import { DocsTechRadar } from './DocsTechRadar.js';
 import type { ProviderKeys } from '../team/archco/multiProviderAI.js';
 
 interface DocsProps {
@@ -142,6 +144,7 @@ export function Docs({ hasApiKey, apiKeys = {}, enrichment = null }: DocsProps) 
       <div className="docs-main" ref={scrollRef} onScroll={onScroll}>
         <div className="docs-progress" style={{ width: `${progress}%` }} />
         <div className="docs-column">
+          <DocsTechRadar />
           <LiveDocumentationUpdates enrichment={enrichment} />
           {selected && (
             <DocArticle

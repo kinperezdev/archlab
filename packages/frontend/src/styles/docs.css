@@ -557,3 +557,24 @@
   .docs-column { padding: 32px 20px 100px; }
   .doc-article-title { font-size: 30px; }
 }
+
+/* Tech radar (live version / EOL data in the Docs column) */
+.docs-radar-actions { display: flex; align-items: center; gap: 10px; }
+.docs-radar-refresh {
+  border: 1px solid #2a2a3f;
+  background: #12121f;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.docs-radar-refresh:hover:not(:disabled) { border-color: #6366f1; color: #e2e8f0; }
+.docs-radar-refresh:disabled { opacity: 0.6; cursor: default; }
+.docs-radar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 7px;
+}
+.docs-radar-item { display: flex; flex-direction: column; gap: 2px; }
+.docs-radar-date { color: #64748b; font-size: 11px; }
