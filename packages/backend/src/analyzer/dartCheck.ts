@@ -1,7 +1,6 @@
 /** Dart error detection via `dart analyze` — real syntax + semantic diagnostics. */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { SquiggleMarker } from '@archlab/shared';
@@ -69,26 +68,14 @@ async function analyze(target: string, sourceLines: string[]): Promise<SquiggleM
     .filter((m): m is SquiggleMarker => m !== null);
 }
 
-/** Real Dart diagnostics for a file (on-disk) or an unsaved buffer (`content`). */
-export async function checkDartSyntax(absPath: string, content?: string): Promise<SquiggleMarker[]> {
+/**
+ * Real Dart diagnostics for a file. Always analyzes the on-disk file so imports
+ * resolve and we never write into the user's project (which would trip Flutter
+ * hot-reload / the analysis server). Squiggles refresh on save, not per keystroke.
+ */
+export async function checkDartSyntax(absPath: string): Promise<SquiggleMarker[]> {
   if (!(await hasDart())) return [];
-
-  // On-disk: analyze the real file so imports resolve.
-  if (content === undefined) {
-    if (!fs.existsSync(absPath)) return [];
-    const source = fs.readFileSync(absPath, 'utf8').split('\n');
-    return analyze(absPath, source);
-  }
-
-  // Unsaved buffer: analyze a temp copy in the same directory for correct context.
-  const tmp = path.join(path.dirname(absPath), `.archlab_${Date.now()}.dart`);
-  try {
-    fs.writeFileSync(tmp, content, 'utf8');
-    const markers = await analyze(tmp, content.split('\n'));
-    return markers;
-  } catch {
-    return [];
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
+  if (!fs.existsSync(absPath)) return [];
+  const source = fs.readFileSync(absPath, 'utf8').split('\n');
+  return analyze(absPath, source);
 }

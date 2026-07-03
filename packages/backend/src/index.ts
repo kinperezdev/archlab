@@ -1170,8 +1170,9 @@ app.get('/code/file', async (req, res) => {
     if (!intel) {
       return res.status(500).json({ ok: false, error: `Could not read file: ${absPath}` });
     }
-    const squiggles = await computeSquiggles(analysis.rootPath, relPath);
-    return res.json({ ok: true, intel: { ...intel, squiggles } });
+    // Return the code immediately; the frontend fetches squiggles separately via
+    // /code/syntax-check so opening a file never blocks on the analyzer.
+    return res.json({ ok: true, intel });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(`[code/file] read failed for ${absPath}: ${String(err)}`);
