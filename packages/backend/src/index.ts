@@ -1220,8 +1220,8 @@ app.post('/code/edit-impact', (req, res) => {
   return res.json({ ok: true, impact });
 });
 
-// Live check of an unsaved buffer: full type-check for JS/TS, tree-sitter syntax
-// for other languages when we know the project, else a fast project-free parse.
+// Live check of an unsaved buffer: full type-check for JS/TS when we know the
+// project, else a fast project-free parse.
 app.post('/code/syntax-check', async (req, res) => {
   const projectId = String(req.body?.projectId ?? '');
   const relPath = String(req.body?.path ?? '');

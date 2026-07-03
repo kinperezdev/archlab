@@ -5,7 +5,6 @@
  * path aliases, and compiler options match what the project actually uses.
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import type { SquiggleMarker } from '@archlab/shared';
@@ -15,7 +14,6 @@ import {
   markerFromDiagnostic,
   detectSyntaxSquiggles,
 } from './syntaxCheck.js';
-import { hasTreeSitterGrammar, checkTreeSitterSyntax } from './multiLangCheck.js';
 
 interface Project {
   service: ts.LanguageService;
@@ -120,10 +118,7 @@ export function getProjectDiagnostics(
   }
 }
 
-/**
- * All diagnostics for any supported language: deep type-check for JS/TS,
- * tree-sitter syntax errors for Dart, Swift, Kotlin, Python, Go, Rust, and more.
- */
+/** Diagnostics for a file: deep syntax + compile check for JS/TS, [] otherwise. */
 export async function computeSquiggles(
   root: string,
   relPath: string,
@@ -131,11 +126,6 @@ export async function computeSquiggles(
 ): Promise<SquiggleMarker[]> {
   if (SCRIPT_KINDS[extname(relPath)] !== undefined) {
     return getProjectDiagnostics(root, relPath, content);
-  }
-  if (hasTreeSitterGrammar(relPath)) {
-    const abs = path.isAbsolute(relPath) ? relPath : path.join(root, relPath);
-    const text = content ?? (fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '');
-    return checkTreeSitterSyntax(relPath, text);
   }
   return [];
 }
