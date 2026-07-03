@@ -16,6 +16,7 @@ import {
   detectSyntaxSquiggles,
 } from './syntaxCheck.js';
 import { checkSwiftSyntax } from './swiftCheck.js';
+import { checkDartSyntax } from './dartCheck.js';
 
 interface Project {
   service: ts.LanguageService;
@@ -136,6 +137,10 @@ export async function computeSquiggles(
     const abs = path.isAbsolute(relPath) ? relPath : path.join(root, relPath);
     const text = content ?? (fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '');
     return checkSwiftSyntax(text);
+  }
+  if (extname(relPath) === '.dart') {
+    const abs = path.isAbsolute(relPath) ? relPath : path.join(root, relPath);
+    return checkDartSyntax(abs, content);
   }
   return [];
 }
