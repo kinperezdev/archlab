@@ -112,6 +112,8 @@ export interface ArchLabState {
   analyzedAt: number | null;
   /** True while a forced re-analysis is in flight (drives the button spinner). */
   reanalyzing: boolean;
+  /** True while a pipeline checks run is in flight (drives the run checks button spinner). */
+  runningChecks: boolean;
   canvas: CanvasGraph;
   /** Live per-node animation state from the pipeline, kept OUT of `canvas.nodes`
    *  so streaming animation ticks never change the structural array identity
@@ -154,6 +156,7 @@ export function useArchLab() {
     projectPath: null,
     analyzedAt: null,
     reanalyzing: false,
+    runningChecks: false,
     canvas: EMPTY_CANVAS,
     nodeAnimations: {},
     edgeAnimations: {},
@@ -209,6 +212,7 @@ export function useArchLab() {
           projectPath: msg.rootPath,
           analyzedAt: Date.now(),
           reanalyzing: false,
+          runningChecks: false,
           canvas: msg.canvas,
           nodeAnimations: {},
           edgeAnimations: {},
@@ -251,7 +255,7 @@ export function useArchLab() {
         };
 
       case 'pipeline-init':
-        return { ...prev, steps: msg.steps, diagnostics: [], report: null };
+        return { ...prev, steps: msg.steps, diagnostics: [], report: null, runningChecks: true };
 
       case 'step-status':
         return {
@@ -268,7 +272,7 @@ export function useArchLab() {
         return { ...prev, diagnostics: [...prev.diagnostics, msg.diagnostic] };
 
       case 'report':
-        return { ...prev, report: msg.report };
+        return { ...prev, report: msg.report, runningChecks: false };
 
       case 'brain':
         return {

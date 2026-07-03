@@ -85,6 +85,7 @@ import { countProjectFiles } from './analyzer/scan.js';
 import { inferSchemaFromAppFlow } from './analyzer/inference.js';
 import { buildFileIntel, findReferences, readFileForIntel } from './analyzer/codeIntel.js';
 import { detectSyntaxSquiggles } from './analyzer/syntaxCheck.js';
+import { computeSquiggles } from './analyzer/typeCheck.js';
 import { analyzeImpact, applyImpact, diffToImpact } from './analyzer/codeActions.js';
 import { resolveWithin } from './security/paths.js';
 import { buildHealthReport, buildSecurityReport } from './doctor/doctor.js';
@@ -1141,7 +1142,7 @@ function resolveAbsolutePath(projectRoot: string, relPath: string): string | nul
 
 // Full code-intelligence view of one file: every line classified, explained,
 // and decorated with context-aware actions, plus a symbol navigator.
-app.get('/code/file', (req, res) => {
+app.get('/code/file', async (req, res) => {
   const projectId = String(req.query.projectId ?? '');
   const relPath = String(req.query.path ?? '');
 
@@ -1169,7 +1170,8 @@ app.get('/code/file', (req, res) => {
     if (!intel) {
       return res.status(500).json({ ok: false, error: `Could not read file: ${absPath}` });
     }
-    return res.json({ ok: true, intel });
+    const squiggles = await computeSquiggles(analysis.rootPath, relPath);
+    return res.json({ ok: true, intel: { ...intel, squiggles } });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(`[code/file] read failed for ${absPath}: ${String(err)}`);
@@ -1218,12 +1220,18 @@ app.post('/code/edit-impact', (req, res) => {
   return res.json({ ok: true, impact });
 });
 
-// Live syntax check of an unsaved buffer, for editor-style squiggles as you type.
-app.post('/code/syntax-check', (req, res) => {
+// Live check of an unsaved buffer: full type-check for JS/TS, tree-sitter syntax
+// for other languages when we know the project, else a fast project-free parse.
+app.post('/code/syntax-check', async (req, res) => {
+  const projectId = String(req.body?.projectId ?? '');
   const relPath = String(req.body?.path ?? '');
   const content = typeof req.body?.content === 'string' ? req.body.content : null;
   if (content === null) return res.status(400).json({ ok: false, error: 'content is required' });
-  return res.json({ ok: true, squiggles: detectSyntaxSquiggles(relPath, content) });
+  const analysis = getAnalysis(projectId);
+  const squiggles = analysis
+    ? await computeSquiggles(analysis.rootPath, relPath, content)
+    : detectSyntaxSquiggles(relPath, content);
+  return res.json({ ok: true, squiggles });
 });
 
 // Apply an Impact Analysis to disk: backs up every file, writes the changes,

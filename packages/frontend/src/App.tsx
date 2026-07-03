@@ -516,7 +516,7 @@ export function App() {
         <div className="security-sidebar-actions">
           <button
             className="btn btn-sm"
-            disabled={!state.projectId || !state.connected || state.reanalyzing}
+            disabled={!state.projectId || !state.connected || state.reanalyzing || state.runningChecks}
             onClick={reanalyzeProject}
             title="Force a fresh full scan of the current project"
           >
@@ -530,10 +530,17 @@ export function App() {
           </button>
           <button
             className="btn btn-sm"
-            disabled={!state.projectId || !state.connected}
+            disabled={!state.projectId || !state.connected || state.reanalyzing || state.runningChecks}
             onClick={runChecks}
+            title="Run code scan and diagnostics checks"
           >
-            Run Checks
+            {state.runningChecks ? (
+              <>
+                <FlickerLoader size={13} /> Running...
+              </>
+            ) : (
+              'Run Checks'
+            )}
           </button>
         </div>
 

@@ -8,7 +8,7 @@
  * Analysis (a project-wide before/after diff) that can be applied to disk.
  */
 
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type {
   CanvasNode,
@@ -389,12 +389,12 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
       // Debounced live syntax check on the unsaved buffer.
       if (syntaxTimer.current) window.clearTimeout(syntaxTimer.current);
       syntaxTimer.current = window.setTimeout(async () => {
-        const marks = await checkSyntax(filePath, buildEditedContent());
+        const marks = await checkSyntax(projectId, filePath, buildEditedContent());
         setLiveSquiggles(marks);
         onSyntaxState?.(marks.some((m) => m.severity === 'error'));
       }, 400);
     },
-    [filePath, buildEditedContent, onSyntaxState],
+    [projectId, filePath, buildEditedContent, onSyntaxState],
   );
 
   const onSave = useCallback(async () => {
@@ -547,44 +547,26 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
       ) : (
         <div className="code-body" ref={bodyRef} key={bodyKey}>
           {intel.lines.map((line) => (
-            <Fragment key={line.n}>
-              <CodeLine
-                line={line}
-                findings={findings}
-                squiggles={squigglesByLine.get(line.n) ?? NO_SQUIGGLES}
-                menuOpen={openMenu === line.n}
-                dimMenu={Boolean(ghost && !ghost.locked)}
-                onToggleMenu={toggleMenu}
-                onAction={runAction}
-                onActionHover={previewAction}
-                onActionLeave={clearPreview}
-                onBadge={badgeFor}
-                onEdit={onEditLine}
-                isFindMatch={findOpen && matchLines.has(line.n)}
-                isFindActive={findOpen && activeLine === line.n}
-                query={findOpen ? query : ''}
-              />
-              {ghost && ghost.line === line.n && (
-                <div className={`ghost-suggestion ${ghost.locked ? 'locked' : 'preview'}`} role="note">
-                  {ghost.after.map((t, i) => (
-                    <div key={i} className="ghost-line">
-                      <span className="code-lineno" />
-                      <code className="code-text ghost-text">{t || ' '}</code>
-                    </div>
-                  ))}
-                  {ghost.locked && (
-                    <div className="ghost-actions">
-                      <button className="ghost-btn confirm" onClick={confirmGhost} disabled={ghostApplying}>
-                        {ghostApplying ? 'Applying…' : 'Confirm (Tab)'}
-                      </button>
-                      <button className="ghost-btn" onClick={dismissGhost} disabled={ghostApplying}>
-                        Dismiss (Esc)
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </Fragment>
+            <CodeLine
+              key={line.n}
+              line={line}
+              findings={findings}
+              squiggles={squigglesByLine.get(line.n) ?? NO_SQUIGGLES}
+              menuOpen={openMenu === line.n}
+              menuGhost={openMenu === line.n ? ghost : null}
+              ghostApplying={ghostApplying}
+              onConfirmGhost={confirmGhost}
+              onDismissGhost={dismissGhost}
+              onToggleMenu={toggleMenu}
+              onAction={runAction}
+              onActionHover={previewAction}
+              onActionLeave={clearPreview}
+              onBadge={badgeFor}
+              onEdit={onEditLine}
+              isFindMatch={findOpen && matchLines.has(line.n)}
+              isFindActive={findOpen && activeLine === line.n}
+              query={findOpen ? query : ''}
+            />
           ))}
         </div>
       )}
@@ -675,7 +657,10 @@ const CodeLine = memo(function CodeLine({
   findings,
   squiggles,
   menuOpen,
-  dimMenu = false,
+  menuGhost = null,
+  ghostApplying = false,
+  onConfirmGhost,
+  onDismissGhost,
   onToggleMenu,
   onAction,
   onActionHover,
@@ -690,7 +675,10 @@ const CodeLine = memo(function CodeLine({
   findings: Diagnostic[];
   squiggles: SquiggleMarker[];
   menuOpen: boolean;
-  dimMenu?: boolean;
+  menuGhost?: { after: string[]; locked: boolean } | null;
+  ghostApplying?: boolean;
+  onConfirmGhost: () => void;
+  onDismissGhost: () => void;
   onToggleMenu: (n: number) => void;
   onAction: (line: LineInfo, a: LineAction) => void;
   onActionHover: (line: LineInfo, a: LineAction) => void;
@@ -711,6 +699,35 @@ const CodeLine = memo(function CodeLine({
     return buildHighlighted(line.text, query, isFindActive);
   }, [query, isFindMatch, isFindActive, line.text]);
 
+  // Quick-fix: insert the missing token into this line's text and re-check.
+  const codeRef = useRef<HTMLElement>(null);
+  const [hoverFix, setHoverFix] = useState<SquiggleMarker | null>(null);
+  const applyFix = useCallback(
+    (s: SquiggleMarker) => {
+      if (!s.fix || !codeRef.current) return;
+      const cur = codeRef.current.textContent ?? '';
+      const col = Math.min(s.fix.col, cur.length);
+      const next = cur.slice(0, col) + s.fix.insert + cur.slice(col);
+      codeRef.current.textContent = next;
+      onEdit(line.n, next);
+      setHoverFix(null);
+    },
+    [line.n, onEdit],
+  );
+
+  // While hovering a fixable squiggle, Tab applies the fix (Copilot-style).
+  useEffect(() => {
+    if (!hoverFix?.fix) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        applyFix(hoverFix);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [hoverFix, applyFix]);
+
   return (
     <div className={`code-line${isFindActive ? ' find-active-line' : ''}`} data-line={line.n}>
       <button
@@ -723,6 +740,7 @@ const CodeLine = memo(function CodeLine({
       <span className={`code-lineno${squiggles.length ? ' has-squiggle' : ''}`}>{line.n}</span>
       <span className="code-text-wrap">
       <code
+        ref={codeRef}
         className="code-text"
         contentEditable
         suppressContentEditableWarning
@@ -747,14 +765,36 @@ const CodeLine = memo(function CodeLine({
         )}
       </code>
         {squiggles.length > 0 && (
-          <span className="squiggle-layer" aria-hidden="true">
+          <span className="squiggle-layer">
             {squiggles.map((s, i) => (
               <span
                 key={i}
                 className={`squiggle squiggle-${s.severity}`}
                 style={{ left: `${s.colStart}ch`, width: `${Math.max(1, s.colEnd - s.colStart)}ch` }}
-                title={s.message}
-              />
+                onMouseEnter={() => setHoverFix(s)}
+                onMouseLeave={() => setHoverFix(null)}
+              >
+                <span className="squiggle-card" role="tooltip">
+                  <span className="sq-msg">{s.message}</span>
+                  {s.help && (
+                    <>
+                      <span className="sq-row"><b>Why</b> {s.help.why}</span>
+                      <span className="sq-row"><b>Look for</b> {s.help.lookFor}</span>
+                    </>
+                  )}
+                  {s.fix && (
+                    <button
+                      className="sq-fix"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        applyFix(s);
+                      }}
+                    >
+                      {s.fix.label} · Tab
+                    </button>
+                  )}
+                </span>
+              </span>
             ))}
           </span>
         )}
@@ -766,7 +806,7 @@ const CodeLine = memo(function CodeLine({
       )}
 
       {menuOpen && (
-        <div className={`code-line-menu${dimMenu ? ' menu-dimmed' : ''}`}>
+        <div className="code-line-menu">
           {line.context && (
             <div className="menu-breadcrumb" title="Where this line sits in the code">
               {line.context.breadcrumb}
@@ -794,6 +834,26 @@ const CodeLine = memo(function CodeLine({
               ))}
             </ul>
           </div>
+          {menuGhost && (
+            <div className={`ghost-suggestion ${menuGhost.locked ? 'locked' : 'preview'}`} role="note">
+              <div className="ghost-head">Preview</div>
+              <div className="ghost-code">
+                {menuGhost.after.map((t, i) => (
+                  <code key={i} className="ghost-text">{t || ' '}</code>
+                ))}
+              </div>
+              {menuGhost.locked && (
+                <div className="ghost-actions">
+                  <button className="ghost-btn confirm" onClick={onConfirmGhost} disabled={ghostApplying}>
+                    {ghostApplying ? 'Applying…' : 'Confirm (Tab)'}
+                  </button>
+                  <button className="ghost-btn" onClick={onDismissGhost} disabled={ghostApplying}>
+                    Dismiss (Esc)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

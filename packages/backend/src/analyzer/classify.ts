@@ -51,7 +51,10 @@ function classifyFile(file: ScannedFile): { lane: Lane; kind: NodeKind } | null 
     /(^|\/)(db|database|databases|data|models|schema|schemas|repositories|repository|migrations)\//.test(p) ||
     /\.(model|schema|entity|repository)\.[\w.]+$/.test(p);
   if (likelyDatabasePath || DATABASE_LIBRARY_RE.test(c) || (looksLikeBackendPath(p) && DATABASE_QUERY_RE.test(c))) {
-    return { lane: looksLikeBackendPath(p) ? 'backend' : 'external', kind: 'database' };
+    const isFrontendClientFile = p.includes('/frontend/') || ['.tsx', '.jsx', '.svelte', '.vue'].includes(file.ext);
+    if (!isFrontendClientFile || likelyDatabasePath) {
+      return { lane: looksLikeBackendPath(p) ? 'backend' : 'external', kind: 'database' };
+    }
   }
   if (/docker-compose|\.tf$/.test(p)) return { lane: 'external', kind: 'config' };
   if (/(^|\/)mcp(-server)?\//.test(p) || /@modelcontextprotocol\/sdk|mcpServer/i.test(c + p)) {
