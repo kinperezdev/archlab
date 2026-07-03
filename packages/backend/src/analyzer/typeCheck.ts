@@ -140,7 +140,7 @@ export async function computeSquiggles(
   }
   if (extname(relPath) === '.dart') {
     const abs = path.isAbsolute(relPath) ? relPath : path.join(root, relPath);
-    return checkDartSyntax(abs, content);
+    return checkDartSyntax(abs);
   }
   return [];
 }

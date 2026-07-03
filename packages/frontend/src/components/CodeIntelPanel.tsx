@@ -223,10 +223,20 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
     setLiveSquiggles(null);
     onSyntaxState?.(false);
     fetchFileIntel(projectId, filePath).then((res) => {
-      if (!cancelled) {
-        setIntel(res.intel);
-        setLoadError(res.error);
-        setLoading(false);
+      if (cancelled) return;
+      setIntel(res.intel);
+      setLoadError(res.error);
+      setLoading(false);
+      // Fetch squiggles after the code is shown, so opening never blocks on the analyzer.
+      if (res.intel) {
+        const content = res.intel.lines.map((l) => l.text).join('\n');
+        checkSyntax(projectId, filePath, content)
+          .then((marks) => {
+            if (cancelled) return;
+            setLiveSquiggles(marks);
+            onSyntaxState?.(marks.some((m) => m.severity === 'error'));
+          })
+          .catch(() => {});
       }
     });
     return () => {
