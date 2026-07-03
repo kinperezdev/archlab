@@ -103,12 +103,32 @@ export interface SymbolInfo {
   line: number;
 }
 
+/**
+ * One editor-style squiggle: a red (error) or amber (warning) underline under a
+ * character range on a line, exactly like VSCode's inline diagnostics.
+ */
+export interface SquiggleMarker {
+  /** 1-based line number. */
+  line: number;
+  /** 0-based column where the underline starts (inclusive). */
+  colStart: number;
+  /** 0-based column where the underline ends (exclusive). */
+  colEnd: number;
+  severity: 'error' | 'warning';
+  /** Hover message, e.g. "Expected ',' — TS1005" or an ArchLab finding title. */
+  message: string;
+  /** Where the squiggle came from, for styling/grouping. */
+  source: 'syntax' | 'finding';
+}
+
 /** The full code-intelligence payload for one file. */
 export interface FileIntel {
   path: string;
   ext: string;
   lines: LineInfo[];
   symbols: SymbolInfo[];
+  /** Editor-style squiggles for this file (syntax errors + ArchLab findings). */
+  squiggles: SquiggleMarker[];
 }
 
 /** One place in the project that references a symbol. */

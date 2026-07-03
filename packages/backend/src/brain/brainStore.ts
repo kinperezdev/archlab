@@ -17,6 +17,7 @@ import type {
   TeamReport,
 } from '@archlab/shared';
 import { BRAIN_DIR, BRAIN_PROJECTS_DIR, BRAIN_STATE_FILE } from './paths.js';
+import { indexWikiEntry, reindexBrainLearning, retrieve } from './rag/ragIndex.js';
 
 // ---- ArchCo: Company Wiki (institutional memory) ----------------------------
 
@@ -56,6 +57,10 @@ export function addWikiEntry(entry: WikiEntry): WikiEntry[] {
   const entries = readJsonFile<WikiEntry[]>(ARCHCO_WIKI_FILE, []);
   const next = [entry, ...entries.filter((e) => e.id !== entry.id)];
   writeJsonFile(ARCHCO_WIKI_FILE, next);
+  // Best-effort semantic indexing; never block or fail the write on it.
+  indexWikiEntry(entry).catch((err) =>
+    console.error('[RAG] failed to index wiki entry', err),
+  );
   return next;
 }
 
@@ -76,6 +81,48 @@ export function searchWiki(query: string): WikiEntry[] {
       .toLowerCase()
       .includes(q),
   );
+}
+
+/**
+ * Semantic wiki search — ranks entries by meaning, not keyword overlap.
+ * Retrieves the nearest wiki vectors, then maps them back to full entries.
+ * Falls back to substring search if nothing has been embedded yet.
+ */
+export async function semanticSearchWiki(query: string, k = 5): Promise<WikiEntry[]> {
+  const hits = await retrieve(query, { k, kinds: ['wiki'] });
+  if (hits.length === 0) return searchWiki(query).slice(0, k);
+
+  const byId = new Map(getWikiEntries().map((e) => [e.id, e]));
+  const results: WikiEntry[] = [];
+  for (const hit of hits) {
+    const id = hit.record.id.replace(/^wiki:/, '');
+    const entry = byId.get(id);
+    if (entry) results.push(entry);
+  }
+  return results;
+}
+
+/**
+ * Backfill embeddings for everything already in the brain: wiki entries plus
+ * learned patterns and insights. Safe to run repeatedly (upserts by id).
+ * Use after adopting RAG on a brain that predates it, or after a model change.
+ */
+export async function reindexBrainVectors(): Promise<{
+  wiki: number;
+  patterns: number;
+  insights: number;
+}> {
+  const brain = loadBrain();
+  const entries = getWikiEntries();
+  for (const entry of entries) {
+    await indexWikiEntry(entry);
+  }
+  await reindexBrainLearning(brain.patterns, brain.insights);
+  return {
+    wiki: entries.length,
+    patterns: brain.patterns.length,
+    insights: brain.insights.length,
+  };
 }
 
 // ---- Failure simulation history (per project) -------------------------------
@@ -205,6 +252,10 @@ export function learnFromProject(record: BrainProjectRecord): BrainState {
   const next: BrainState = { ...state, projects, patterns, insights };
   saveBrain(next);
   writeLivingDocument(record);
+  // Best-effort: refresh embeddings for the learned patterns/insights.
+  reindexBrainLearning(patterns, insights).catch((err) =>
+    console.error('[RAG] failed to reindex brain learning', err),
+  );
   return next;
 }
 

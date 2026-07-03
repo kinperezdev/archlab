@@ -24,6 +24,7 @@ import type {
 } from '@archlab/shared';
 import type { AnalysisResult } from './analyzer.js';
 import { trackScopes, framesAtLine, type Frame } from './scopeTracker.js';
+import { detectSyntaxSquiggles } from './syntaxCheck.js';
 import { resolveWithin } from '../security/paths.js';
 
 /**
@@ -519,5 +520,6 @@ export function buildFileIntel(analysis: AnalysisResult, relPath: string): FileI
     ext: path.extname(relPath),
     lines,
     symbols: detectSymbols(content),
+    squiggles: detectSyntaxSquiggles(relPath, content),
   };
 }

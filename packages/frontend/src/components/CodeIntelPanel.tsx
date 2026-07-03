@@ -8,7 +8,7 @@
  * Analysis (a project-wide before/after diff) that can be applied to disk.
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type {
   CanvasNode,
@@ -19,6 +19,7 @@ import type {
   CodeReference,
   ImpactAnalysis,
   AffectedFile,
+  SquiggleMarker,
 } from '@archlab/shared';
 import { tokenizeLine } from '../lib/codeHighlight.js';
 import { useApiKeyContext } from '../state/apiKeyContext.js';
@@ -29,10 +30,48 @@ import {
   fetchImpact,
   fetchEditImpact,
   applyImpact,
+  checkSyntax,
 } from '../lib/codeApi.js';
 
 /** Stable empty findings array so memoized lines don't re-render needlessly. */
 const NO_FINDINGS: Diagnostic[] = [];
+const NO_SQUIGGLES: SquiggleMarker[] = [];
+
+/** Whole-line squiggles for lines an ArchLab finding lands on (same match as line actions). */
+function findingSquiggles(lines: LineInfo[], findings: Diagnostic[]): SquiggleMarker[] {
+  const out: SquiggleMarker[] = [];
+  for (const line of lines) {
+    const hit = findings.find((f) => {
+      const t = f.title.toLowerCase();
+      if (line.kind === 'db-query' && t.includes('sql injection')) return true;
+      if (line.kind === 'route' && (t.includes('auth') || t.includes('unprotected'))) return true;
+      if (line.kind === 'route' && t.includes('rate')) return true;
+      return false;
+    });
+    if (!hit) continue;
+    const indent = line.text.length - line.text.trimStart().length;
+    out.push({
+      line: line.n,
+      colStart: indent,
+      colEnd: Math.max(indent + 1, line.text.length),
+      severity: hit.severity === 'critical' || hit.severity === 'high' ? 'error' : 'warning',
+      message: hit.title,
+      source: 'finding',
+    });
+  }
+  return out;
+}
+
+/** Group all squiggles by 1-based line number for O(1) lookup per rendered line. */
+function groupSquiggles(all: SquiggleMarker[]): Map<number, SquiggleMarker[]> {
+  const map = new Map<number, SquiggleMarker[]>();
+  for (const m of all) {
+    const list = map.get(m.line);
+    if (list) list.push(m);
+    else map.set(m.line, [m]);
+  }
+  return map;
+}
 
 interface CodeIntelPanelProps {
   projectId: string | null;
@@ -43,6 +82,8 @@ interface CodeIntelPanelProps {
   width: number;
   /** Begin a drag-resize from the left-edge handle. */
   onResizeStart: (e: React.MouseEvent) => void;
+  /** Fired when the open file's live syntax-error state changes (for node highlighting). */
+  onSyntaxState?: (hasError: boolean) => void;
 }
 
 /** A thin left-edge bar the user drags to resize the panel. */
@@ -66,6 +107,7 @@ export function CodeIntelPanel({
   onClose,
   width,
   onResizeStart,
+  onSyntaxState,
 }: CodeIntelPanelProps) {
   if (!projectId || !node.filePath) {
     return (
@@ -94,6 +136,7 @@ export function CodeIntelPanel({
         filePath={node.filePath}
         findings={nodeFindings}
         onClose={onClose}
+        onSyntaxState={onSyntaxState}
       />
     </aside>
   );
@@ -104,18 +147,40 @@ interface ViewProps {
   filePath: string;
   findings: Diagnostic[];
   onClose: () => void;
+  onSyntaxState?: (hasError: boolean) => void;
   /** Secondary instances float over the canvas instead of filling the column. */
   floating?: boolean;
 }
 
 /** The workhorse view: header, navigator, highlighted code, menus, overlays. */
-function CodeIntelView({ projectId, filePath, findings, onClose, floating }: ViewProps) {
+function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, floating }: ViewProps) {
   const [intel, setIntel] = useState<FileIntel | null>(null);
+  // Live syntax squiggles from unsaved edits; null means "use the on-disk set".
+  const [liveSquiggles, setLiveSquiggles] = useState<SquiggleMarker[] | null>(null);
+  const syntaxTimer = useRef<number | null>(null);
+  // Syntax squiggles (live if editing, else on-disk) + whole-line finding squiggles.
+  const squigglesByLine = useMemo(() => {
+    if (!intel) return new Map<number, SquiggleMarker[]>();
+    const syntax = liveSquiggles ?? intel.squiggles;
+    return groupSquiggles([...syntax, ...findingSquiggles(intel.lines, findings)]);
+  }, [intel, liveSquiggles, findings]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [impact, setImpact] = useState<ImpactAnalysis | null>(null);
   const [impactBusy, setImpactBusy] = useState(false);
+  // Inline ghost suggestion. Hovering an action shows a transient preview; clicking
+  // locks it (stops following hover) so the confirm bar can be reached. Tap/Tab
+  // confirms and applies, Esc dismisses.
+  const [ghost, setGhost] = useState<{
+    line: number;
+    after: string[];
+    impact: ImpactAnalysis;
+    locked: boolean;
+    key: string;
+  } | null>(null);
+  const [ghostApplying, setGhostApplying] = useState(false);
+  const hoverTimer = useRef<number | null>(null);
   const [popover, setPopover] = useState<{ line: number; symbol: string; refs: CodeReference[] } | null>(null);
   const [secondary, setSecondary] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -142,7 +207,9 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
     dirtyRef.current = false;
     setDirty(false);
     setBodyKey((k) => k + 1);
-  }, []);
+    setLiveSquiggles(null);
+    onSyntaxState?.(false);
+  }, [onSyntaxState]);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +220,8 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
     editsRef.current.clear();
     dirtyRef.current = false;
     setDirty(false);
+    setLiveSquiggles(null);
+    onSyntaxState?.(false);
     fetchFileIntel(projectId, filePath).then((res) => {
       if (!cancelled) {
         setIntel(res.intel);
@@ -246,6 +315,40 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
     [projectId, filePath],
   );
 
+  // Fetch impact and turn it into an inline ghost for this file, or the impact
+  // page when the change lands only in other files. `locked` persists it past hover.
+  const showGhost = useCallback(
+    async (line: LineInfo, action: LineAction, locked: boolean) => {
+      const result = await fetchImpact(projectId, filePath, line.n, action.id);
+      if (!result) return;
+      const here = result.affected.find((f) => f.path === filePath);
+      const hunk = here?.hunks[0];
+      if (hunk && hunk.after.length > 0) {
+        setGhost({ line: hunk.startLine, after: hunk.after, impact: result, locked, key: action.id });
+      } else if (locked) {
+        setImpact(result);
+      }
+    },
+    [projectId, filePath],
+  );
+
+  // Hover an action → transient preview (debounced so moving across the menu
+  // doesn't fire a request per option).
+  const previewAction = useCallback(
+    (line: LineInfo, action: LineAction) => {
+      if (action.kind !== 'edit') return;
+      if (ghost?.locked) return;
+      if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+      hoverTimer.current = window.setTimeout(() => showGhost(line, action, false), 220);
+    },
+    [ghost, showGhost],
+  );
+
+  const clearPreview = useCallback(() => {
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    setGhost((g) => (g && !g.locked ? null : g));
+  }, []);
+
   const runAction = useCallback(
     async (line: LineInfo, action: LineAction) => {
       if (action.kind === 'reference') {
@@ -253,13 +356,12 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
         return;
       }
       setOpenMenu(null);
-      setImpactBusy(true);
-      const result = await fetchImpact(projectId, filePath, line.n, action.id);
-      setImpactBusy(false);
-      if (result) setImpact(result);
+      await showGhost(line, action, true);
     },
-    [projectId, filePath, openReferences],
+    [openReferences, showGhost],
   );
+
+  const dismissGhost = useCallback(() => setGhost(null), []);
 
   // Stable callbacks so memoized lines aren't re-rendered while editing.
   const toggleMenu = useCallback((n: number) => {
@@ -271,19 +373,29 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
     [openReferences],
   );
 
-  const onEditLine = useCallback((n: number, text: string) => {
-    editsRef.current.set(n, text);
-    if (!dirtyRef.current) {
-      dirtyRef.current = true;
-      setDirty(true);
-    }
-  }, []);
-
   // Reconstruct the full file from the original lines plus any edits.
   const buildEditedContent = useCallback(() => {
     if (!intel) return '';
     return intel.lines.map((l) => (editsRef.current.has(l.n) ? editsRef.current.get(l.n)! : l.text)).join('\n');
   }, [intel]);
+
+  const onEditLine = useCallback(
+    (n: number, text: string) => {
+      editsRef.current.set(n, text);
+      if (!dirtyRef.current) {
+        dirtyRef.current = true;
+        setDirty(true);
+      }
+      // Debounced live syntax check on the unsaved buffer.
+      if (syntaxTimer.current) window.clearTimeout(syntaxTimer.current);
+      syntaxTimer.current = window.setTimeout(async () => {
+        const marks = await checkSyntax(filePath, buildEditedContent());
+        setLiveSquiggles(marks);
+        onSyntaxState?.(marks.some((m) => m.severity === 'error'));
+      }, 400);
+    },
+    [filePath, buildEditedContent, onSyntaxState],
+  );
 
   const onSave = useCallback(async () => {
     if (!intel) return;
@@ -304,8 +416,35 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
     editsRef.current.clear();
     dirtyRef.current = false;
     setDirty(false);
+    setLiveSquiggles(null);
+    onSyntaxState?.(false);
     setReloadTick((t) => t + 1);
-  }, []);
+  }, [onSyntaxState]);
+
+  const confirmGhost = useCallback(async () => {
+    if (!ghost) return;
+    setGhostApplying(true);
+    const res = await applyImpact(projectId, ghost.impact);
+    setGhostApplying(false);
+    setGhost(null);
+    if (res?.ok) onSaveApplied();
+  }, [ghost, projectId, onSaveApplied]);
+
+  // Once a ghost is locked in, Tab confirms and Esc dismisses.
+  useEffect(() => {
+    if (!ghost?.locked) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (!ghostApplying) confirmGhost();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        dismissGhost();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [ghost, ghostApplying, confirmGhost, dismissGhost]);
 
   const fileName = filePath.split('/').pop() ?? filePath;
 
@@ -408,19 +547,44 @@ function CodeIntelView({ projectId, filePath, findings, onClose, floating }: Vie
       ) : (
         <div className="code-body" ref={bodyRef} key={bodyKey}>
           {intel.lines.map((line) => (
-            <CodeLine
-              key={line.n}
-              line={line}
-              findings={findings}
-              menuOpen={openMenu === line.n}
-              onToggleMenu={toggleMenu}
-              onAction={runAction}
-              onBadge={badgeFor}
-              onEdit={onEditLine}
-              isFindMatch={findOpen && matchLines.has(line.n)}
-              isFindActive={findOpen && activeLine === line.n}
-              query={findOpen ? query : ''}
-            />
+            <Fragment key={line.n}>
+              <CodeLine
+                line={line}
+                findings={findings}
+                squiggles={squigglesByLine.get(line.n) ?? NO_SQUIGGLES}
+                menuOpen={openMenu === line.n}
+                dimMenu={Boolean(ghost && !ghost.locked)}
+                onToggleMenu={toggleMenu}
+                onAction={runAction}
+                onActionHover={previewAction}
+                onActionLeave={clearPreview}
+                onBadge={badgeFor}
+                onEdit={onEditLine}
+                isFindMatch={findOpen && matchLines.has(line.n)}
+                isFindActive={findOpen && activeLine === line.n}
+                query={findOpen ? query : ''}
+              />
+              {ghost && ghost.line === line.n && (
+                <div className={`ghost-suggestion ${ghost.locked ? 'locked' : 'preview'}`} role="note">
+                  {ghost.after.map((t, i) => (
+                    <div key={i} className="ghost-line">
+                      <span className="code-lineno" />
+                      <code className="code-text ghost-text">{t || ' '}</code>
+                    </div>
+                  ))}
+                  {ghost.locked && (
+                    <div className="ghost-actions">
+                      <button className="ghost-btn confirm" onClick={confirmGhost} disabled={ghostApplying}>
+                        {ghostApplying ? 'Applying…' : 'Confirm (Tab)'}
+                      </button>
+                      <button className="ghost-btn" onClick={dismissGhost} disabled={ghostApplying}>
+                        Dismiss (Esc)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Fragment>
           ))}
         </div>
       )}
@@ -509,9 +673,13 @@ function symbolGlyph(kind: string): string {
 const CodeLine = memo(function CodeLine({
   line,
   findings,
+  squiggles,
   menuOpen,
+  dimMenu = false,
   onToggleMenu,
   onAction,
+  onActionHover,
+  onActionLeave,
   onBadge,
   onEdit,
   isFindMatch = false,
@@ -520,9 +688,13 @@ const CodeLine = memo(function CodeLine({
 }: {
   line: LineInfo;
   findings: Diagnostic[];
+  squiggles: SquiggleMarker[];
   menuOpen: boolean;
+  dimMenu?: boolean;
   onToggleMenu: (n: number) => void;
   onAction: (line: LineInfo, a: LineAction) => void;
+  onActionHover: (line: LineInfo, a: LineAction) => void;
+  onActionLeave: () => void;
   onBadge: (line: LineInfo) => void;
   onEdit: (n: number, text: string) => void;
   isFindMatch?: boolean;
@@ -548,7 +720,8 @@ const CodeLine = memo(function CodeLine({
       >
         <span className="gutter-dot">▾</span>
       </button>
-      <span className="code-lineno">{line.n}</span>
+      <span className={`code-lineno${squiggles.length ? ' has-squiggle' : ''}`}>{line.n}</span>
+      <span className="code-text-wrap">
       <code
         className="code-text"
         contentEditable
@@ -573,6 +746,19 @@ const CodeLine = memo(function CodeLine({
           ))
         )}
       </code>
+        {squiggles.length > 0 && (
+          <span className="squiggle-layer" aria-hidden="true">
+            {squiggles.map((s, i) => (
+              <span
+                key={i}
+                className={`squiggle squiggle-${s.severity}`}
+                style={{ left: `${s.colStart}ch`, width: `${Math.max(1, s.colEnd - s.colStart)}ch` }}
+                title={s.message}
+              />
+            ))}
+          </span>
+        )}
+      </span>
       {line.refCount > 0 && (
         <button className="code-conn-badge" onClick={() => onBadge(line)} title="Show references">
           used in {line.refCount} {line.refCount === 1 ? 'file' : 'files'}
@@ -580,7 +766,7 @@ const CodeLine = memo(function CodeLine({
       )}
 
       {menuOpen && (
-        <div className="code-line-menu">
+        <div className={`code-line-menu${dimMenu ? ' menu-dimmed' : ''}`}>
           {line.context && (
             <div className="menu-breadcrumb" title="Where this line sits in the code">
               {line.context.breadcrumb}
@@ -598,6 +784,8 @@ const CodeLine = memo(function CodeLine({
                   <button
                     className={`menu-action ${a.fromFinding || a.critical ? 'from-finding' : ''}`}
                     onClick={() => onAction(line, a)}
+                    onMouseEnter={() => onActionHover(line, a)}
+                    onMouseLeave={onActionLeave}
                   >
                     {(a.fromFinding || a.critical) && <span className="finding-spark">⚠</span>}
                     {a.label}

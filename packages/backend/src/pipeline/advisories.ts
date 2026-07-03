@@ -17,6 +17,37 @@ import { detectFrameworks, type TechProfile } from '../analyzer/frameworks.js';
 /** Regex matching frontend API calls, to see which screens expect a backend. */
 const FETCH_RE = /(?:fetch|axios(?:\.\w+)?)\(\s*[`'"]([^`'"]+)[`'"]/g;
 
+/** LLM / generative-AI usage: the project talks to a language model. */
+const AI_RE =
+  /@anthropic-ai\/sdk|from ['"]openai|require\(['"]openai|@google\/generative-ai|GoogleGenerativeAI|langchain|@ai-sdk\/|generateText|streamText|ChatCompletion|replicate/i;
+
+/** Existing retrieval / vector-store usage: the project already does RAG. */
+const RAG_RE =
+  /pinecone|pgvector|chromadb|@chroma|weaviate|qdrant|faiss|text-embedding|feature-extraction|embeddings|vector_cosine_ops|hnsw|@huggingface\/transformers|<=>/i;
+
+/**
+ * Does the project have a knowledge source worth grounding an LLM against?
+ * Docs/markdown, a database, or a file-upload/storage surface all qualify.
+ */
+function hasGroundableKnowledge(analysis: AnalysisResult, hasDb: boolean): boolean {
+  if (hasDb) return true;
+  const hasStorage = analysis.canvas.nodes.some(
+    (n) =>
+      (n.kind === 'external-service' && /storage|bucket|s3|blob/i.test(n.label)) ||
+      /upload|document|knowledge|pdf|file/i.test(n.label),
+  );
+  if (hasStorage) return true;
+  const docCount = analysis.scan.files.filter((f) =>
+    /\.(md|mdx|txt|pdf|docx)$/i.test(f.relPath),
+  ).length;
+  return docCount >= 3;
+}
+
+/** True if any scanned file matches a pattern (skips empty/oversized content). */
+function scanMatches(analysis: AnalysisResult, re: RegExp): boolean {
+  return analysis.scan.files.some((f) => f.content && re.test(f.content));
+}
+
 function advisory(
   severity: Severity,
   title: string,
@@ -153,6 +184,27 @@ export function architectureAdvisories(analysis: AnalysisResult): Diagnostic[] {
         'Consider a managed auth provider (Clerk/Auth.js) to avoid hand-rolling credential security.',
         'Add authentication: create signup/login endpoints with hashed passwords and JWT or session cookies, add middleware to protect routes, and wire the existing login/signup screens to these endpoints.',
         frontScreens.filter((s) => /(login|signup|auth|account|register)/i.test(s.label)).map((s) => s.id),
+      ),
+    );
+  }
+
+  // 5. LLM feature with a knowledge source but no retrieval grounding (RAG gap).
+  const usesAi = scanMatches(analysis, AI_RE);
+  const usesRag = scanMatches(analysis, RAG_RE);
+  if (usesAi && !usesRag && hasGroundableKnowledge(analysis, hasDb)) {
+    out.push(
+      advisory(
+        'low',
+        'AI feature with no retrieval (RAG) layer',
+        'This project calls a language model and has a knowledge source (docs, a database, or uploaded files), but no vector store or retrieval step was detected. The model answers from its training data alone, not from your data.',
+        'Without retrieval, an LLM cannot cite your documents, stays frozen at its training cutoff, and hallucinates specifics it was never given. Grounding it with RAG (Retrieval-Augmented Generation) makes answers accurate, current, and traceable to a source.',
+        'Add a RAG pipeline:\n' +
+          '1. Chunk your knowledge source (docs / DB rows / uploads) into passages.\n' +
+          '2. Embed each chunk with an embedding model and store the vectors.\n' +
+          '3. On each query, embed the question, retrieve the top-k nearest chunks.\n' +
+          '4. Pass those chunks to the model as grounding context before it answers.',
+        'Start local and simple: a small embedding model plus brute-force cosine search is enough at low volume. Move to pgvector or a dedicated vector DB only when scale or latency demands it. Add hybrid keyword+vector search and a reranker if precision matters.',
+        'Add a Retrieval-Augmented Generation pipeline to this project: chunk the existing knowledge source, generate embeddings, store them in a vector index, and retrieve the top-k relevant chunks to inject into the model prompt before each answer. Keep it local (in-process embeddings + cosine search) unless scale requires pgvector or a dedicated vector database.',
       ),
     );
   }

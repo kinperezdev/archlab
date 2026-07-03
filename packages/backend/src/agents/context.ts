@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AnalysisResult } from '../analyzer/analyzer.js';
 import { loadBrain } from '../brain/brainStore.js';
+import { retrieve } from '../brain/rag/ragIndex.js';
 import { inferSchemaFromAppFlow } from '../analyzer/inference.js';
 
 export interface AgentContext {
@@ -78,6 +79,33 @@ export function buildAgentContext(analysis: AnalysisResult): AgentContext {
       projectCount: brain.projects.length,
     },
   };
+}
+
+/** One retrieved brain chunk, ready to drop into a prompt. */
+export interface RetrievedBrainChunk {
+  kind: string;
+  text: string;
+  score: number;
+}
+
+/**
+ * Retrieval-augmented brain context.
+ *
+ * Instead of dumping every pattern and insight into the prompt (which grows
+ * unbounded and burns tokens), this pulls only the top-k brain chunks that are
+ * semantically relevant to the agent's task. Returns [] gracefully if nothing
+ * has been embedded yet, so callers can fall back to the full context.
+ */
+export async function retrieveBrainForTask(
+  task: string,
+  k = 6,
+): Promise<RetrievedBrainChunk[]> {
+  const hits = await retrieve(task, { k });
+  return hits.map((h) => ({
+    kind: h.record.kind,
+    text: h.record.text,
+    score: Number(h.score.toFixed(3)),
+  }));
 }
 
 /** Serialize the context to a compact JSON string for the prompt. */

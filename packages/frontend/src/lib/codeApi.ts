@@ -9,6 +9,7 @@ import {
   type CodeReference,
   type ImpactAnalysis,
   type ApplyResult,
+  type SquiggleMarker,
 } from '@archlab/shared';
 
 const BASE = `http://127.0.0.1:${PORTS.backend}`;
@@ -90,6 +91,18 @@ export async function fetchEditImpact(
     .then((r) => r.json())
     .catch(() => null);
   return res?.ok ? (res.impact as ImpactAnalysis) : null;
+}
+
+/** Live syntax check of an unsaved buffer; returns squiggles for the edited text. */
+export async function checkSyntax(relPath: string, content: string): Promise<SquiggleMarker[]> {
+  const res = await fetch(`${BASE}/code/syntax-check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: relPath, content }),
+  })
+    .then((r) => r.json())
+    .catch(() => null);
+  return res?.ok ? (res.squiggles as SquiggleMarker[]) : [];
 }
 
 /** Write an Impact Analysis to disk (backs up first, then re-analyzes). */
