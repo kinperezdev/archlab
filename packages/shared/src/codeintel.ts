@@ -107,6 +107,23 @@ export interface SymbolInfo {
  * One editor-style squiggle: a red (error) or amber (warning) underline under a
  * character range on a line, exactly like VSCode's inline diagnostics.
  */
+export interface SquiggleFix {
+  /** Text to insert to fix the error. */
+  insert: string;
+  /** 0-based column to insert at. */
+  col: number;
+  /** Button label, e.g. "Insert ','". */
+  label: string;
+}
+
+/** Educational hover help for a squiggle: cause, fix, and what to look for. */
+export interface SquiggleHelp {
+  /** Why the error happens, in plain English. */
+  why: string;
+  /** How to debug it / what to look for. */
+  lookFor: string;
+}
+
 export interface SquiggleMarker {
   /** 1-based line number. */
   line: number;
@@ -115,10 +132,14 @@ export interface SquiggleMarker {
   /** 0-based column where the underline ends (exclusive). */
   colEnd: number;
   severity: 'error' | 'warning';
-  /** Hover message, e.g. "Expected ',' — TS1005" or an ArchLab finding title. */
+  /** Hover message, e.g. "',' expected (TS1005)" or an ArchLab finding title. */
   message: string;
   /** Where the squiggle came from, for styling/grouping. */
   source: 'syntax' | 'finding';
+  /** Instant heuristic quick-fix, when the error is a simple missing token. */
+  fix?: SquiggleFix;
+  /** Plain-English debugging help shown on hover. */
+  help?: SquiggleHelp;
 }
 
 /** The full code-intelligence payload for one file. */

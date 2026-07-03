@@ -582,8 +582,9 @@
 .squiggle {
   position: absolute;
   bottom: 0;
-  height: 4px;
+  height: 9px;
   pointer-events: auto;
+  cursor: help;
   background-repeat: repeat-x;
   background-position: bottom left;
 }
@@ -646,3 +647,79 @@
 .code-line-menu.menu-dimmed:hover {
   opacity: 0.32;
 }
+
+/* Ghost preview shown at the TOP of the action menu, options listed below it. */
+.code-line-menu .ghost-suggestion {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border-left: 2px solid var(--code-accent);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--code-accent) 10%, transparent);
+}
+.code-line-menu .ghost-suggestion.preview { border-left-style: dashed; }
+.ghost-head {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--code-fg-dim);
+  margin-bottom: var(--space-1);
+}
+.ghost-code {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+.ghost-code .ghost-text {
+  white-space: pre-wrap;
+  color: var(--code-fg-dim);
+  opacity: 0.75;
+  font-style: italic;
+}
+
+/* Hover card on a squiggle: what/why/look-for + a one-click quick fix. */
+.squiggle-card {
+  display: none;
+  position: absolute;
+  bottom: 9px;
+  left: 0;
+  width: 320px;
+  max-width: 60vw;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--code-bg-2);
+  border: 1px solid var(--code-border);
+  border-left: 3px solid #ff5b5b;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  font-family: var(--font-sans);
+  font-style: normal;
+  z-index: 60;
+  white-space: normal;
+  cursor: default;
+}
+.squiggle:hover .squiggle-card { display: flex; }
+.sq-msg { font-size: 0.78rem; font-weight: 600; color: #ff8a8a; }
+.sq-row { font-size: 0.72rem; color: var(--code-fg); line-height: 1.4; }
+.sq-row b {
+  display: inline-block;
+  min-width: 58px;
+  color: var(--code-fg-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+}
+.sq-fix {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  border-radius: 5px;
+  border: 1px solid var(--code-accent);
+  background: color-mix(in oklab, var(--code-accent) 15%, transparent);
+  color: var(--code-accent);
+  cursor: pointer;
+}
+.sq-fix:hover { background: var(--code-accent); color: #04121f; }

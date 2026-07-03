@@ -93,12 +93,16 @@ export async function fetchEditImpact(
   return res?.ok ? (res.impact as ImpactAnalysis) : null;
 }
 
-/** Live syntax check of an unsaved buffer; returns squiggles for the edited text. */
-export async function checkSyntax(relPath: string, content: string): Promise<SquiggleMarker[]> {
+/** Live check of an unsaved buffer; returns squiggles (syntax + compile) for the edit. */
+export async function checkSyntax(
+  projectId: string,
+  relPath: string,
+  content: string,
+): Promise<SquiggleMarker[]> {
   const res = await fetch(`${BASE}/code/syntax-check`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: relPath, content }),
+    body: JSON.stringify({ projectId, path: relPath, content }),
   })
     .then((r) => r.json())
     .catch(() => null);

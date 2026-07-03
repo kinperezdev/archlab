@@ -69,6 +69,44 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
     }
   };
 
+  // Explicit `null` tells the backend to delete the stored key (empty string
+  // means "untouched" in the merge, so this is the only removal path).
+  const handleRemove = async (provider: 'anthropic' | 'openai' | 'gemini') => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const res = await fetch(`http://127.0.0.1:${PORTS.backend}/api/keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: { [provider]: null } }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setPresent((prev) => ({ ...prev, [provider]: false }));
+        setKeys((prev) => ({ ...prev, [provider]: '' }));
+        setMessage('Key removed.');
+      } else {
+        setMessage(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      setMessage(`Error: ${String(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeButton = (provider: 'anthropic' | 'openai' | 'gemini') =>
+    present[provider] ? (
+      <button
+        type="button"
+        onClick={() => handleRemove(provider)}
+        disabled={saving}
+        style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-dim)', cursor: 'pointer' }}
+      >
+        Remove
+      </button>
+    ) : null;
+
   return (
     <div className="brain-overlay" onClick={onClose}>
       <div className="brain-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
@@ -89,8 +127,11 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label htmlFor="anthropic-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Anthropic API Key (Claude)</label>
-                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.anthropic || keys.anthropic) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.anthropic || keys.anthropic) ? '#34d399' : '#f87171', fontWeight: 500 }}>
-                  {(present.anthropic || keys.anthropic) ? 'Active' : 'Not Configured'}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.anthropic || keys.anthropic) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.anthropic || keys.anthropic) ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                    {(present.anthropic || keys.anthropic) ? 'Active' : 'Not Configured'}
+                  </span>
+                  {removeButton('anthropic')}
                 </span>
               </div>
               <input
@@ -107,8 +148,11 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label htmlFor="openai-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>OpenAI API Key (ChatGPT)</label>
-                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.openai || keys.openai) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.openai || keys.openai) ? '#34d399' : '#f87171', fontWeight: 500 }}>
-                  {(present.openai || keys.openai) ? 'Active' : 'Not Configured'}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.openai || keys.openai) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.openai || keys.openai) ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                    {(present.openai || keys.openai) ? 'Active' : 'Not Configured'}
+                  </span>
+                  {removeButton('openai')}
                 </span>
               </div>
               <input
@@ -125,8 +169,11 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label htmlFor="gemini-key" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Gemini API Key (Google AI)</label>
-                <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.gemini || keys.gemini) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.gemini || keys.gemini) ? '#34d399' : '#f87171', fontWeight: 500 }}>
-                  {(present.gemini || keys.gemini) ? 'Active' : 'Not Configured'}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '12px', background: (present.gemini || keys.gemini) ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.12)', color: (present.gemini || keys.gemini) ? '#34d399' : '#f87171', fontWeight: 500 }}>
+                    {(present.gemini || keys.gemini) ? 'Active' : 'Not Configured'}
+                  </span>
+                  {removeButton('gemini')}
                 </span>
               </div>
               <input
