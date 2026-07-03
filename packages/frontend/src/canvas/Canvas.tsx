@@ -311,6 +311,8 @@ interface CanvasProps {
   simulationResult?: SimulationResult | null;
   /** Clear the active simulation. */
   onResetSimulation?: () => void;
+  /** Nodes to paint red because an unsaved edit in the code panel broke syntax. */
+  liveErrorNodeIds?: Set<string>;
   /** Whether a project is loaded (drives the smart empty state). */
   hasProject?: boolean;
   /** Project name + detected stack, shown in the empty state. */
@@ -417,6 +419,7 @@ export function Canvas({
   simulationMode = false,
   simulationResult = null,
   onResetSimulation,
+  liveErrorNodeIds,
   hasProject = false,
   projectName = null,
   techStack = [],
@@ -900,6 +903,30 @@ export function Canvas({
 
     return () => timers.forEach((t) => clearTimeout(t));
   }, [simulationResult, setNodes]);
+
+  // Paint the nodes an unsaved syntax error affects red (and only revert the ones
+  // we ourselves marked, so simulation states are never clobbered).
+  const liveErrorRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const next = liveErrorNodeIds ?? new Set<string>();
+    const prev = liveErrorRef.current;
+    if (next.size === 0 && prev.size === 0) return;
+    liveErrorRef.current = next;
+    setNodes((cur) =>
+      cur.map((node) => {
+        if (!('kind' in node.data)) return node;
+        const shouldError = next.has(node.id);
+        const wasError = prev.has(node.id);
+        if (shouldError && node.data.simState !== 'failed') {
+          return { ...node, data: { ...node.data, simState: 'failed' } };
+        }
+        if (!shouldError && wasError) {
+          return { ...node, data: { ...node.data, simState: undefined } };
+        }
+        return node;
+      }),
+    );
+  }, [liveErrorNodeIds, setNodes]);
 
   // Fix 1: the highlight node set is memoized so the BFS over edges only runs
   // when the active node / hovered edge / selection actually changes, not on

@@ -561,3 +561,88 @@
 .code-line.find-active-line {
   background: rgba(251, 146, 60, 0.08);
 }
+
+/* Editor-style squiggles (real syntax errors + ArchLab findings). */
+.code-text-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.code-text-wrap > .code-text {
+  display: block;
+  flex: none;
+}
+.squiggle-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font: inherit;
+  tab-size: 2;
+}
+.squiggle {
+  position: absolute;
+  bottom: 0;
+  height: 4px;
+  pointer-events: auto;
+  background-repeat: repeat-x;
+  background-position: bottom left;
+}
+.squiggle-error {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 3 L3 0 L6 3' fill='none' stroke='%23ff5b5b' stroke-width='0.9'/%3E%3C/svg%3E");
+}
+.squiggle-warning {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 3 L3 0 L6 3' fill='none' stroke='%23e2b341' stroke-width='0.9'/%3E%3C/svg%3E");
+}
+.code-lineno.has-squiggle {
+  color: #ff5b5b;
+  font-weight: 600;
+}
+
+/* Inline ghost suggestion: faded preview shown in place, confirm/dismiss. */
+.ghost-suggestion {
+  border-left: 2px solid var(--code-accent);
+  background: color-mix(in oklab, var(--code-accent) 8%, transparent);
+  margin: 2px 0;
+}
+.ghost-line {
+  display: flex;
+  align-items: flex-start;
+}
+.ghost-text {
+  color: var(--code-fg-dim);
+  opacity: 0.6;
+  font-style: italic;
+  white-space: pre;
+}
+.ghost-actions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) var(--space-2) 40px;
+}
+.ghost-btn {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--code-border, #333);
+  background: transparent;
+  color: var(--code-fg-dim);
+  cursor: pointer;
+}
+.ghost-btn.confirm {
+  border-color: var(--code-accent);
+  color: var(--code-accent);
+}
+.ghost-btn:hover { color: #fff; }
+
+.ghost-suggestion.preview { opacity: 0.85; border-left-style: dashed; }
+.ghost-suggestion.locked { opacity: 1; }
+
+/* While hovering an action to preview its ghost, fade the menu so the ghost
+   (which renders in the code beneath the menu) is visible. */
+.code-line-menu.menu-dimmed {
+  opacity: 0.18;
+  transition: opacity 120ms ease;
+}
+.code-line-menu.menu-dimmed:hover {
+  opacity: 0.32;
+}

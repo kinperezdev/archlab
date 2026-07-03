@@ -6,7 +6,7 @@
  * brain overlay. Everything is live and connected from the first render.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReactFlowProvider } from 'reactflow';
 import { useArchLab } from './state/useArchLab.js';
 import { usePersistentBoolean } from './lib/usePersistentBoolean.js';
@@ -264,6 +264,8 @@ export function App() {
   const [bottomCollapsed, , toggleBottom] = usePersistentBoolean('archlab:bottomCollapsed', false);
   // The Code Intelligence Panel: which locked node (with a source file) it shows.
   const [codeNodeId, setCodeNodeId] = useState<string | null>(null);
+  // Nodes turned red because the open file has an unsaved syntax error (blast radius).
+  const [codeErrorNodeIds, setCodeErrorNodeIds] = useState<Set<string>>(() => new Set());
   // Failure simulation: whether the mode is armed, and the latest result.
   const [simulationMode, setSimulationMode] = useState(false);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
@@ -416,6 +418,29 @@ export function App() {
     [state.canvas.nodes, codeNodeId],
   );
   const showCodePanel = isArchitecture && Boolean(codeNode);
+
+  // Live syntax error in the open file → mark that node and its graph neighbors
+  // red, so the user sees which nodes their unsaved edit is breaking.
+  const handleSyntaxState = useCallback(
+    (hasError: boolean) => {
+      if (!hasError || !codeNode) {
+        setCodeErrorNodeIds((prev) => (prev.size ? new Set() : prev));
+        return;
+      }
+      const affected = new Set<string>([codeNode.id]);
+      for (const e of state.canvas.edges) {
+        if (e.source === codeNode.id) affected.add(e.target);
+        if (e.target === codeNode.id) affected.add(e.source);
+      }
+      setCodeErrorNodeIds(affected);
+    },
+    [codeNode, state.canvas.edges],
+  );
+
+  // Clear the red state whenever the code panel closes.
+  useEffect(() => {
+    if (!codeNode) setCodeErrorNodeIds((prev) => (prev.size ? new Set() : prev));
+  }, [codeNode]);
 
   // Single click only updates the right-hand node details panel + locks the
   // highlight. It no longer opens the Code Intelligence Panel.
@@ -674,6 +699,7 @@ export function App() {
                 simulationMode={simulationMode}
                 simulationResult={simulationResult}
                 onResetSimulation={resetSimulation}
+                liveErrorNodeIds={codeErrorNodeIds}
                 hasProject={Boolean(state.projectId)}
                 projectName={state.projectName}
                 techStack={state.techStack}
@@ -716,6 +742,7 @@ export function App() {
             onClose={() => setCodeNodeId(null)}
             width={codeWidth}
             onResizeStart={makeResizeHandler(codeWidth, setCodeWidth)}
+            onSyntaxState={handleSyntaxState}
           />
         )}
       </div>

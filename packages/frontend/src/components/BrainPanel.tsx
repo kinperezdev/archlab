@@ -41,6 +41,31 @@ export function BrainPanel({ brain, persistentIssues = [], projectName = '', onC
   const [liveBrain, setLiveBrain] = useState<BrainSummary | null>(null);
 
   const [liveSummary, setLiveSummary] = useState<any>(null);
+  // RAG index backfill: embeds all wiki entries + patterns + insights so
+  // semantic search and agent retrieval have vectors to work with.
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexMsg, setReindexMsg] = useState<string | null>(null);
+
+  async function reindexRag() {
+    setReindexing(true);
+    setReindexMsg(null);
+    try {
+      const res = await fetch(`http://127.0.0.1:${PORTS.backend}/brain/rag/reindex`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.ok) {
+        const { wiki, patterns, insights } = data.indexed;
+        setReindexMsg(`Indexed ${wiki} wiki · ${patterns} patterns · ${insights} insights`);
+      } else {
+        setReindexMsg('Reindex failed');
+      }
+    } catch {
+      setReindexMsg('Reindex failed (is the backend running?)');
+    } finally {
+      setReindexing(false);
+    }
+  }
 
   useEffect(() => {
     fetchAccessStatus().then(setAccess).catch(() => setAccess(null));
@@ -192,7 +217,21 @@ export function BrainPanel({ brain, persistentIssues = [], projectName = '', onC
           <span className="brain-logo-mark" aria-hidden="true" />
           <h2>Global Brain</h2>
           <span className="brain-count-badge">{view.projectCount} projects</span>
-          <button className="btn" onClick={onClose} style={{ marginLeft: 'auto' }}>
+          {reindexMsg && (
+            <span className="brain-count-badge" title="Local RAG vector index">
+              {reindexMsg}
+            </span>
+          )}
+          <button
+            className="btn"
+            onClick={reindexRag}
+            disabled={reindexing}
+            style={{ marginLeft: 'auto' }}
+            title="Embed the brain (wiki, patterns, insights) into the local RAG vector index"
+          >
+            {reindexing ? 'Indexing…' : 'Reindex RAG'}
+          </button>
+          <button className="btn" onClick={onClose}>
             Close
           </button>
         </header>

@@ -51,7 +51,8 @@ import {
   loadBrain,
   addWikiEntry,
   getWikiEntries,
-  searchWiki,
+  semanticSearchWiki,
+  reindexBrainVectors,
   loadArchcoGrowth,
   saveArchcoGrowth,
   saveEmployeeLivingData,
@@ -83,6 +84,7 @@ import { createSession, type ShellSession } from './terminal/shell.js';
 import { countProjectFiles } from './analyzer/scan.js';
 import { inferSchemaFromAppFlow } from './analyzer/inference.js';
 import { buildFileIntel, findReferences, readFileForIntel } from './analyzer/codeIntel.js';
+import { detectSyntaxSquiggles } from './analyzer/syntaxCheck.js';
 import { analyzeImpact, applyImpact, diffToImpact } from './analyzer/codeActions.js';
 import { resolveWithin } from './security/paths.js';
 import { buildHealthReport, buildSecurityReport } from './doctor/doctor.js';
@@ -186,9 +188,12 @@ function persistSessionToken(): void {
 
 // The frontend fetches the token here at startup. Gated by Origin only (the
 // browser enforces it) because the client has no token yet at this point.
+// A KNOWN origin is required — not merely "no bad origin" — so a plain curl
+// without an Origin header cannot fetch the token, matching the WebSocket
+// handshake. Local CLI processes read brain/.session-token instead.
 app.get('/session/token', (req, res) => {
   const origin = req.headers.origin;
-  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
     return res.status(403).json({ ok: false, error: 'Forbidden origin.' });
   }
   return res.json({ ok: true, token: SESSION_TOKEN });
@@ -247,17 +252,25 @@ app.post('/api/keys', (req, res) => {
     // Merge: the client only sends the providers it actually changed (the GET
     // never returns key values, so the UI cannot resend untouched keys). Start
     // from what is on disk and overlay only non-empty incoming values, so saving
-    // one provider never blanks the others.
+    // one provider never blanks the others. An explicit `null` means "remove
+    // this key" — the only way to delete, since empty means untouched.
     const current = storedKeys();
+    const mergeKey = (value: unknown, existing: string): string => {
+      if (value === null) return '';
+      return typeof value === 'string' && value ? value : existing;
+    };
     const merged = {
-      anthropic: typeof incoming.anthropic === 'string' && incoming.anthropic ? incoming.anthropic : current.anthropic,
-      openai: typeof incoming.openai === 'string' && incoming.openai ? incoming.openai : current.openai,
-      gemini: typeof incoming.gemini === 'string' && incoming.gemini ? incoming.gemini : current.gemini,
+      anthropic: mergeKey(incoming.anthropic, current.anthropic),
+      openai: mergeKey(incoming.openai, current.openai),
+      gemini: mergeKey(incoming.gemini, current.gemini),
     };
 
     fs.mkdirSync(path.dirname(KEYS_FILE), { recursive: true });
     // 0600: keys hold provider credentials; only the owner may read them.
+    // `mode` only applies when the file is CREATED, so chmod explicitly to
+    // also fix the permissions of a pre-existing file on every save.
     fs.writeFileSync(KEYS_FILE, JSON.stringify(merged, null, 2), { encoding: 'utf8', mode: 0o600 });
+    fs.chmodSync(KEYS_FILE, 0o600);
 
     // Load them into environment immediately.
     process.env.ANTHROPIC_API_KEY = merged.anthropic || '';
@@ -596,11 +609,23 @@ app.get('/api/archco/changes', (_req, res) => {
 
 // ---- ArchCo Company Wiki + employee growth state ---------------------------
 
-app.get('/brain/archco-wiki', (req, res) => {
+// Backfill/rebuild the local RAG vector index for the whole brain.
+app.post('/brain/rag/reindex', async (_req, res) => {
+  try {
+    const counts = await reindexBrainVectors();
+    return res.json({ ok: true, indexed: counts });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.get('/brain/archco-wiki', async (req, res) => {
   const q = typeof req.query.q === 'string' ? req.query.q : '';
   const project = typeof req.query.project === 'string' ? req.query.project : undefined;
   try {
-    const entries = q ? searchWiki(q) : getWikiEntries(project);
+    // Semantic search when there's a query (falls back to substring internally),
+    // plain listing otherwise.
+    const entries = q ? await semanticSearchWiki(q) : getWikiEntries(project);
     return res.json(entries);
   } catch {
     return res.json([]);
@@ -1191,6 +1216,14 @@ app.post('/code/edit-impact', (req, res) => {
   if (original === null) return res.status(404).json({ ok: false, error: 'File not found' });
   const impact = diffToImpact(projectId, relPath, original, content);
   return res.json({ ok: true, impact });
+});
+
+// Live syntax check of an unsaved buffer, for editor-style squiggles as you type.
+app.post('/code/syntax-check', (req, res) => {
+  const relPath = String(req.body?.path ?? '');
+  const content = typeof req.body?.content === 'string' ? req.body.content : null;
+  if (content === null) return res.status(400).json({ ok: false, error: 'content is required' });
+  return res.json({ ok: true, squiggles: detectSyntaxSquiggles(relPath, content) });
 });
 
 // Apply an Impact Analysis to disk: backs up every file, writes the changes,

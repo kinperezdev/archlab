@@ -22,7 +22,7 @@ import type {
 } from '@archlab/shared';
 import type { Emit } from '../pipeline/pipeline.js';
 import type { AnalysisResult } from '../analyzer/analyzer.js';
-import { buildAgentContext, contextToBlock } from './context.js';
+import { buildAgentContext, contextToBlock, retrieveBrainForTask } from './context.js';
 import {
   WORKER_AGENTS,
   orchestratorSystemPrompt,
@@ -336,7 +336,26 @@ export async function runAgentTeam(
     return;
   }
 
-  const contextBlock = contextToBlock(buildAgentContext(analysis));
+  let contextBlock = contextToBlock(buildAgentContext(analysis));
+
+  // Retrieval-augment the prompt: pull only the brain chunks most relevant to
+  // this project instead of relying solely on the full dump. Best-effort — a
+  // retrieval failure must never block the agent run.
+  try {
+    const brainQuery = [analysis.name, analysis.techStack.join(' ')]
+      .filter(Boolean)
+      .join(' — ');
+    const chunks = await retrieveBrainForTask(brainQuery, 6);
+    if (chunks.length > 0) {
+      const rag = chunks
+        .map((c) => `- [${c.kind} · ${c.score}] ${c.text.replace(/\n/g, ' ')}`)
+        .join('\n');
+      contextBlock += `\n\nRELEVANT BRAIN (retrieved for this project):\n${rag}`;
+    }
+  } catch (err) {
+    console.error('[RAG] brain retrieval for agent run failed', err);
+  }
+
   const bus: AgentMessage[] = [];
   let allFindings: AgentFinding[] = [];
 
