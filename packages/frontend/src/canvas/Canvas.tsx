@@ -174,11 +174,12 @@ const READABLE_ROW_H = 128;
 const READABLE_MAX_ROWS = 20;
 const DECORATED_COL_W = 340;
 const DECORATED_ROW_H = 86;
-const LARGE_GRAPH_NODE_THRESHOLD = 140;
-const LARGE_GRAPH_EDGE_THRESHOLD = 220;
+const LARGE_GRAPH_NODE_THRESHOLD = 90;
+const LARGE_GRAPH_EDGE_THRESHOLD = 130;
 // Above this edge count, a selected node culls non-incident edges while it is
-// highlighted, instead of dimming hundreds of edges (which thrashes paint).
-const EDGE_CULL_THRESHOLD = 300;
+// highlighted, instead of dimming every edge (which thrashes paint on dense
+// graphs like Flutter projects, causing flicker on click).
+const EDGE_CULL_THRESHOLD = 120;
 const LANE_PAD = 70; // breathing room around the group
 const LANE_PAD_TOP = 96; // extra room at the top for the lane label
 
