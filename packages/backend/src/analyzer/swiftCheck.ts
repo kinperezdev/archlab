@@ -1,8 +1,4 @@
-/**
- * Swift syntax-error detection via native tree-sitter bindings. Native (not WASM)
- * so it can't crash the runtime the way the WASM grammars did. Reports ERROR and
- * MISSING nodes. Syntax-level only — deep Swift checking would need sourcekit-lsp.
- */
+/** Swift syntax-error detection via native tree-sitter (ERROR/MISSING nodes). */
 
 import { createRequire } from 'node:module';
 import type { SquiggleMarker } from '@archlab/shared';

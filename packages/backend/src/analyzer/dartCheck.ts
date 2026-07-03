@@ -1,9 +1,4 @@
-/**
- * Dart error detection via the Dart SDK's own analyzer (`dart analyze`). Gives
- * real syntax AND semantic errors, the same ones the IDE shows. Runs the file in
- * place so imports resolve; for unsaved buffers it analyzes a temp copy in the
- * same folder so package context still resolves.
- */
+/** Dart error detection via `dart analyze` — real syntax + semantic diagnostics. */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,12 +32,12 @@ function markerFromLine(line: string, sourceLines: string[]): SquiggleMarker | n
   const lineNo = parseInt(lineStr, 10);
   const colStart = Math.max(0, parseInt(colStr, 10) - 1);
 
-  // Dart gives a start position, not a range — underline the word that starts there.
+  // Underline the word at the reported start position (Dart gives no range).
   const text = sourceLines[lineNo - 1] ?? '';
   const word = /^[\w$]+/.exec(text.slice(colStart));
   const colEnd = colStart + (word ? word[0].length : 1);
 
-  // Dart messages often read "Problem. Try fixing X." — split into why / look-for.
+  // Split "Problem. Try fixing X." into why / look-for.
   const dot = rawMessage.indexOf('. Try ');
   const why = dot >= 0 ? rawMessage.slice(0, dot + 1) : rawMessage;
   const lookFor = dot >= 0 ? rawMessage.slice(dot + 2) : 'Check the Dart analyzer message and the referenced symbols.';

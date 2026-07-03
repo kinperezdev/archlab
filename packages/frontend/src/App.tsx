@@ -302,9 +302,9 @@ export function App() {
       if (isMod) {
         if (e.key.toLowerCase() === 'b') {
           e.preventDefault();
-          toggleBottom();
+          toggleLeftSidebar();
           return;
-        } else if (e.key.toLowerCase() === 'j') {
+        } else if (e.key.toLowerCase() === 'j' || e.key.toLowerCase() === 'n') {
           e.preventDefault();
           toggleBottom();
           return;
@@ -318,13 +318,13 @@ export function App() {
       
       // 3. Raw-key shortcuts
       if (e.altKey) return;
-      if (e.key === 'l' || e.key === 'L') {
+      if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         toggleLeftSidebar();
-      } else if (e.key === 'r' || e.key === 'R') {
+      } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         setShowRightSidebar((p) => !p);
-      } else if (e.key === 'b' || e.key === 'B') {
+      } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
         toggleBottom();
       } else if (e.key === 's' || e.key === 'S') {
@@ -632,7 +632,7 @@ export function App() {
             <button
               className="panel-reveal-tab on-left"
               onClick={toggleLeftSidebar}
-              title="Show navigation (L)"
+              title="Show navigation (B)"
             >
               ▶
             </button>
@@ -641,7 +641,7 @@ export function App() {
             <button
               className={`panel-reveal-tab on-right${showCodePanel ? ' beside-code-panel' : ''}`}
               onClick={() => setShowRightSidebar((p) => !p)}
-              title="Show right sidebar (R)"
+              title="Show right sidebar (M)"
             >
               ◀
             </button>
@@ -758,7 +758,7 @@ export function App() {
         <button
           className="bottom-reveal-btn"
           onClick={toggleBottom}
-          title="Show bottom panel (B)"
+          title="Show bottom panel (N)"
           style={isAnyModalOpen ? { display: 'none' } : undefined}
         >
           ▲
