@@ -5,6 +5,7 @@
  * path aliases, and compiler options match what the project actually uses.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import type { SquiggleMarker } from '@archlab/shared';
@@ -14,6 +15,7 @@ import {
   markerFromDiagnostic,
   detectSyntaxSquiggles,
 } from './syntaxCheck.js';
+import { checkSwiftSyntax } from './swiftCheck.js';
 
 interface Project {
   service: ts.LanguageService;
@@ -118,7 +120,10 @@ export function getProjectDiagnostics(
   }
 }
 
-/** Diagnostics for a file: deep syntax + compile check for JS/TS, [] otherwise. */
+/**
+ * Diagnostics for a file: deep syntax + compile check for JS/TS, native
+ * tree-sitter syntax errors for Swift, [] for anything else.
+ */
 export async function computeSquiggles(
   root: string,
   relPath: string,
@@ -126,6 +131,11 @@ export async function computeSquiggles(
 ): Promise<SquiggleMarker[]> {
   if (SCRIPT_KINDS[extname(relPath)] !== undefined) {
     return getProjectDiagnostics(root, relPath, content);
+  }
+  if (extname(relPath) === '.swift') {
+    const abs = path.isAbsolute(relPath) ? relPath : path.join(root, relPath);
+    const text = content ?? (fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '');
+    return checkSwiftSyntax(text);
   }
   return [];
 }
