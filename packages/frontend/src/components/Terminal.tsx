@@ -83,16 +83,6 @@ function typeLabel(file: StagedFile): string {
   return ext || 'FILE';
 }
 
-/**
- * Ids whose saved buffer has already been restored in THIS page session. The
- * sessionStorage restore exists to survive a page reload — but a split or layout
- * change remounts the same Terminal within the same page, and restoring again
- * would write the saved banner on top of the still-live session (the doubling on
- * split). Restoring at most once per id per page load fixes that; a true reload
- * starts a fresh module so the set is empty again.
- */
-const restoredThisPage = new Set<string>();
-
 export function Terminal({ id, api }: TerminalProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const writeRef = useRef<((data: string) => void) | null>(null);
@@ -168,24 +158,16 @@ export function Terminal({ id, api }: TerminalProps) {
       raf2 = requestAnimationFrame(safeFit);
     });
 
-    // Restore prior output after a refresh, but only if it belongs to the SAME
-    // backend run. The session token changes whenever the backend restarts, so a
-    // buffer tagged with a different token is stale — its PTY is gone and the new
-    // shell streams a fresh banner. Replaying the old raw bytes on top of that
-    // (and they don't reflow on resize) is exactly what doubled and garbled the
-    // terminal. When the token mismatches, discard the stale buffer instead.
+    // Keep a bounded copy of output for the current page only. Reconnect/reload
+    // history comes from the backend PTY replay buffer, which is authoritative
+    // for live sessions and prevents stale local bytes from drawing over a fresh
+    // terminal after backend restarts.
     const bufKey = `archlab:term-buf:${id}`;
     const tokenKey = `archlab:term-buf-token:${id}`;
     const BUF_CAP = 200_000;
     const backendToken = getSessionToken();
-    const sameBackend = sessionStorage.getItem(tokenKey) === backendToken;
-    // Restore only on the FIRST mount of this id this page load. A split/layout
-    // remount must not replay the buffer over the live session (the doubling).
-    const firstMount = !restoredThisPage.has(id);
-    restoredThisPage.add(id);
-    let buf = sameBackend && firstMount ? (sessionStorage.getItem(bufKey) ?? '') : '';
-    if (!sameBackend) sessionStorage.removeItem(bufKey);
-    if (buf) term.write(buf);
+    let buf = '';
+    if (sessionStorage.getItem(tokenKey) !== backendToken) sessionStorage.removeItem(bufKey);
     const persist = () => {
       try {
         sessionStorage.setItem(bufKey, buf.length > BUF_CAP ? buf.slice(-BUF_CAP) : buf);

@@ -47,6 +47,44 @@ body {
 
 code, pre, .code-text, .terminal, .xterm { font-family: var(--font-mono); }
 
+.root-error-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: var(--bg-base);
+}
+
+.root-error-panel {
+  width: min(560px, 100%);
+  border: 1px solid var(--error);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  background: var(--color-surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.root-error-panel h1 {
+  margin: 0 0 10px;
+  color: var(--error);
+  font-size: 20px;
+}
+
+.root-error-panel p {
+  margin: 0 0 18px;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.root-error-panel button {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
 .app-shell {
   display: grid;
   grid-template-rows: 52px 1fr 200px;
@@ -1403,6 +1441,7 @@ body.is-resizing .app-shell {
   position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  height: 100%;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   min-height: 0;
@@ -1529,6 +1568,7 @@ body.is-resizing .app-shell {
 .bottom-right {
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
