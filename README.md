@@ -88,3 +88,7 @@ npx archlab --check
 
 *   Hover-animated UI icons from [itshover.com](https://www.itshover.com/icons) (installed via the shadcn registry).
 *   Pixel loader inspired by [Flicker](https://flicker.laurie.fyi) by Laura.
+
+## Code Intelligence
+
+The Code Intelligence Panel type-checks JS/TS files with the real TypeScript engine: it shows syntax and compile errors as red squiggles, a hover card explaining each error (what, why, and what to look for), instant Tab quick-fixes for common missing-token mistakes, and inline ghost previews for suggested edits (hover to preview, click to lock, Tab to apply).
