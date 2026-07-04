@@ -140,7 +140,7 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
         )}
 
         {table.isInferred && (
-          <span className="inferred-badge" title="Inferred from app flow — needs verification">
+          <span className="inferred-badge" title="Inferred from app flow, needs verification">
             💡
           </span>
         )}
@@ -161,7 +161,7 @@ export function SchemaTableNode({ data, selected }: NodeProps<SchemaNodeData>) {
                       className={`col-icon fk ${fkUnverified ? 'fk-unverified' : ''}`}
                       title={
                         fkUnverified
-                          ? `Foreign key → ${col.fkRelation?.parentTable}.${col.fkRelation?.parentColumn} (inferred — needs verification)`
+                          ? `Foreign key → ${col.fkRelation?.parentTable}.${col.fkRelation?.parentColumn} (inferred, needs verification)`
                           : `Foreign key → ${col.fkRelation?.parentTable}.${col.fkRelation?.parentColumn}`
                       }
                     >

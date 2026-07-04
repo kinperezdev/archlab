@@ -304,13 +304,15 @@ function buildInsights(patterns: BrainPattern[]): BrainInsight[] {
     // Bottleneck patterns surface once seen in 3+ projects; others at 2+.
     const threshold = isBottleneck ? 3 : 2;
     if (p.count < threshold) continue;
+    const desc = p.description.trim();
+    const descSentence = desc.endsWith('.') ? desc : `${desc}.`;
     insights.push({
       id: `insight:${p.id}`,
       patternId: p.id,
       severity: 'info',
       message: isBottleneck
-        ? `${p.description} detected across ${p.count} projects — this is a recurring pattern in your architecture.`
-        : `${p.description} — observed across ${p.count} projects.`,
+        ? `${desc} detected across ${p.count} projects. This is a recurring pattern in your architecture.`
+        : `${descSentence} Observed across ${p.count} projects.`,
     });
   }
   return insights;
@@ -343,7 +345,7 @@ function writeLivingDocument(record: BrainProjectRecord): void {
   lines.push('');
   lines.push('## Open Diagnostics');
   for (const d of record.report.diagnostics) {
-    lines.push(`- **[${d.severity.toUpperCase()}] ${d.title}** — ${d.what}`);
+    lines.push(`- **[${d.severity.toUpperCase()}] ${d.title}**: ${d.what}`);
   }
   lines.push('');
   fs.writeFileSync(file, lines.join('\n'), 'utf8');
@@ -451,7 +453,7 @@ export function absorbAgentTeamFindings(
           lines.push('No critical agent findings detected.');
         } else {
           for (const f of findings) {
-            lines.push(`- **[${f.severity.toUpperCase()}] [${f.agentId}] ${f.title}** — ${f.description}`);
+            lines.push(`- **[${f.severity.toUpperCase()}] [${f.agentId}] ${f.title}**: ${f.description}`);
             if (f.suggestedFix) {
               lines.push(`  * Fix: ${f.suggestedFix}`);
             }
@@ -462,7 +464,7 @@ export function absorbAgentTeamFindings(
           lines.push('');
           lines.push('### Priority Recommendations');
           for (const action of report.priorityActions) {
-            lines.push(`- **${action.title}** (${action.effort ?? 'medium effort'}) — ${action.detail}`);
+            lines.push(`- **${action.title}** (${action.effort ?? 'medium effort'}): ${action.detail}`);
           }
         }
         

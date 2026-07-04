@@ -139,7 +139,7 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
                 type="password"
                 value={keys.anthropic}
                 onChange={(e) => setKeys({ ...keys, anthropic: e.target.value })}
-                placeholder={present.anthropic ? '•••••••• saved — type to replace' : 'sk-ant-...'}
+                placeholder={present.anthropic ? '•••••••• saved, type to replace' : 'sk-ant-...'}
                 className="input"
                 style={{ width: '100%', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '8px 12px', color: 'var(--color-text)', outline: 'none' }}
               />
@@ -160,7 +160,7 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
                 type="password"
                 value={keys.openai}
                 onChange={(e) => setKeys({ ...keys, openai: e.target.value })}
-                placeholder={present.openai ? '•••••••• saved — type to replace' : 'sk-proj-...'}
+                placeholder={present.openai ? '•••••••• saved, type to replace' : 'sk-proj-...'}
                 className="input"
                 style={{ width: '100%', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '8px 12px', color: 'var(--color-text)', outline: 'none' }}
               />
@@ -181,7 +181,7 @@ export function ApiKeysModal({ onClose }: ApiKeysModalProps) {
                 type="password"
                 value={keys.gemini}
                 onChange={(e) => setKeys({ ...keys, gemini: e.target.value })}
-                placeholder={present.gemini ? '•••••••• saved — type to replace' : 'AIzaSy...'}
+                placeholder={present.gemini ? '•••••••• saved, type to replace' : 'AIzaSy...'}
                 className="input"
                 style={{ width: '100%', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '8px 12px', color: 'var(--color-text)', outline: 'none' }}
               />

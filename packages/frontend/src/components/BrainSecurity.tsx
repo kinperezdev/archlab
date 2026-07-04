@@ -101,7 +101,7 @@ function SecuritySettings({
       const status = await setBrainPassword(newPassword);
       onChange(status);
       setNewPassword('');
-      setPwStatus('Password saved. The brain is now locked again — unlock to continue.');
+      setPwStatus('Password saved. The brain is now locked again. Unlock to continue.');
     } catch (err) {
       setPwStatus(err instanceof Error ? err.message : 'Could not set password.');
     }

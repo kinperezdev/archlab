@@ -46,10 +46,12 @@ export interface ShellSession {
   resize(cols: number, rows: number): void;
   /** Kill the PTY (called when the tab is explicitly closed). */
   kill(): void;
-  /** Point output at a (new) socket and replay anything buffered while detached. */
+  /** Point output at a (new) socket and replay the session history once. */
   attach(handlers: SessionHandlers): void;
   /** Stop forwarding output (socket closed) but keep the PTY running. */
   detach(): void;
+  /** Whether a socket is currently receiving this session's output. */
+  readonly isAttached: boolean;
 }
 
 /** Spawn a real shell in a PTY and start streaming its output. */
@@ -120,11 +122,18 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
     },
     attach: (next) => {
       current = next;
-      if (replayBuffer) next.onData(replayBuffer);
+      // Reset the client surface before replaying: the attaching xterm may
+      // already show part of this history (a page held open across a
+      // reconnect), and appending a second copy stacks duplicate prompt
+      // lines. CSI H + 2J + 3J = home cursor, clear screen, clear scrollback.
+      if (replayBuffer) next.onData('\x1b[H\x1b[2J\x1b[3J' + replayBuffer);
       detachedBuffer = '';
     },
     detach: () => {
       current = null;
+    },
+    get isAttached() {
+      return current !== null;
     },
   };
 

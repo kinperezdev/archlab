@@ -1495,15 +1495,26 @@ wss.on('connection', (socket) => {
         }
       },
     };
-    attachedIds.add(id);
     const existing = terminals.get(id);
     if (existing) {
-      existing.attach(handlers); // reconnect: re-point output, replay buffered output
+      // Attach (and replay history) only on this socket's FIRST touch of the
+      // session, or when the session lost its sink (its previous socket died).
+      // Every client message routes through here and term-input fires per
+      // keystroke, so attaching unconditionally would repaint the full replay
+      // buffer into a live terminal on every key press.
+      if (!attachedIds.has(id) || !existing.isAttached) {
+        attachedIds.add(id);
+        existing.attach(handlers);
+      }
       return existing;
     }
+    attachedIds.add(id);
     const session = createSession(handlers, initialCwd || lastActiveCwd);
     terminals.set(id, session);
     return session;
+  };
+  const releaseSession = (id: string) => {
+    attachedIds.delete(id);
   };
 
   log(emit, 'info', 'Connected to ArchLab backend.');
@@ -1533,7 +1544,7 @@ wss.on('connection', (socket) => {
       log(emit, 'error', 'Received malformed message.');
       return;
     }
-    handleClientMessage(msg, emit, { ensureSession }).catch((err: unknown) => {
+    handleClientMessage(msg, emit, { ensureSession, releaseSession }).catch((err: unknown) => {
       log(emit, 'error', `Pipeline error: ${String(err)}`);
     });
   });
@@ -1545,6 +1556,8 @@ wss.on('connection', (socket) => {
 
 interface TerminalRouter {
   ensureSession: (id: string, initialCwd?: string) => ShellSession;
+  /** Forget a session id on this socket (explicit tab close killed its PTY). */
+  releaseSession: (id: string) => void;
 }
 
 /** Route a client message to the right handler. */
@@ -1584,6 +1597,7 @@ async function handleClientMessage(
         s.kill();
         terminals.delete(msg.id);
       }
+      term.releaseSession(msg.id);
       return;
     }
     case 'term-input':

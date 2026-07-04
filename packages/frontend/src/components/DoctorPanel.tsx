@@ -65,8 +65,8 @@ function CheckRow({ check }: { check: DoctorCheck }) {
               }}
               title={
                 check.kind === 'real'
-                  ? 'Server-side protection — a real boundary'
-                  : 'Deterrence — raises the bar but not a hard boundary'
+                  ? 'Server-side protection, a real boundary'
+                  : 'Deterrence: raises the bar but not a hard boundary'
               }
             >
               {check.kind}

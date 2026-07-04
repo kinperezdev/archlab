@@ -218,6 +218,36 @@
   flex: 1;
   height: 100%;
 }
+/* Honest empty state: shown instead of a bare void when no infra was detected. */
+.sd-canvas-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  text-align: center;
+  pointer-events: none;
+}
+.sd-canvas-empty-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+}
+.sd-canvas-empty-sub {
+  margin: 0;
+  max-width: 380px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--color-text-dim) 75%, transparent);
+}
 
 /* Horizontal Timeline flow */
 .sd-horizontal-timeline {
