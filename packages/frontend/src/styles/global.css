@@ -1736,8 +1736,7 @@ body.is-resizing .app-shell {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  gap: 1px;
-  background: var(--color-border); /* shows through the gap as a divider line */
+  background: var(--color-border);
 }
 .term-split-row { flex-direction: row; }
 .term-split-col { flex-direction: column; }
@@ -1746,6 +1745,30 @@ body.is-resizing .app-shell {
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+}
+.term-split-divider {
+  position: relative;
+  z-index: 8;
+  flex: 0 0 6px;
+  background: var(--color-border);
+  transition: background var(--duration-fast) ease;
+}
+.term-split-divider-row {
+  cursor: col-resize;
+  width: 6px;
+}
+.term-split-divider-col {
+  cursor: row-resize;
+  height: 6px;
+}
+.term-split-divider:hover {
+  background: var(--color-accent);
+}
+/* Keep the divider lit for the whole drag: the pointer constantly leaves the
+   6px strip mid-drag, so :hover alone flickers. */
+body.is-resizing-split .term-split-divider {
+  background: var(--color-accent);
 }
 .term-pane {
   position: relative;
@@ -1760,6 +1783,37 @@ body.is-resizing .app-shell {
 }
 .term-pane-active {
   box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+.term-pane-close {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 7;
+  display: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+.term-pane:hover .term-pane-close,
+.term-pane-active .term-pane-close {
+  display: grid;
+}
+.term-pane-close:hover {
+  color: #fff;
+  border-color: #ef4444;
+  background: #ef4444;
+}
+.term-pane-close:focus-visible {
+  display: grid;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 .term-pane-body {
   display: flex;
