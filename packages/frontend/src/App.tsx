@@ -743,6 +743,7 @@ export function App() {
 
         {showCodePanel && codeNode && (
           <CodeIntelPanel
+            key={codeNode.id}
             projectId={state.projectId}
             node={codeNode}
             diagnostics={state.diagnostics}

@@ -177,16 +177,16 @@ function RlsRow({ table }: { table: DbTable }) {
     tone = 'unknown';
     Icon = ShieldQuestion;
     label = 'RLS unknown';
-    detail = 'Inferred schema — open the real migration to confirm row-level security.';
+    detail = 'Inferred schema. Open the real migration to confirm row-level security.';
   } else if (enabled && policies > 0) {
     tone = 'ok';
     Icon = ShieldCheck;
-    label = `Protected — ${policies} ${policies === 1 ? 'policy' : 'policies'}`;
+    label = `Protected: ${policies} ${policies === 1 ? 'policy' : 'policies'}`;
     detail = 'Row Level Security is on and scoped by policies.';
   } else if (enabled) {
     tone = 'ok';
     Icon = ShieldCheck;
-    label = 'RLS on — 0 policies';
+    label = 'RLS on, 0 policies';
     detail = 'RLS enabled with no policies denies all access by default.';
   } else if (policies > 0) {
     tone = 'warn';
@@ -197,7 +197,7 @@ function RlsRow({ table }: { table: DbTable }) {
     tone = 'warn';
     Icon = ShieldAlert;
     label = 'No RLS';
-    detail = 'No row-level security — the public/anon key can read every row.';
+    detail = 'No row-level security. The public/anon key can read every row.';
   }
 
   return (

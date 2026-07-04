@@ -78,6 +78,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.code-enriching-pill {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid rgba(13, 153, 255, 0.36);
+  border-radius: 999px;
+  color: var(--code-accent);
+  background: rgba(13, 153, 255, 0.1);
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
 .code-icon-btn {
   background: transparent;
   border: none;

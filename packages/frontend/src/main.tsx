@@ -6,7 +6,7 @@
  * stylesheets are imported here, in cascade order.
  */
 
-import React from 'react';
+import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { initSession } from './lib/session.js';
@@ -27,12 +27,43 @@ import 'reactflow/dist/style.css';
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element #root not found');
 
+class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error('[ArchLab] root render failed', error, info.componentStack);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <div className="root-error-screen">
+        <div className="root-error-panel">
+          <h1>ArchLab hit a render error</h1>
+          <p>{this.state.error.message || 'Unknown render error.'}</p>
+          <button type="button" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
 // Obtain the session token and install the auth'd fetch wrapper before the app
 // mounts, so every backend call (and the WebSocket) is authenticated.
 void initSession().finally(() => {
   createRoot(root).render(
     <React.StrictMode>
-      <App />
+      <RootErrorBoundary>
+        <App />
+      </RootErrorBoundary>
     </React.StrictMode>,
   );
 });

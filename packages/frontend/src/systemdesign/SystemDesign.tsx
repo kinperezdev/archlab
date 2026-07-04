@@ -1010,9 +1010,25 @@ function DetectedMode({
               nodesConnectable={false}
             >
               <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="rgba(255,255,255,0.05)" />
-              <MiniMap pannable zoomable className="arch-minimap" />
+              <MiniMap
+                pannable
+                zoomable
+                className="arch-minimap"
+                maskColor="rgba(0,0,0,0.55)"
+                nodeColor="#1e2433"
+                nodeStrokeColor="#3a4257"
+              />
               <Controls showInteractive={false} />
             </ReactFlow>
+            {infra.nodes.length === 0 && (
+              <div className="sd-canvas-empty">
+                <p className="sd-canvas-empty-title">No infrastructure detected yet</p>
+                <p className="sd-canvas-empty-sub">
+                  This map fills in when ArchLab finds servers, databases, caches, or
+                  external services in the project code.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Detail / suggestions side panel */}
@@ -1062,7 +1078,11 @@ function DetectedMode({
                 <h4 className="sd-panel-title">Smart Suggestions</h4>
                 <p className="sd-panel-sub">{infra.suggestions.length} recommendation(s) for this project</p>
                 {infra.suggestions.length === 0 && (
-                  <p className="sd-empty">No gaps detected. Your infrastructure looks complete.</p>
+                  <p className="sd-empty">
+                    {infra.nodes.length === 0
+                      ? 'Nothing to evaluate yet. No infrastructure was detected in this project.'
+                      : 'No gaps detected. Your infrastructure looks complete.'}
+                  </p>
                 )}
                 {infra.suggestions.map((s) => (
                   <div
@@ -1104,7 +1124,9 @@ function DetectedMode({
                 {(!hasApiKey || !agentTeamHasRun) && (
                   <NudgeCard tone="amber">
                     <NudgeText tone="muted">
-                      Infrastructure detected from code patterns.{' '}
+                      {infra.nodes.length > 0
+                        ? 'Infrastructure detected from code patterns. '
+                        : 'Static scan only. '}
                     </NudgeText>
                     <NudgeText tone="amber" onClick={onOpenAgentTeam}>
                       ⚡ Run Agent Team for AI architectural review.

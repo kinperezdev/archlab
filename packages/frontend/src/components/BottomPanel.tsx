@@ -21,6 +21,8 @@ import {
   firstLeafId,
   splitLeaf,
   removeLeaf,
+  resizeSplit,
+  hydratePaneLayout,
 } from './terminalLayout.js';
 
 interface BottomPanelProps {
@@ -52,7 +54,7 @@ function loadTabs(): TermTab[] {
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed.map((tab) => ({
         ...tab,
-        layout: tab.layout ?? makeLeaf(tab.id),
+        layout: hydratePaneLayout(tab.layout ?? makeLeaf(tab.id)),
       }));
     }
   } catch {
@@ -202,28 +204,38 @@ export function BottomPanel({
     [],
   );
 
+  const resizePaneSplit = useCallback((tabId: string, splitId: string, ratio: number) => {
+    setTabs((prev) =>
+      prev.map((tab) => (
+        tab.id === tabId ? { ...tab, layout: resizeSplit(tab.layout, splitId, ratio) } : tab
+      )),
+    );
+  }, []);
+
   /** Close one pane; the tab's split collapses to the surviving panes. */
   const closePane = useCallback(
     (tabId: string, paneId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab || leafCount(tab.layout) <= 1) return; // never remove the last pane
       terminalApi.closeTerminal(paneId);
       try {
         sessionStorage.removeItem(`archlab:term-buf:${paneId}`);
       } catch {
         /* ignore */
       }
+      const remaining = leafIds(tab.layout).filter((lid) => lid !== paneId);
       setTabs((prev) =>
-        prev.map((tab) => {
-          if (tab.id !== tabId) return tab;
-          if (leafCount(tab.layout) <= 1) return tab; // never remove the last pane
-          const next = removeLeaf(tab.layout, paneId);
-          return next ? { ...tab, layout: next } : tab;
+        prev.map((t) => {
+          if (t.id !== tabId) return t;
+          const next = removeLeaf(t.layout, paneId);
+          return next ? { ...t, layout: next } : t;
         }),
       );
+      // Keep focus where it was; only move it when the closed pane WAS focused.
       setActivePaneByTab((m) => {
-        const tab = tabs.find((t) => t.id === tabId);
-        if (!tab) return m;
-        const remaining = leafIds(tab.layout).filter((lid) => lid !== paneId);
-        return { ...m, [tabId]: remaining[0] ?? tab.id };
+        const current = m[tabId] ?? firstLeafId(tab.layout);
+        const next = current === paneId ? remaining[0] ?? firstLeafId(tab.layout) : current;
+        return m[tabId] === next ? m : { ...m, [tabId]: next };
       });
     },
     [terminalApi, tabs],
@@ -436,6 +448,8 @@ export function BottomPanel({
                 api={terminalApi}
                 activePaneId={paneId}
                 onFocusPane={(pid) => focusPane(t.id, pid)}
+                onClosePane={(pid) => closePane(t.id, pid)}
+                onResizeSplit={(splitId, ratio) => resizePaneSplit(t.id, splitId, ratio)}
               />
             </div>
           );

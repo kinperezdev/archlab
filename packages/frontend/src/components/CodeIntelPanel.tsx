@@ -8,7 +8,7 @@
  * Analysis (a project-wide before/after diff) that can be applied to disk.
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Component, memo, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type {
   CanvasNode,
@@ -25,6 +25,7 @@ import { tokenizeLine } from '../lib/codeHighlight.js';
 import { useApiKeyContext } from '../state/apiKeyContext.js';
 import { NudgeText } from './ConfidenceNudge.js';
 import {
+  fetchRawFileIntel,
   fetchFileIntel,
   fetchReferences,
   fetchImpact,
@@ -99,6 +100,45 @@ function ResizeHandle({ onResizeStart }: { onResizeStart: (e: React.MouseEvent) 
   );
 }
 
+class CodePanelBoundary extends Component<
+  { resetKey: string; onClose: () => void; children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error('[CodeIntelPanel] render failed', error, info.componentStack);
+  }
+
+  componentDidUpdate(prevProps: { resetKey: string }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <>
+        <header className="code-panel-head">
+          <span className="code-panel-title">Code Intelligence</span>
+          <button className="code-icon-btn" onClick={this.props.onClose} title="Close panel">✕</button>
+        </header>
+        <div className="code-empty code-error">
+          <strong>Could not render this file.</strong>
+          <span className="code-error-detail">{this.state.error.message || 'Unknown render error.'}</span>
+        </div>
+      </>
+    );
+  }
+}
+
 /** Column wrapper: resolves the file from the locked node and hosts the view. */
 export function CodeIntelPanel({
   projectId,
@@ -109,6 +149,14 @@ export function CodeIntelPanel({
   onResizeStart,
   onSyntaxState,
 }: CodeIntelPanelProps) {
+  // Findings that touch this node, used to promote fix actions to the top.
+  // Keep this hook before the empty-state branch so changing between source and
+  // source-less nodes never changes the component's hook order.
+  const nodeFindings = useMemo(
+    () => diagnostics.filter((d) => d.relatedNodeIds.includes(node.id)),
+    [diagnostics, node.id],
+  );
+
   if (!projectId || !node.filePath) {
     return (
       <aside className="code-panel" style={{ width }}>
@@ -122,22 +170,18 @@ export function CodeIntelPanel({
     );
   }
 
-  // Findings that touch this node, used to promote fix actions to the top.
-  const nodeFindings = useMemo(
-    () => diagnostics.filter((d) => d.relatedNodeIds.includes(node.id)),
-    [diagnostics, node.id],
-  );
-
   return (
     <aside className="code-panel" style={{ width }}>
       <ResizeHandle onResizeStart={onResizeStart} />
-      <CodeIntelView
-        projectId={projectId}
-        filePath={node.filePath}
-        findings={nodeFindings}
-        onClose={onClose}
-        onSyntaxState={onSyntaxState}
-      />
+      <CodePanelBoundary resetKey={`${projectId}:${node.id}:${node.filePath}`} onClose={onClose}>
+        <CodeIntelView
+          projectId={projectId}
+          filePath={node.filePath}
+          findings={nodeFindings}
+          onClose={onClose}
+          onSyntaxState={onSyntaxState}
+        />
+      </CodePanelBoundary>
     </aside>
   );
 }
@@ -166,6 +210,7 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
   }, [intel, liveSquiggles, findings]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [enriching, setEnriching] = useState(false);
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [impact, setImpact] = useState<ImpactAnalysis | null>(null);
   const [impactBusy, setImpactBusy] = useState(false);
@@ -222,23 +267,53 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
     setDirty(false);
     setLiveSquiggles(null);
     onSyntaxState?.(false);
-    fetchFileIntel(projectId, filePath).then((res) => {
-      if (cancelled) return;
-      setIntel(res.intel);
-      setLoadError(res.error);
-      setLoading(false);
-      // Fetch squiggles after the code is shown, so opening never blocks on the analyzer.
-      if (res.intel) {
-        const content = res.intel.lines.map((l) => l.text).join('\n');
-        checkSyntax(projectId, filePath, content)
-          .then((marks) => {
-            if (cancelled) return;
-            setLiveSquiggles(marks);
-            onSyntaxState?.(marks.some((m) => m.severity === 'error'));
-          })
-          .catch(() => {});
-      }
-    });
+    fetchRawFileIntel(projectId, filePath)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.intel) {
+          setIntel(res.intel);
+          setLoadError(null);
+          setLoading(false);
+        } else {
+          setLoadError(res.error);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadError(err instanceof Error ? err.message : 'Could not read the file.');
+      });
+
+    setEnriching(true);
+    fetchFileIntel(projectId, filePath)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.intel) {
+          setIntel(res.intel);
+          setLoadError(null);
+        } else {
+          setLoadError(res.error);
+        }
+        setLoading(false);
+        setEnriching(false);
+        // Fetch squiggles after the code is shown, so opening never blocks on the analyzer.
+        if (res.intel) {
+          const content = res.intel.lines.map((l) => l.text).join('\n');
+          checkSyntax(projectId, filePath, content)
+            .then((marks) => {
+              if (cancelled) return;
+              setLiveSquiggles(marks);
+              onSyntaxState?.(marks.some((m) => m.severity === 'error'));
+            })
+            .catch(() => {});
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setIntel((current) => current);
+        setLoadError(err instanceof Error ? err.message : 'Could not read the file.');
+        setLoading(false);
+        setEnriching(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -468,6 +543,11 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
           </span>
           <span className="code-panel-path">{filePath}</span>
         </div>
+        {enriching && intel && (
+          <span className="code-enriching-pill" title="Loading symbols, line actions, and references">
+            Enriching
+          </span>
+        )}
         <div className="code-head-actions">
           {dirty && (
             <>
@@ -484,7 +564,7 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
       </header>
 
       <div className="code-toolbar">
-        <SymbolNavigator intel={intel} onJump={jumpToLine} />
+        <SymbolNavigator intel={intel} enriching={enriching} onJump={jumpToLine} />
         <div className={`code-find-bar ${findOpen ? 'is-open' : ''}`}>
           <button
             className={`code-icon-btn code-find-toggle ${findOpen ? 'active' : ''}`}
@@ -622,7 +702,15 @@ function CodeIntelView({ projectId, filePath, findings, onClose, onSyntaxState, 
 }
 
 /** The function/class/route/method navigator dropdown. */
-function SymbolNavigator({ intel, onJump }: { intel: FileIntel | null; onJump: (line: number) => void }) {
+function SymbolNavigator({
+  intel,
+  enriching,
+  onJump,
+}: {
+  intel: FileIntel | null;
+  enriching: boolean;
+  onJump: (line: number) => void;
+}) {
   const count = intel?.symbols.length ?? 0;
   return (
     <select
@@ -635,7 +723,9 @@ function SymbolNavigator({ intel, onJump }: { intel: FileIntel | null; onJump: (
         e.currentTarget.value = '';
       }}
     >
-      <option value="">{count > 0 ? `Navigate (${count} symbols)…` : 'No symbols detected'}</option>
+      <option value="">
+        {count > 0 ? `Navigate (${count} symbols)...` : enriching ? 'Loading symbols...' : 'No symbols detected'}
+      </option>
       {intel?.symbols.map((s) => (
         <option key={`${s.kind}-${s.name}-${s.line}`} value={s.line}>
           {symbolGlyph(s.kind)} {s.name}  · L{s.line}

@@ -46,10 +46,12 @@ export interface ShellSession {
   resize(cols: number, rows: number): void;
   /** Kill the PTY (called when the tab is explicitly closed). */
   kill(): void;
-  /** Point output at a (new) socket and replay anything buffered while detached. */
+  /** Point output at a (new) socket and replay the session history once. */
   attach(handlers: SessionHandlers): void;
   /** Stop forwarding output (socket closed) but keep the PTY running. */
   detach(): void;
+  /** Whether a socket is currently receiving this session's output. */
+  readonly isAttached: boolean;
 }
 
 /** Spawn a real shell in a PTY and start streaming its output. */
@@ -82,8 +84,15 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
 
   // Current output sink. Starts as the initial handlers; swapped on re-attach.
   let current: SessionHandlers | null = handlers;
-  // Output produced while no socket is attached, replayed on the next attach so
-  // a long-running process (e.g. `npm run dev`) loses nothing across a reconnect.
+  // Rolling output replayed on every browser attach. The frontend has its own
+  // sessionStorage backup, but that can be stale or absent after a refresh while
+  // this backend PTY is still alive. Replaying a bounded server-side buffer keeps
+  // a waiting shell prompt visible instead of leaving the new xterm blank.
+  let replayBuffer = '';
+  const REPLAY_CAP = 200_000;
+  // Output produced while no socket is attached. This is kept separately so a
+  // reconnect can receive only the detached delta when a full replay is not
+  // needed, but it is also appended to the rolling replay buffer below.
   let detachedBuffer = '';
   const DETACHED_CAP = 200_000;
 
@@ -113,19 +122,26 @@ export function createSession(handlers: SessionHandlers, initialCwd?: string): S
     },
     attach: (next) => {
       current = next;
-      if (detachedBuffer) {
-        next.onData(detachedBuffer);
-        detachedBuffer = '';
-      }
+      // Reset the client surface before replaying: the attaching xterm may
+      // already show part of this history (a page held open across a
+      // reconnect), and appending a second copy stacks duplicate prompt
+      // lines. CSI H + 2J + 3J = home cursor, clear screen, clear scrollback.
+      if (replayBuffer) next.onData('\x1b[H\x1b[2J\x1b[3J' + replayBuffer);
+      detachedBuffer = '';
     },
     detach: () => {
       current = null;
+    },
+    get isAttached() {
+      return current !== null;
     },
   };
 
   let hasEmittedInitialCwd = false;
 
   term.onData((data) => {
+    replayBuffer += data;
+    if (replayBuffer.length > REPLAY_CAP) replayBuffer = replayBuffer.slice(-REPLAY_CAP);
     const cwd = parseOsc7Cwd(data);
     if (cwd) {
       const isChanged = cwd !== session.cwd;

@@ -96,17 +96,17 @@
   font-size: 0.6rem;
 }
 
-/* Entry-point node — larger, glowing, brighter, with an ENTRY crown badge. */
+/* Entry-point node: slightly raised, quiet accent ring, ENTRY badge.
+   No resting bloom; the canvas stays clean and static at rest. */
 .arch-node.is-entry {
-  transform: scale(1.16);
+  transform: scale(1.06);
   z-index: 5;
-  border-width: 2px !important;
-  border-color: var(--color-accent) !important;
-  background: color-mix(in srgb, var(--node-color) 18%, var(--bg-elevated));
+  border-width: 1.5px !important;
+  border-color: color-mix(in srgb, var(--color-accent) 80%, transparent) !important;
+  background: color-mix(in srgb, var(--node-color) 14%, var(--bg-elevated));
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-accent) 30%, transparent),
-    0 0 22px color-mix(in srgb, var(--color-accent) 45%, transparent),
-    0 8px 20px rgba(0, 0, 0, 0.18);
+    0 0 0 2px color-mix(in srgb, var(--color-accent) 16%, transparent),
+    0 6px 16px rgba(0, 0, 0, 0.3);
 }
 .entry-badge {
   position: absolute;

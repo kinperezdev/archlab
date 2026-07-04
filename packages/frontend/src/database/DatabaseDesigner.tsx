@@ -325,9 +325,9 @@ function buildEdges(tables: DbTable[]): Edge<RelationshipEdgeData>[] {
       const relType = relationshipType(col);
 
       let note = '';
-      if (col.fkAutoCorrected) note = ' (auto-corrected to primary key — verify)';
-      else if (col.fkUnresolved) note = ' (unresolved — inferred, needs verification)';
-      else if (inferred) note = ' (inferred relationship — needs verification)';
+      if (col.fkAutoCorrected) note = ' (auto-corrected to primary key, verify)';
+      else if (col.fkUnresolved) note = ' (unresolved: inferred, needs verification)';
+      else if (inferred) note = ' (inferred relationship, needs verification)';
 
       edges.push({
         id: `fk_${table.name}_${col.name}`,
@@ -965,7 +965,14 @@ function DatabaseDesignerInner({ inferredSql, projectId }: { inferredSql: string
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={24} color="rgba(255,255,255,0.05)" />
-          <MiniMap pannable zoomable className="arch-minimap" />
+          <MiniMap
+            pannable
+            zoomable
+            className="arch-minimap"
+            maskColor="rgba(0,0,0,0.55)"
+            nodeColor="#1e2433"
+            nodeStrokeColor="#3a4257"
+          />
           <Controls showInteractive={false} />
         </ReactFlow>
         {tables.length === 0 && (

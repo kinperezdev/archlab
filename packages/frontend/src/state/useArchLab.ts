@@ -386,6 +386,7 @@ export function useArchLab() {
   useEffect(() => {
     let closed = false;
     let retry: ReturnType<typeof setTimeout> | null = null;
+    let hadOpenBefore = false;
 
     const connect = () => {
       // The backend's WS handshake requires the same session token as HTTP.
@@ -395,6 +396,15 @@ export function useArchLab() {
       ws.onopen = () => {
         setState((p) => ({ ...p, connected: true }));
         ws.send(JSON.stringify({ type: 'term-init' }));
+        // After a RECONNECT, re-attach every mounted terminal: the backend
+        // detached their sessions when the old socket died, and it replays
+        // history exactly once per socket, so each xterm repaints cleanly.
+        if (hadOpenBefore) {
+          for (const id of termListeners.current.keys()) {
+            ws.send(JSON.stringify({ type: 'term-create', id }));
+          }
+        }
+        hadOpenBefore = true;
         // Deliver everything queued while the socket was still connecting.
         const queued = sendQueue.current;
         sendQueue.current = [];

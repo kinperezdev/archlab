@@ -162,7 +162,7 @@ export function TopBar({
           className="tb-conn"
           type="button"
           onClick={onOpenDoctor}
-          title="Doctor — system health & security self-check"
+          title="Doctor: system health & security self-check"
           aria-label="Open Doctor: system health and security self-check"
         >
           <Stethoscope size={15} strokeWidth={1.75} aria-hidden="true" />

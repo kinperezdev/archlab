@@ -9,7 +9,7 @@
 
 export type PaneNode =
   | { kind: 'leaf'; id: string }
-  | { kind: 'split'; id: string; dir: 'row' | 'col'; a: PaneNode; b: PaneNode };
+  | { kind: 'split'; id: string; dir: 'row' | 'col'; ratio: number; a: PaneNode; b: PaneNode };
 
 export const MAX_PANES = 4;
 
@@ -56,7 +56,7 @@ export function splitLeaf(
 ): PaneNode {
   if (node.kind === 'leaf') {
     if (node.id !== targetId) return node;
-    return { kind: 'split', id: newSplitId(), dir, a: makeLeaf(targetId), b: makeLeaf(newId) };
+    return { kind: 'split', id: newSplitId(), dir, ratio: 0.5, a: makeLeaf(targetId), b: makeLeaf(newId) };
   }
   return {
     ...node,
@@ -79,4 +79,26 @@ export function removeLeaf(node: PaneNode, targetId: string): PaneNode | null {
   if (a === null) return b;
   if (b === null) return a;
   return { ...node, a, b };
+}
+
+/** Resize one split node by id. Ratio is the first child share, clamped by caller. */
+export function resizeSplit(node: PaneNode, splitId: string, ratio: number): PaneNode {
+  if (node.kind === 'leaf') return node;
+  if (node.id === splitId) return { ...node, ratio };
+  return {
+    ...node,
+    a: resizeSplit(node.a, splitId, ratio),
+    b: resizeSplit(node.b, splitId, ratio),
+  };
+}
+
+/** Ensure old saved split layouts receive a ratio after schema upgrades. */
+export function hydratePaneLayout(node: PaneNode): PaneNode {
+  if (node.kind === 'leaf') return node;
+  return {
+    ...node,
+    ratio: typeof node.ratio === 'number' && Number.isFinite(node.ratio) ? node.ratio : 0.5,
+    a: hydratePaneLayout(node.a),
+    b: hydratePaneLayout(node.b),
+  };
 }
