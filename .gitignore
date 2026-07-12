@@ -10,3 +10,8 @@ dist/
 # paths. Never commit its runtime data; keep only the folder's README.
 brain/*
 !brain/README.md
+
+# Local AI tool configuration is per-machine (permissions, MCP endpoints).
+# Applies to contributors' clones too, not just this machine's global ignore.
+.claude/
+.codex/
