@@ -62,6 +62,18 @@ pkill -f "tsx watch"; pkill -f "concurrently"; kill -9 $(lsof -t -i:4317) 2>/dev
 4. Exercise the affected flow in the browser (the canvas, terminal, and pipeline are the critical paths).
 5. Conventional commit messages: `feat|fix|refactor|docs|chore(scope): description`.
 
+## Licensing and sign-off
+
+ArchLab is GPL-3.0. By contributing, you agree your work ships under the same license.
+
+Every commit needs a Developer Certificate of Origin sign-off. It is one flag:
+
+```bash
+git commit -s -m "feat(scope): description"
+```
+
+The `-s` adds a `Signed-off-by: Your Name <email>` line to the commit. That line certifies you wrote the change, or have the right to submit it, under GPL-3.0 (full text at [developercertificate.org](https://developercertificate.org)). Pull requests with unsigned commits will be asked to amend before merge. No separate CLA, no paperwork beyond the flag.
+
 ## Where to look when something breaks
 
 | Symptom | First place to look |
